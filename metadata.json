@@ -1,0 +1,5 @@
+{
+  "name": "VERDIQ",
+  "description": "AI-Powered Music Review & Magazine Platform",
+  "requestFramePermissions": ["microphone", "camera"]
+}
