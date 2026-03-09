@@ -1,7 +1,18 @@
 /**
- * Auth Client for Verdiq - MongoDB/JWT Based Authentication
- * Replaces Supabase auth with localStorage-based session management
+ * Auth Client for Verdiq - Firebase Based Authentication
  */
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  updateProfile,
+  User,
+  GoogleAuthProvider,
+  signInWithPopup
+} from 'firebase/auth';
+import { auth } from './firebase';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -11,7 +22,7 @@ const SESSION_KEY = 'verdiq_session';
 /**
  * Save session data to localStorage
  */
-export const saveSession = (userData) => {
+export const saveSession = (userData: any) => {
   try {
     const { history, invoices, ...sessionData } = userData;
     localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
@@ -60,46 +71,94 @@ export const isAuthenticated = () => {
 };
 
 /**
+ * Safely parse JSON from a response
+ */
+const safeJson = async (res: Response) => {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('Failed to parse JSON response:', text);
+    throw new Error(`Server returned non-JSON response: ${res.status} ${res.statusText}`);
+  }
+};
+
+/**
  * Login user
  */
 export const login = async (email, password) => {
-  const res = await fetch(`${API_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
-  });
-  
-  const data = await res.json();
-  
-  if (!res.ok) {
-    throw new Error(data.detail || 'Login failed');
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+    const token = await user.getIdToken();
+    
+    // Fetch user profile from our API
+    const res = await fetch(`${API_URL}/api/users/${user.uid}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!res.ok) {
+      // If user doesn't exist in our DB but exists in Firebase Auth, create them
+      const signupRes = await fetch(`${API_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email, password, name: user.displayName || email.split('@')[0], id: user.uid })
+      });
+      const signupData = await safeJson(signupRes);
+      saveSession({ ...signupData, session: { access_token: token } });
+      return { ...signupData, session: { access_token: token } };
+    }
+    
+    const userData = await safeJson(res);
+    const sessionData = {
+      ...userData,
+      session: { access_token: token }
+    };
+    
+    saveSession(sessionData);
+    return sessionData;
+  } catch (error: any) {
+    console.error('Login error details:', {
+      code: error.code,
+      message: error.message,
+      config: {
+        projectId: auth.app.options.projectId,
+        authDomain: auth.app.options.authDomain
+      }
+    });
+    throw error;
   }
-  
-  // Save session to localStorage
-  saveSession(data);
-  
-  return data;
 };
 
 /**
  * Signup user
  */
 export const signup = async (email, password, name) => {
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  const user = userCredential.user;
+  await updateProfile(user, { displayName: name });
+  
   const res = await fetch(`${API_URL}/api/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password, name: name || email.split('@')[0] })
+    body: JSON.stringify({ 
+      email, 
+      password, 
+      name: name || email.split('@')[0],
+      id: user.uid // Use Firebase UID
+    })
   });
   
-  const data = await res.json();
+  const data = await safeJson(res);
   
   if (!res.ok) {
-    throw new Error(data.detail || 'Signup failed');
+    throw new Error(data.detail || data.message || 'Signup failed');
   }
   
-  // Save session to localStorage
   saveSession(data);
-  
   return data;
 };
 
@@ -107,15 +166,7 @@ export const signup = async (email, password, name) => {
  * Logout user
  */
 export const logout = async () => {
-  try {
-    const headers = getAuthHeaders();
-    await fetch(`${API_URL}/api/auth/logout`, {
-      method: 'POST',
-      headers
-    });
-  } catch (e) {
-    console.error('Logout API error:', e);
-  }
+  await signOut(auth);
   clearSession();
 };
 
@@ -123,34 +174,98 @@ export const logout = async () => {
  * Get current user from API
  */
 export const getCurrentUser = async () => {
-  const session = getSession();
-  if (!session?.id || !session?.session?.access_token) {
-    return null;
-  }
-  
-  try {
-    const res = await fetch(`${API_URL}/api/users/${session.id}`, {
-      headers: getAuthHeaders()
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubscribe();
+      if (user) {
+        try {
+          const token = await user.getIdToken();
+          const res = await fetch(`${API_URL}/api/users/${user.uid}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (res.ok) {
+            const userData = await safeJson(res);
+            const fullUser = { ...userData, session: { access_token: token } };
+            saveSession(fullUser);
+            resolve(fullUser);
+          } else {
+            resolve(null);
+          }
+        } catch (e) {
+          console.error('Failed to get current user:', e);
+          resolve(null);
+        }
+      } else {
+        clearSession();
+        resolve(null);
+      }
     });
-    
-    if (res.ok) {
-      const userData = await res.json();
-      return { ...userData, session: session.session };
-    }
-  } catch (e) {
-    console.error('Failed to get current user:', e);
-  }
-  
-  return null;
+  });
 };
 
 /**
- * Request password reset (placeholder - would need backend implementation)
+ * Request password reset
  */
 export const requestPasswordReset = async (email) => {
-  // For now, just inform user - actual implementation would require email service
-  console.log('Password reset requested for:', email);
-  return { success: true, message: 'If an account exists with this email, you will receive a reset link.' };
+  await sendPasswordResetEmail(auth, email);
+  return { success: true };
+};
+
+/**
+ * Login with Google
+ */
+export const loginWithGoogle = async () => {
+  try {
+    const provider = new GoogleAuthProvider();
+    const userCredential = await signInWithPopup(auth, provider);
+    const user = userCredential.user;
+    const token = await user.getIdToken();
+    
+    // Fetch user profile from our API
+    const res = await fetch(`${API_URL}/api/users/${user.uid}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!res.ok) {
+      // If user doesn't exist in our DB, create them
+      const signupRes = await fetch(`${API_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          email: user.email, 
+          password: 'google-auth-user', // Dummy password for DB
+          name: user.displayName || user.email?.split('@')[0], 
+          id: user.uid 
+        })
+      });
+      const signupData = await safeJson(signupRes);
+      saveSession({ ...signupData, session: { access_token: token } });
+      return { ...signupData, session: { access_token: token } };
+    }
+    
+    const userData = await safeJson(res);
+    const sessionData = {
+      ...userData,
+      session: { access_token: token }
+    };
+    
+    saveSession(sessionData);
+    return sessionData;
+  } catch (error: any) {
+    console.error('Google Login error details:', {
+      code: error.code,
+      message: error.message,
+      config: {
+        projectId: auth.app.options.projectId,
+        authDomain: auth.app.options.authDomain
+      }
+    });
+    throw error;
+  }
 };
 
 export default {
@@ -163,5 +278,6 @@ export default {
   signup,
   logout,
   getCurrentUser,
-  requestPasswordReset
+  requestPasswordReset,
+  loginWithGoogle
 };

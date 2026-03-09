@@ -91,6 +91,33 @@ export interface Review {
   songAudio?: string; // Base64 encoded original song audio for background
 }
 
+export interface MagazineArticle {
+  id: string;
+  title: string;
+  subtitle: string;
+  content: string;
+  imageUrl: string;
+  author: string;
+  category: string;
+  readTime: string;
+  createdAt: string;
+  slug: string;
+  isFeatured?: boolean;
+}
+
+export interface PodcastEpisode {
+  id: string;
+  title: string;
+  description: string;
+  audioUrl: string;
+  imageUrl: string;
+  duration: string;
+  playCount: number;
+  createdAt: string;
+  guest?: string;
+  tags: string[];
+}
+
 export interface SubmissionData {
   audioFile: File;
   featuredPhoto?: File;

@@ -1,8 +1,18 @@
 import app from "./server/app.ts";
 import { createServer as createViteServer } from "vite";
+import { ensureDbReady } from "./server/firebase.ts";
 
 async function startServer() {
   const PORT = 3000;
+
+  console.log("Checking database connectivity (non-blocking)...");
+  ensureDbReady().then(() => {
+    console.log("Database check complete.");
+  }).catch(err => {
+    console.error("Database check failed:", err);
+  });
+  
+  console.log("Starting server...");
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -24,4 +34,7 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("CRITICAL: FAILED TO START SERVER");
+  console.error(err);
+});

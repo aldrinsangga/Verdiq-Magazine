@@ -22,7 +22,7 @@ const Magazine = ({ reviews, onSelect }) => {
       <div className="border-b-4 border-white pb-6 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div>
           <h1 className="text-8xl md:text-[7.8125rem] font-black tracking-tighter leading-[0.8] mb-4">VERDIQ</h1>
-          <p className="text-emerald-500 font-bold uppercase tracking-[0.5em] text-xs">Public Artist Marketplace</p>
+          <p className="text-emerald-500 font-bold uppercase tracking-[0.5em] text-xs">THE FUTURE OF MUSIC CRITIC</p>
         </div>
         <div className="text-right">
           <p className="text-slate-500 font-black uppercase text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>

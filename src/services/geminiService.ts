@@ -189,12 +189,31 @@ const REVIEW_SCHEMA = {
 export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, preset }: any) => {
   const ai = getAI();
   
+  // Fetch style guides for training
+  let styleGuidesContext = "";
+  try {
+    const res = await fetch('/api/public/style-guides');
+    if (res.ok) {
+      const guides = await res.json();
+      if (guides && guides.length > 0) {
+        styleGuidesContext = "\nSTYLE GUIDES & WRITING VOICE EXAMPLES:\n";
+        guides.forEach((guide: any, index: number) => {
+          styleGuidesContext += `\nExample ${index + 1} (${guide.type} from ${guide.source}):\n${guide.content}\n`;
+        });
+        styleGuidesContext += "\nINSTRUCTION: Analyze the writing style, vocabulary, tone, and structure of the examples above. Mimic this professional, sharp, and authoritative music criticism voice in your review. Avoid generic AI phrasing like 'tapestry of sound' or 'sonic journey'. Be specific, opinionated, and culturally aware.\n";
+      }
+    }
+  } catch (e) {
+    console.error("Failed to fetch style guides for Gemini context", e);
+  }
+
   const prompt = `
     TRACK METADATA:
     - Track: ${trackName}
     - Artist: ${artistName}
     - Bio: ${bio || "Independent artist."}
     - Lyrics: ${lyrics || "No lyrics provided - focus on mood, delivery, and theme implied by the music."}
+    ${styleGuidesContext}
     
     REVIEW WRITING INSTRUCTIONS:
     Write a fully human-sounding music review that feels natural, emotionally sharp, and specific.
@@ -202,7 +221,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-latest",
     contents: [
       { text: prompt },
       {
@@ -225,7 +244,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
   if (imageBase64 && imageMimeType) {
     try {
       const imgResponse = await ai.models.generateContent({
-        model: "gemini-3.1-flash-image-preview",
+        model: "gemini-2.5-flash-image",
         contents: [
           { text: `Transform this artist image into a magazine-cover style featured image with the word VERDIQ in the background. Preset: ${preset || 'dark'}` },
           {
@@ -267,7 +286,7 @@ export const generatePodcast = async (review: any) => {
   `;
 
   const scriptResponse = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+    model: "gemini-flash-latest",
     contents: scriptPrompt
   });
 
@@ -292,5 +311,69 @@ export const generatePodcast = async (review: any) => {
   const pcmData = audioResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   if (!pcmData) throw new Error("No audio generated");
 
-  return { audio: pcmData, script };
+  // Convert base64 PCM to WAV format
+  const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = pcmBuffer.length;
+  
+  const wavHeader = new ArrayBuffer(44);
+  const view = new DataView(wavHeader);
+  
+  // RIFF identifier
+  view.setUint8(0, 'R'.charCodeAt(0));
+  view.setUint8(1, 'I'.charCodeAt(0));
+  view.setUint8(2, 'F'.charCodeAt(0));
+  view.setUint8(3, 'F'.charCodeAt(0));
+  // file length
+  view.setUint32(4, 36 + dataSize, true);
+  // WAVE identifier
+  view.setUint8(8, 'W'.charCodeAt(0));
+  view.setUint8(9, 'A'.charCodeAt(0));
+  view.setUint8(10, 'V'.charCodeAt(0));
+  view.setUint8(11, 'E'.charCodeAt(0));
+  // fmt chunk identifier
+  view.setUint8(12, 'f'.charCodeAt(0));
+  view.setUint8(13, 'm'.charCodeAt(0));
+  view.setUint8(14, 't'.charCodeAt(0));
+  view.setUint8(15, ' '.charCodeAt(0));
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // sample format (raw)
+  view.setUint16(20, 1, true);
+  // channel count
+  view.setUint16(22, numChannels, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sample rate * block align)
+  view.setUint32(28, byteRate, true);
+  // block align (channel count * bytes per sample)
+  view.setUint16(32, blockAlign, true);
+  // bits per sample
+  view.setUint16(34, bitsPerSample, true);
+  // data chunk identifier
+  view.setUint8(36, 'd'.charCodeAt(0));
+  view.setUint8(37, 'a'.charCodeAt(0));
+  view.setUint8(38, 't'.charCodeAt(0));
+  view.setUint8(39, 'a'.charCodeAt(0));
+  // data chunk length
+  view.setUint32(40, dataSize, true);
+  
+  const wavBuffer = new Uint8Array(44 + dataSize);
+  wavBuffer.set(new Uint8Array(wavHeader), 0);
+  wavBuffer.set(pcmBuffer, 44);
+  
+  // Convert to base64 safely to avoid "Maximum call stack size exceeded"
+  let binary = '';
+  const CHUNK_SIZE = 0x8000; // 32768
+  for (let i = 0; i < wavBuffer.length; i += CHUNK_SIZE) {
+    const chunk = wavBuffer.subarray(i, i + CHUNK_SIZE);
+    binary += String.fromCharCode.apply(null, chunk as any);
+  }
+  const audioBase64 = btoa(binary);
+
+  return { audio: audioBase64, script };
 };

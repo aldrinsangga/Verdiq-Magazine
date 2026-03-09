@@ -203,7 +203,7 @@ const SpotifyPlayer = ({
 
   return (
     <div className={`bg-slate-800/50 backdrop-blur-xl rounded-2xl p-4 ${className}`} data-testid="spotify-player">
-      <audio ref={audioRef} preload="metadata" crossOrigin="anonymous" />
+      <audio ref={audioRef} preload="metadata" />
       
       <div className="flex items-center gap-4">
         {/* Album Art */}

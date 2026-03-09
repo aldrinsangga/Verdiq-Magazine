@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // TEMPORARY: Open rules to verify Client SDK connectivity from server
+    // Once connectivity is confirmed, we will restore secure rules.
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -9,7 +9,7 @@ const SUBSCRIPTION_PLANS = {
   label: { name: 'Label', credits: 60, price: '$49/mo' }
 };
 
-const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) => {
+const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview, styleGuides = [], onAddStyleGuide, onUpdateStyleGuide, onDeleteStyleGuide }) => {
   const [activeTab, setActiveTab] = useState('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
@@ -22,6 +22,18 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
   const [podcasts, setPodcasts] = useState([]);
   const [loadingPodcasts, setLoadingPodcasts] = useState(false);
   
+  // Style Guide state
+  const [isStyleModalOpen, setIsStyleModalOpen] = useState(false);
+  const [editingStyleGuide, setEditingStyleGuide] = useState(null);
+  const [styleGuideForm, setStyleGuideForm] = useState({
+    title: '',
+    content: '',
+    source: '',
+    type: 'article'
+  });
+  const [savingStyle, setSavingStyle] = useState(false);
+  const [deletingStyle, setDeletingStyle] = useState(null);
+  
   // Loading states for buttons
   const [savingUser, setSavingUser] = useState(false);
   const [addingCredits, setAddingCredits] = useState(false);
@@ -29,12 +41,15 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
   const [publishingReview, setPublishingReview] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
 
-  const allReviews = users.flatMap(u => (u.history || []).map(r => ({ ...r, userId: u.id, userName: u.name, userEmail: u.email })));
+  // Defensive check for users
+  const safeUsers = Array.isArray(users) ? users : [];
+
+  const allReviews = safeUsers.flatMap(u => (u.history || []).map(r => ({ ...r, userId: u.id, userName: u.name, userEmail: u.email })));
   
   // Get all reviews that have podcasts
   const podcastReviews = allReviews.filter(r => r.hasPodcast || r.podcastAudioPath);
   
-  const filteredUsers = users.filter(u => 
+  const filteredUsers = safeUsers.filter(u => 
     u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -52,8 +67,8 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
   );
 
   // Stats
-  const totalSubscribers = users.filter(u => u.isSubscribed).length;
-  const totalCreditsInSystem = users.reduce((sum, u) => sum + (u.credits || 0), 0);
+  const totalSubscribers = safeUsers.filter(u => u.isSubscribed).length;
+  const totalCreditsInSystem = safeUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
   const publishedReviews = allReviews.filter(r => r.isPublished).length;
 
   const handleEditUser = (user) => {
@@ -183,6 +198,62 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
     setActiveTab('user-detail');
   };
 
+  const handleOpenStyleModal = (guide = null) => {
+    if (guide) {
+      setEditingStyleGuide(guide);
+      setStyleGuideForm({
+        title: guide.title,
+        content: guide.content,
+        source: guide.source || '',
+        type: guide.type
+      });
+    } else {
+      setEditingStyleGuide(null);
+      setStyleGuideForm({
+        title: '',
+        content: '',
+        source: '',
+        type: 'article'
+      });
+    }
+    setIsStyleModalOpen(true);
+  };
+
+  const handleSaveStyleGuide = async () => {
+    if (!styleGuideForm.title || !styleGuideForm.content) {
+      alert('Title and content are required');
+      return;
+    }
+
+    setSavingStyle(true);
+    try {
+      if (editingStyleGuide) {
+        await onUpdateStyleGuide(editingStyleGuide.id, styleGuideForm);
+      } else {
+        await onAddStyleGuide(styleGuideForm);
+      }
+      setIsStyleModalOpen(false);
+    } catch (error) {
+      console.error('Error saving style guide:', error);
+      alert('Failed to save style guide');
+    } finally {
+      setSavingStyle(false);
+    }
+  };
+
+  const handleDeleteStyleGuide = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this style guide?')) return;
+    setDeletingStyle(id);
+    try {
+      await onDeleteStyleGuide(id);
+    } catch (error) {
+      console.error('Error deleting style guide:', error);
+      alert('Failed to delete style guide');
+    } finally {
+      setDeletingStyle(null);
+    }
+  };
+
   const getPlanBadge = (user) => {
     if (!user.isSubscribed && !user.is_subscribed) return { label: 'Free', color: 'bg-slate-700 text-slate-300' };
     const plan = user.subscription_type || 'curious';
@@ -208,7 +279,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
           </div>
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Total Users</p>
-            <p className="text-2xl font-black text-white">{users.length}</p>
+            <p className="text-2xl font-black text-white">{safeUsers.length}</p>
           </div>
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Reviews</p>
@@ -228,6 +299,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
           { id: 'reviews', label: 'Reviews', icon: '📝' },
           { id: 'podcasts', label: 'Podcasts', icon: '🎙️' },
           { id: 'subscriptions', label: 'Subscriptions', icon: '💳' },
+          { id: 'style', label: 'Style Guides', icon: '🎨' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -741,7 +813,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
                 </div>
                 <div>
                   <p className="text-slate-500 text-xs uppercase font-bold">Free (Curious)</p>
-                  <p className="text-2xl font-black text-white">{users.filter(u => !u.isSubscribed && !u.is_subscribed).length}</p>
+                  <p className="text-2xl font-black text-white">{safeUsers.filter(u => !u.isSubscribed && !u.is_subscribed).length}</p>
                 </div>
               </div>
             </div>
@@ -752,7 +824,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
                 </div>
                 <div>
                   <p className="text-emerald-500 text-xs uppercase font-bold">Artist</p>
-                  <p className="text-2xl font-black text-white">{users.filter(u => u.subscription_type === 'artist').length}</p>
+                  <p className="text-2xl font-black text-white">{safeUsers.filter(u => u.subscription_type === 'artist').length}</p>
                 </div>
               </div>
             </div>
@@ -763,7 +835,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
                 </div>
                 <div>
                   <p className="text-purple-500 text-xs uppercase font-bold">Label</p>
-                  <p className="text-2xl font-black text-white">{users.filter(u => u.subscription_type === 'label').length}</p>
+                  <p className="text-2xl font-black text-white">{safeUsers.filter(u => u.subscription_type === 'label').length}</p>
                 </div>
               </div>
             </div>
@@ -786,7 +858,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
                   </tr>
                 </thead>
                 <tbody>
-                  {users.filter(u => u.isSubscribed || u.is_subscribed).map(user => (
+                  {safeUsers.filter(u => u.isSubscribed || u.is_subscribed).map(user => (
                     <tr key={user.id} className="border-t border-slate-800 hover:bg-slate-900/50">
                       <td className="px-6 py-4">
                         <div>
@@ -817,7 +889,7 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
                       </td>
                     </tr>
                   ))}
-                  {users.filter(u => u.isSubscribed || u.is_subscribed).length === 0 && (
+                  {safeUsers.filter(u => u.isSubscribed || u.is_subscribed).length === 0 && (
                     <tr>
                       <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
                         No subscribers yet
@@ -826,6 +898,147 @@ const AdminDashboard = ({ users, onUpdateUser, onDeleteUser, onUpdateReview }) =
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STYLE GUIDES TAB */}
+      {activeTab === 'style' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-black text-white">Style Guides</h2>
+              <p className="text-slate-500 text-sm">Reference articles for AI voice training</p>
+            </div>
+            <button 
+              onClick={() => handleOpenStyleModal()}
+              className="bg-emerald-500 text-slate-950 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-400 transition-colors"
+            >
+              Add New Guide
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {styleGuides.map(guide => (
+              <div key={guide.id} className="glass rounded-2xl border border-slate-800 p-6 flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                  <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest ${
+                    guide.type === 'article' ? 'bg-blue-500/20 text-blue-400' :
+                    guide.type === 'review' ? 'bg-purple-500/20 text-purple-400' :
+                    'bg-amber-500/20 text-amber-400'
+                  }`}>
+                    {guide.type}
+                  </span>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleOpenStyleModal(guide)} className="text-slate-500 hover:text-white transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteStyleGuide(guide.id)} 
+                      disabled={deletingStyle === guide.id}
+                      className="text-slate-500 hover:text-red-500 transition-colors disabled:opacity-50"
+                    >
+                      {deletingStyle === guide.id ? <Loader2 className="w-4 h-4 animate-spin" /> : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{guide.title}</h3>
+                <p className="text-slate-500 text-xs mb-4 line-clamp-3">{guide.content}</p>
+                <div className="mt-auto pt-4 border-t border-slate-800 flex justify-between items-center">
+                  <span className="text-[10px] text-slate-600 font-bold uppercase">{guide.source || 'Unknown Source'}</span>
+                  <span className="text-[10px] text-slate-600">{new Date(guide.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))}
+            {styleGuides.length === 0 && (
+              <div className="col-span-full py-20 text-center glass rounded-3xl border border-slate-800">
+                <p className="text-slate-500">No style guides added yet.</p>
+                <p className="text-xs text-slate-600 mt-2">Add reference articles to train the AI's writing voice.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* STYLE GUIDE MODAL */}
+      {isStyleModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setIsStyleModalOpen(false)}>
+          <div className="bg-slate-900 p-8 rounded-3xl max-w-2xl w-full border border-slate-800 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <span className="text-emerald-500">🎨</span>
+              {editingStyleGuide ? 'Edit Style Guide' : 'Add New Style Guide'}
+            </h3>
+            
+            <div className="space-y-5">
+              <div>
+                <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2">Title</label>
+                <input
+                  value={styleGuideForm.title}
+                  onChange={e => setStyleGuideForm({...styleGuideForm, title: e.target.value})}
+                  placeholder="e.g. Pitchfork Review Style"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2">Type</label>
+                  <select
+                    value={styleGuideForm.type}
+                    onChange={e => setStyleGuideForm({...styleGuideForm, type: e.target.value as any})}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  >
+                    <option value="article">Article</option>
+                    <option value="review">Review</option>
+                    <option value="blog">Blog</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2">Source (Optional)</label>
+                  <input
+                    value={styleGuideForm.source}
+                    onChange={e => setStyleGuideForm({...styleGuideForm, source: e.target.value})}
+                    placeholder="e.g. Pitchfork, Rolling Stone"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2">Content (Reference Text)</label>
+                <textarea
+                  value={styleGuideForm.content}
+                  onChange={e => setStyleGuideForm({...styleGuideForm, content: e.target.value})}
+                  rows={12}
+                  placeholder="Paste the reference article text here..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button 
+                onClick={() => setIsStyleModalOpen(false)} 
+                className="flex-1 bg-slate-800 py-3 rounded-xl font-bold hover:bg-slate-700 transition-colors"
+                disabled={savingStyle}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleSaveStyleGuide} 
+                disabled={savingStyle}
+                className="flex-1 bg-emerald-500 text-slate-950 py-3 rounded-xl font-bold hover:bg-emerald-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingStyle ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {editingStyleGuide ? 'Update Guide' : 'Save Guide'}
+              </button>
             </div>
           </div>
         </div>

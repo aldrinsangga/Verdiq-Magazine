@@ -17,6 +17,8 @@ import Podcasts from './components/Podcasts';
 import CreditCounter from './components/CreditCounter';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser } from './authClient';
+import { analyzeTrack, generatePodcast } from './services/geminiService';
+import { UserAccount } from '../types';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -62,7 +64,7 @@ const getAuthHeadersLocal = () => {
 };
 
 // AdminDashboard wrapper that fetches users on mount
-const AdminDashboardWrapper = ({ currentUser, users, setUsers, setAllReviews, onUpdateUser, onDeleteUser, onUpdateReview }) => {
+const AdminDashboardWrapper = ({ currentUser, users, setUsers, setAllReviews, onUpdateUser, onDeleteUser, onUpdateReview, styleGuides, onAddStyleGuide, onUpdateStyleGuide, onDeleteStyleGuide }) => {
   const [localUsers, setLocalUsers] = React.useState(users || []);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -180,6 +182,10 @@ const AdminDashboardWrapper = ({ currentUser, users, setUsers, setAllReviews, on
       onUpdateUser={onUpdateUser} 
       onDeleteUser={onDeleteUser}
       onUpdateReview={onUpdateReview}
+      styleGuides={styleGuides}
+      onAddStyleGuide={onAddStyleGuide}
+      onUpdateStyleGuide={onUpdateStyleGuide}
+      onDeleteStyleGuide={onDeleteStyleGuide}
     />
   );
 };
@@ -187,7 +193,7 @@ const AdminDashboardWrapper = ({ currentUser, users, setUsers, setAllReviews, on
 function App() {
   // Map views to URL paths
   const viewToPath = {
-    'landing': '/submit',
+    'landing': '/',
     'dashboard': '/studio',
     'magazine': '/magazine',
     'podcasts': '/podcasts',
@@ -214,7 +220,7 @@ function App() {
       if (res.ok) {
         const review = await res.json();
         setCurrentReview(review);
-        setView('review');
+        navigate('review');
       }
     } catch (e) {
       console.error('Failed to load review from URL:', e);
@@ -245,6 +251,7 @@ function App() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [allReviews, setAllReviews] = useState([]);
+  const [styleGuides, setStyleGuides] = useState([]);
   const [targetPodcastId, setTargetPodcastId] = useState(null);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -256,14 +263,41 @@ function App() {
   
   // Sync URL with view changes
   useEffect(() => {
-    const handlePopState = () => {
-      const newView = getViewFromPath();
-      setView(newView);
+    const handlePopState = async () => {
+      const path = window.location.pathname;
+      
+      // Check for review with ID: /review/{id}
+      if (path.startsWith('/review/')) {
+        const reviewId = path.split('/review/')[1];
+        if (reviewId) {
+          try {
+            const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+            if (reviewRes.ok) {
+              const reviewData = await reviewRes.json();
+              setCurrentReview({ ...reviewData, viewOnly: true });
+              setView('review');
+            } else {
+              setView('magazine');
+            }
+          } catch (e) {
+            setView('magazine');
+          }
+        } else {
+          setView('magazine');
+        }
+      } else {
+        const newView = pathToView[path] || 'landing';
+        setView(newView);
+        if (newView !== 'review') {
+          setCurrentReview(null);
+        }
+      }
+      window.scrollTo(0, 0);
     };
     
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [pathToView]);
   
   // Update URL when view changes (without triggering navigation)
   const updateUrlForView = (newView, reviewId = null) => {
@@ -391,15 +425,15 @@ function App() {
             if (reviewRes.ok) {
               const reviewData = await reviewRes.json();
               setCurrentReview({ ...reviewData, viewOnly: true });
-              setView('review');
+              navigate('review', reviewId);
             } else {
               // Review not found, redirect to magazine
-              setView('magazine');
+              navigate('magazine');
               window.history.replaceState({}, '', '/');
             }
           } catch (e) {
             console.error('Failed to load shared review:', e);
-            setView('magazine');
+            navigate('magazine');
             window.history.replaceState({}, '', '/');
           }
         } else {
@@ -407,12 +441,12 @@ function App() {
           const params = new URLSearchParams(window.location.search);
           const urlView = params.get('view');
           if (urlView && ['landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 'guide', 'account'].includes(urlView)) {
-            setView(urlView);
+            navigate(urlView);
           }
         }
 
         // Check for existing session in localStorage
-        const savedUser = await getCurrentUser();
+        const savedUser = await getCurrentUser() as UserAccount | null;
         if (savedUser) {
           setCurrentUser(savedUser);
           saveSessionLocal(savedUser);
@@ -441,6 +475,8 @@ function App() {
               const usersList = await usersRes.json();
               setUsers(usersList);
             }
+            // Fetch style guides for admin
+            fetchStyleGuides();
           }
         } catch (e) {
           console.error("Failed to load users", e);
@@ -451,36 +487,6 @@ function App() {
     };
     
     init();
-  }, []);
-
-  // Handle browser back/forward navigation
-  useEffect(() => {
-    const handlePopState = async () => {
-      const path = window.location.pathname;
-      const reviewMatch = path.match(/^\/review\/([a-zA-Z0-9-]+)$/);
-      
-      if (reviewMatch) {
-        const reviewId = reviewMatch[1];
-        try {
-          const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
-          if (reviewRes.ok) {
-            const reviewData = await reviewRes.json();
-            setCurrentReview({ ...reviewData, viewOnly: true });
-            setView('review');
-          } else {
-            setView('magazine');
-          }
-        } catch (e) {
-          setView('magazine');
-        }
-      } else if (path === '/' || path === '') {
-        setView('landing');
-        setCurrentReview(null);
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const refreshUserData = async () => {
@@ -526,9 +532,12 @@ function App() {
     
     // Only navigate to landing if we're still on the auth view
     // This prevents overwriting navigation that happened during the async fetch
-    setView(currentView => currentView === 'auth' ? 'landing' : currentView);
+    if (view === 'auth') {
+      navigate('landing');
+    }
   };
 
+  // Handle logout
   const handleLogout = async () => {
     try {
       clearSession();
@@ -537,13 +546,67 @@ function App() {
     }
     setCurrentUser(null);
     setCreditStatus(null);
-    setView('landing');
+    navigate('landing');
     setCurrentAudioFile(null);
+  };
+
+  const fetchStyleGuides = async () => {
+    try {
+      const headers = getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/style-guides`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setStyleGuides(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch style guides:', e);
+    }
+  };
+
+  const handleAddStyleGuide = async (guide) => {
+    const headers = getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/style-guides`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(guide)
+    });
+    if (res.ok) {
+      await fetchStyleGuides();
+    } else {
+      throw new Error('Failed to add style guide');
+    }
+  };
+
+  const handleUpdateStyleGuide = async (id, guide) => {
+    const headers = getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/style-guides/${id}`, {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(guide)
+    });
+    if (res.ok) {
+      await fetchStyleGuides();
+    } else {
+      throw new Error('Failed to update style guide');
+    }
+  };
+
+  const handleDeleteStyleGuide = async (id) => {
+    const headers = getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/style-guides/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (res.ok) {
+      await fetchStyleGuides();
+    } else {
+      throw new Error('Failed to delete style guide');
+    }
   };
 
   const handleAnalyze = async (data) => {
     if (!currentUser) {
-      setView('auth');
+      navigate('auth');
       return;
     }
 
@@ -584,49 +647,28 @@ function App() {
       // Get auth headers for API calls
       const authHeaders = getAuthHeadersLocal();
       
-      // Call the analyze API
-      const analyzeRes = await fetch(`${API_URL}/api/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({
-          trackName: data.trackName,
-          artistName: data.artistName,
-          audioBase64: audioBase64,
-          audioMimeType: data.audioFile.type,
-          lyrics: data.lyrics || '',
-          bio: data.bio || '',
-          imageBase64: imageBase64,
-          imageMimeType: imageMimeType,
-          preset: data.stylePreset || 'dark'
-        })
+      // Call the analyze service directly on frontend
+      const review = await analyzeTrack({
+        trackName: data.trackName,
+        artistName: data.artistName,
+        audioBase64: audioBase64,
+        audioMimeType: data.audioFile.type,
+        lyrics: data.lyrics || '',
+        bio: data.bio || '',
+        imageBase64: imageBase64,
+        imageMimeType: imageMimeType,
+        preset: data.stylePreset || 'dark'
       });
-
-      if (!analyzeRes.ok) {
-        const err = await analyzeRes.json().catch(() => ({ detail: 'Analysis failed' }));
-        throw new Error(err.detail || 'Analysis failed');
-      }
-
-      const review = await analyzeRes.json();
       
-      // Generate podcast audio - REQUIRED for review to complete
+      // Generate podcast audio directly on frontend
       let podcastAudio = null;
       let podcastError = null;
       try {
         setStatus("Synthesizing session voices...");
-        const podcastRes = await fetch(`${API_URL}/api/generate-podcast`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ review })
-        });
-        if (podcastRes.ok) {
-          const podcastData = await podcastRes.json();
-          podcastAudio = podcastData.audio;
-          if (!podcastAudio) {
-            podcastError = 'Podcast audio was empty';
-          }
-        } else {
-          const errData = await podcastRes.json().catch(() => ({}));
-          podcastError = errData.detail || 'Podcast generation failed';
+        const podcastData = await generatePodcast(review);
+        podcastAudio = podcastData.audio;
+        if (!podcastAudio) {
+          podcastError = 'Podcast audio was empty';
         }
       } catch (err) {
         console.error("Podcast generation failed", err);
@@ -649,6 +691,7 @@ function App() {
         userId: currentUser.id,
         hasPodcast: !!podcastAudio,
         podcastAudio: podcastAudio,  // Include the actual audio data
+        songAudio: songAudio,        // Include the actual song data
         hasSongAudio: true
       };
       
@@ -729,7 +772,7 @@ function App() {
         }
       }
 
-      setView('review');
+      navigate('review');
     } catch (error) {
       console.error(error);
       alert(`Studio Error: ${error.message || 'Verify your file and try again.'}`);
@@ -805,8 +848,7 @@ function App() {
           console.error("Failed to refresh published reviews", e);
         }
         
-        setView('magazine');
-        window.scrollTo(0, 0);
+        navigate('magazine');
       } else {
         const errorData = await res.json().catch(() => ({}));
         alert(`Failed to publish: ${errorData.message || 'Server error'}`);
@@ -940,42 +982,46 @@ function App() {
     }
   };
 
-  const navigate = (v) => {
+  const navigate = (v, reviewId = null) => {
+    // Close mobile menu if open
+    setMobileMenuOpen(false);
+    
     if ((v === 'dashboard' || v === 'account') && !currentUser) {
       setView('auth');
       updateUrlForView('auth');
+      window.scrollTo(0, 0);
       return;
     }
-    if (v === 'admin' && currentUser?.role !== 'admin') {
+    if (v === 'admin' && currentUser?.role !== 'admin' && currentUser?.email !== 'verdiqmag@gmail.com') {
       setView('landing');
       updateUrlForView('landing');
+      window.scrollTo(0, 0);
       return;
     }
+    
     setView(v);
-    updateUrlForView(v);
+    updateUrlForView(v, reviewId);
+    
     if (v !== 'review') {
       setCurrentReview(null);
     }
     if (v !== 'podcasts') {
       setTargetPodcastId(null);
     }
-    window.scrollTo(0, 0);
+    
+    // Use a small timeout to ensure DOM has updated before scrolling
+    setTimeout(() => window.scrollTo(0, 0), 0);
   };
 
   // Function to navigate to a review and update URL
   const navigateToReview = (review, viewOnly = false) => {
     if (!review) {
       console.error('navigateToReview: Review is null');
-      setView('magazine');
+      navigate('magazine');
       return;
     }
     setCurrentReview({ ...review, viewOnly });
-    setView('review');
-    // Update URL for shareable link (only for published reviews)
-    if (review.isPublished) {
-      updateUrlForView('review', review.id);
-    }
-    window.scrollTo(0, 0);
+    navigate('review', review.isPublished ? review.id : null);
   };
 
   return (
@@ -1034,7 +1080,7 @@ function App() {
               </div>
             ) : (
               <div className="flex items-center gap-6">
-                <button onClick={() => setView('auth')} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white transition-colors border-none bg-transparent" data-testid="login-btn">Login</button>
+                <button onClick={() => navigate('auth')} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white transition-colors border-none bg-transparent" data-testid="login-btn">Login</button>
                 <button onClick={() => navigate('pricing')} className="btn-primary !px-6 !py-2.5 !text-xs" data-testid="go-pro-btn">Go Pro</button>
               </div>
             )}
@@ -1097,11 +1143,11 @@ function App() {
             isSubscribed={currentUser?.isSubscribed || false} 
           />
         )}
-        {view === 'auth' && <Auth onLogin={handleLogin} onClose={() => setView('landing')} />}
+        {view === 'auth' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} />}
         {view === 'review' && currentReview && (
           <ReviewDisplay 
             review={currentReview} 
-            onUpgrade={() => setView('pricing')} 
+            onUpgrade={() => navigate('pricing')} 
             onSave={handleUpdateReview} 
             onPublish={handlePublish}
             onBack={() => navigate('magazine')}
@@ -1156,7 +1202,7 @@ function App() {
           <Pricing 
             currentUser={currentUser}
             onUpgrade={(data) => { 
-              if (!currentUser) { setView('auth'); return; }
+              if (!currentUser) { navigate('auth'); return; }
               // Update user state with subscription data
               const updated = { 
                 ...currentUser, 
@@ -1174,7 +1220,7 @@ function App() {
                 ] 
               };
               handleUpdateProfile(updated);
-              setView('landing'); 
+              navigate('landing'); 
             }} 
           />
         )}
@@ -1194,6 +1240,10 @@ function App() {
             onUpdateUser={handleUpdateProfile} 
             onDeleteUser={handleDeleteUser}
             onUpdateReview={handleAdminUpdateReview}
+            styleGuides={styleGuides}
+            onAddStyleGuide={handleAddStyleGuide}
+            onUpdateStyleGuide={handleUpdateStyleGuide}
+            onDeleteStyleGuide={handleDeleteStyleGuide}
           />
         )}
         {view === 'privacy' && <PrivacyPolicy />}

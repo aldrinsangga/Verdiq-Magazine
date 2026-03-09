@@ -101,8 +101,13 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
       const res = await fetch(`${API_URL}/api/reviews/${reviewId}`);
       if (res.ok) {
         const fullReview = await res.json();
-        const url = fullReview.podcastAudioUrl || (fullReview.podcastAudio ? `data:audio/wav;base64,${fullReview.podcastAudio}` : null);
-        if (url) {
+        let url = fullReview.podcastAudioUrl || fullReview.podcastAudio || fullReview.podcast_audio_path;
+        
+        if (url && typeof url === 'string' && !url.startsWith('http') && !url.startsWith('data:')) {
+          url = `data:audio/wav;base64,${url}`;
+        }
+        
+        if (url && typeof url === 'string') {
           setAudioUrls(prev => ({ ...prev, [reviewId]: url }));
           return url;
         }
@@ -230,13 +235,19 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleTimeUpdate}
         onEnded={() => setIsPlaying(false)}
+        onError={(e) => {
+          const target = e.target as HTMLAudioElement;
+          console.error('Audio element error:', target.error);
+          setIsPlaying(false);
+          setIsLoading(false);
+        }}
       />
       
       {/* Marketplace Header */}
       <div className="border-b border-slate-900 pb-6 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div>
-          <h1 className="text-7xl font-black tracking-tighter leading-none mb-4">SESSIONS</h1>
-          <p className="text-emerald-500 font-bold uppercase tracking-[0.5em] text-xs">Public Podcast Marketplace</p>
+          <h1 className="text-7xl font-black tracking-tighter leading-none mb-4">VERDIQ SESSIONS</h1>
+          <p className="text-emerald-500 font-bold uppercase tracking-[0.5em] text-xs">MUSIC REVIEW PODCAST</p>
         </div>
         <div className="text-right hidden md:block">
           <p className="text-slate-500 font-black uppercase text-sm">Global Feed</p>

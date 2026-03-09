@@ -85,10 +85,11 @@ const ReviewDisplay = ({ review, onUpgrade, onSave, onPublish, onViewPodcast, on
 
   // Get podcast audio source (URL or base64)
   const getPodcastSource = () => {
-    if (review.podcastAudioUrl) return review.podcastAudioUrl;
-    if (review.podcastAudio) return `data:audio/wav;base64,${review.podcastAudio}`;
-    if (review.podcast_audio_path) return review.podcast_audio_path;
-    return null;
+    let url = review.podcastAudioUrl || review.podcastAudio || review.podcast_audio_path;
+    if (url && typeof url === 'string' && !url.startsWith('http') && !url.startsWith('data:')) {
+      return `data:audio/wav;base64,${url}`;
+    }
+    return (typeof url === 'string' ? url : null);
   };
 
   // Check if podcast audio data actually exists
