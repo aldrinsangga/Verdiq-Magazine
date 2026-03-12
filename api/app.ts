@@ -2,7 +2,13 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase";
-import firebaseConfig from "../firebase-applet-config.json";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const firebaseConfig = JSON.parse(fs.readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
 import { UserAccount, Review } from "../types";
 import { client as paypalClient, paypal } from "./paypal";
 
