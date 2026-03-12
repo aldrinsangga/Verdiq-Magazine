@@ -2,6 +2,12 @@ import { supabase } from '../supabaseClient';
 
 
 export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, artistPhotoBase64, artistPhotoMimeType, preset }: any) => {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw new Error('You must be logged in to analyze tracks');
+  }
+
   const { data, error } = await supabase.functions.invoke('gemini-analyze', {
     body: {
       trackName,
@@ -19,6 +25,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
   });
 
   if (error) {
+    console.error('Edge Function Error:', error);
     throw new Error(error.message || 'Failed to analyze track');
   }
 

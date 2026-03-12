@@ -15,6 +15,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Unauthorized: Missing authorization header');
+    }
+
     const { trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, artistPhotoBase64, artistPhotoMimeType, preset } = await req.json();
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
@@ -22,15 +27,15 @@ Deno.serve(async (req: Request) => {
       throw new Error("GEMINI_API_KEY not configured");
     }
 
-    // Fetch style guides for context
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
+
     let styleGuidesContext = "";
     try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL");
-      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
-
-      const guidesResponse = await fetch(`${supabaseUrl}/rest/v1/style_guides?select=*&is_public=eq.true`, {
+      const guidesResponse = await fetch(`${supabaseUrl}/rest/v1/style_guides?select=*`, {
         headers: {
           'apikey': supabaseKey!,
+          'Authorization': authHeader,
           'Content-Type': 'application/json'
         }
       });
@@ -46,7 +51,7 @@ Deno.serve(async (req: Request) => {
         }
       }
     } catch (e) {
-      console.error("Failed to fetch style guides", e);
+      console.error("Failed to fetch style guides:", e);
     }
 
     const prompt = `
