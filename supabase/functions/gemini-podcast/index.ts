@@ -20,20 +20,25 @@ Deno.serve(async (req: Request) => {
       throw new Error('Unauthorized: Missing authorization header');
     }
 
-    const { review } = await req.json();
+    const body = await req.json();
+    const review = body.review || body;
+
+    const songTitle = review.songTitle || review.song_title || review.trackName || review.track_name || 'Unknown Track';
+    const artistName = review.artistName || review.artist_name || 'Unknown Artist';
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY not configured");
     }
 
-    // Generate script
     const scriptPrompt = `
     Create a RAW, conversational, high-energy dialogue script for a music podcast session.
-    Track: "${review.songTitle}" by ${review.artistName}.
+    Track: "${songTitle}" by ${artistName}.
     Characters: Wolf (energetic male) and Sloane (analytical female).
     Format: Wolf: [Dialogue], Sloane: [Dialogue].
   `;
+
+    console.log("Generating script for:", songTitle, "by", artistName);
 
     const scriptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
       method: "POST",
@@ -53,13 +58,19 @@ Deno.serve(async (req: Request) => {
 
     if (!scriptResponse.ok) {
       const error = await scriptResponse.text();
-      throw new Error(`Script generation error: ${error}`);
+      console.error("Script API error status:", scriptResponse.status, error);
+      throw new Error(`Script generation failed (${scriptResponse.status}): ${error}`);
     }
 
     const scriptData = await scriptResponse.json();
     const script = scriptData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // Generate audio
+    if (!script) {
+      const finishReason = scriptData.candidates?.[0]?.finishReason;
+      console.error("No script generated. Finish reason:", finishReason, JSON.stringify(scriptData).slice(0, 500));
+      throw new Error(`Script generation returned no content. Finish reason: ${finishReason || 'unknown'}`);
+    }
+
     console.log("Script generated, length:", script.length);
     console.log("Starting audio generation...");
 
@@ -92,7 +103,8 @@ Deno.serve(async (req: Request) => {
 
     if (!audioResponse.ok) {
       const error = await audioResponse.text();
-      throw new Error(`Audio generation error: ${error}`);
+      console.error("Audio API error status:", audioResponse.status, error);
+      throw new Error(`Audio generation failed (${audioResponse.status}): ${error}`);
     }
 
     const audioData = await audioResponse.json();
@@ -100,10 +112,10 @@ Deno.serve(async (req: Request) => {
 
     if (!pcmData) {
       const finishReason = audioData.candidates?.[0]?.finishReason;
-      throw new Error(`No audio generated. Finish reason: ${finishReason || 'unknown'}. Response: ${JSON.stringify(audioData).slice(0, 500)}`);
+      console.error("No audio data. Finish reason:", finishReason, JSON.stringify(audioData).slice(0, 500));
+      throw new Error(`No audio generated. Finish reason: ${finishReason || 'unknown'}`);
     }
 
-    // Convert base64 PCM to WAV format
     const pcmBytes = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
     const sampleRate = 24000;
     const numChannels = 1;
@@ -163,7 +175,7 @@ Deno.serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Podcast generation error:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
