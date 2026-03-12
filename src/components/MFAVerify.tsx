@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Loader2, AlertTriangle } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from '../services/api';
 
 const MFAVerify = ({ email, password, onSuccess, onCancel }) => {
   const [code, setCode] = useState('');
@@ -24,26 +23,9 @@ const MFAVerify = ({ email, password, onSuccess, onCancel }) => {
     setError(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/mfa/verify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          mfa_code: code
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Invalid MFA code');
-      }
-
-      const userData = await res.json();
+      const userData = await api.verifyMFA(email, password, code);
       onSuccess(userData);
-    } catch (e) {
+    } catch (e: any) {
       setError(e.message);
       setCode('');
     } finally {

@@ -1,6 +1,5 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from './api';
 
 // Initialize Gemini API
 // Note: process.env.GEMINI_API_KEY is injected by the platform
@@ -191,19 +190,15 @@ const REVIEW_SCHEMA = {
 export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, artistPhotoBase64, artistPhotoMimeType, preset }: any) => {
   const ai = getAI();
   
-  // Fetch style guides for training
   let styleGuidesContext = "";
   try {
-    const res = await fetch(`${API_URL}/api/public/style-guides`);
-    if (res.ok) {
-      const guides = await res.json();
-      if (guides && guides.length > 0) {
-        styleGuidesContext = "\nSTYLE GUIDES & WRITING VOICE EXAMPLES:\n";
-        guides.forEach((guide: any, index: number) => {
-          styleGuidesContext += `\nExample ${index + 1} (${guide.type} from ${guide.source}):\n${guide.content}\n`;
-        });
-        styleGuidesContext += "\nINSTRUCTION: You MUST strictly adopt the professional, sharp, and authoritative music criticism voice found in the examples above. This is NOT optional. Use their specific vocabulary, sentence length variation, and critical perspective. If your output sounds like a generic AI assistant, it is a failure. Be specific, opinionated, and culturally aware. Write like a human critic who has listened to thousands of records.\n";
-      }
+    const guides = await api.getPublicStyleGuides();
+    if (guides && guides.length > 0) {
+      styleGuidesContext = "\nSTYLE GUIDES & WRITING VOICE EXAMPLES:\n";
+      guides.forEach((guide: any, index: number) => {
+        styleGuidesContext += `\nExample ${index + 1} (${guide.type} from ${guide.source}):\n${guide.content}\n`;
+      });
+      styleGuidesContext += "\nINSTRUCTION: You MUST strictly adopt the professional, sharp, and authoritative music criticism voice found in the examples above. This is NOT optional. Use their specific vocabulary, sentence length variation, and critical perspective. If your output sounds like a generic AI assistant, it is a failure. Be specific, opinionated, and culturally aware. Write like a human critic who has listened to thousands of records.\n";
     }
   } catch (e) {
     console.error("Failed to fetch style guides for Gemini context", e);

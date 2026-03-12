@@ -1,9 +1,5 @@
-/**
- * Auth Client for Verdiq - Supabase Authentication
- */
 import { supabase } from './supabaseClient';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from './services/api';
 
 const SESSION_KEY = 'verdiq_session';
 
@@ -40,7 +36,6 @@ export const getAuthHeaders = async () => {
     if (session?.access_token) {
       return { 'Authorization': `Bearer ${session.access_token}` };
     }
-
     const storedSession = getSession();
     if (storedSession?.session?.access_token) {
       return { 'Authorization': `Bearer ${storedSession.session.access_token}` };
@@ -67,14 +62,10 @@ export const getCurrentUser = async () => {
     const session = getSession();
     if (!session?.id) return null;
 
-    const headers = await getAuthHeaders();
-    if (!headers.Authorization) return null;
+    const { data: { session: supaSession } } = await supabase.auth.getSession();
+    if (!supaSession) return null;
 
-    const response = await fetch(`${API_URL}/api/users/${session.id}`, { headers });
-    if (response.ok) {
-      return await response.json();
-    }
-    return null;
+    return await api.getUser(session.id);
   } catch (e) {
     console.error('Failed to get current user', e);
     return null;
@@ -83,30 +74,34 @@ export const getCurrentUser = async () => {
 
 export const login = async (email: string, password: string) => {
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     if (!data.session || !data.user) throw new Error('No session returned');
 
-    const token = data.session.access_token;
-    const headers = { 'Authorization': `Bearer ${token}` };
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
 
-    const response = await fetch(`${API_URL}/api/users/${data.user.id}`, { headers });
-
-    if (response.ok) {
-      const userData = await response.json();
-      const sessionData = {
-        ...userData,
-        session: { access_token: token }
-      };
-      saveSession(sessionData);
-      return sessionData;
-    } else {
-      throw new Error('Failed to fetch user data from backend');
+    if (user?.mfaEnabled) {
+      return { mfa_required: true, email };
     }
+
+    const { data: reviews } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('userId', data.user.id)
+      .order('createdAt', { ascending: false });
+
+    const { password: pw, ...safe } = (user || { id: data.user.id, email: data.user.email }) as any;
+    const sessionData = {
+      ...safe,
+      history: reviews || [],
+      session: { access_token: data.session.access_token }
+    };
+    saveSession(sessionData);
+    return sessionData;
   } catch (error: any) {
     console.error('Login error:', error);
     throw error;
@@ -115,28 +110,37 @@ export const login = async (email: string, password: string) => {
 
 export const signup = async (email: string, password: string, name: string) => {
   try {
-    const response = await fetch(`${API_URL}/api/auth/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name })
-    });
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({ message: 'Signup failed' }));
-      throw new Error(err.message || 'Signup failed');
+    if (!data.user) throw new Error('Signup failed');
+
+    let session = data.session;
+    if (!session) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw new Error('Account created. Please try logging in.');
+      session = signInData.session;
     }
 
-    const userData = await response.json();
+    const newUser = {
+      id: data.user.id,
+      email,
+      name: name || '',
+      credits: 10,
+      role: 'user',
+      mfaEnabled: false,
+      createdAt: new Date().toISOString()
+    };
 
-    if (userData.session?.access_token) {
-      await supabase.auth.setSession({
-        access_token: userData.session.access_token,
-        refresh_token: userData.session.refresh_token || ''
-      });
-    }
+    await supabase.from('users').insert(newUser);
 
-    saveSession(userData);
-    return userData;
+    const sessionData = {
+      ...newUser,
+      history: [],
+      session: { access_token: session!.access_token }
+    };
+    saveSession(sessionData);
+    return sessionData;
   } catch (error: any) {
     console.error('Signup error:', error);
     throw error;
@@ -169,27 +173,17 @@ export const forgotPassword = async (email: string) => {
 export const requestPasswordReset = forgotPassword;
 
 export const sendVerificationEmail = async () => {
-  console.log('Email verification is handled automatically by Supabase');
   return { success: true };
 };
 
 export const updateUserProfile = async (userId: string, updates: any) => {
   try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}/api/users/${userId}`, {
-      method: 'PUT',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    });
-
-    if (!response.ok) throw new Error('Failed to update profile');
-
-    const updatedUser = await response.json();
+    const result = await api.updateUser(userId, updates);
     const currentSession = getSession();
     if (currentSession) {
-      saveSession({ ...currentSession, ...updatedUser });
+      saveSession({ ...currentSession, ...result });
     }
-    return updatedUser;
+    return result;
   } catch (error) {
     console.error('Update profile error:', error);
     throw error;
@@ -198,18 +192,7 @@ export const updateUserProfile = async (userId: string, updates: any) => {
 
 export const verifyMFA = async (email: string, password: string, mfaCode: string) => {
   try {
-    const response = await fetch(`${API_URL}/api/auth/mfa/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, mfa_code: mfaCode })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'MFA verification failed');
-    }
-
-    const userData = await response.json();
+    const userData = await api.verifyMFA(email, password, mfaCode);
     saveSession(userData);
     return userData;
   } catch (error: any) {
@@ -220,14 +203,7 @@ export const verifyMFA = async (email: string, password: string, mfaCode: string
 
 export const setupMFA = async () => {
   try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}/api/auth/mfa/setup`, {
-      method: 'POST',
-      headers
-    });
-
-    if (!response.ok) throw new Error('MFA setup failed');
-    return await response.json();
+    return await api.setupMFA();
   } catch (error) {
     console.error('MFA setup error:', error);
     throw error;
@@ -236,19 +212,7 @@ export const setupMFA = async () => {
 
 export const verifyMFASetup = async (code: string) => {
   try {
-    const headers = await getAuthHeaders();
-    const response = await fetch(`${API_URL}/api/auth/mfa/verify-setup`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'MFA verification failed');
-    }
-
-    return await response.json();
+    return await api.verifyMFASetup(code);
   } catch (error) {
     console.error('MFA verification setup error:', error);
     throw error;

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, QrCode, Key, Check, AlertTriangle, X, Loader2 } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from '../services/api';
 
 const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
   const [step, setStep] = useState('initial'); // initial, setup, verify, success
@@ -18,12 +17,7 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
 
   const checkMFAStatus = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/auth/mfa/status`, {
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`
-        }
-      });
-      const data = await res.json();
+      const data = await api.getMFAStatus();
       setMfaEnabled(data.mfa_enabled);
     } catch (e) {
       console.error('Failed to check MFA status:', e);
@@ -34,23 +28,10 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/auth/mfa/setup`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Failed to setup MFA');
-      }
-      
-      const data = await res.json();
+      const data = await api.setupMFA();
       setSetupData(data);
       setStep('setup');
-    } catch (e) {
+    } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
@@ -62,31 +43,17 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
       setError('Please enter a 6-digit code');
       return;
     }
-    
+
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/auth/mfa/verify-setup`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ code: verifyCode })
-      });
-      
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Failed to verify MFA');
-      }
-      
-      const data = await res.json();
+      const data = await api.verifyMFASetup(verifyCode);
       if (data.success) {
         setStep('success');
         setMfaEnabled(true);
         if (onMFAEnabled) onMFAEnabled();
       }
-    } catch (e) {
+    } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from '../services/api';
 
 const ContactUs = () => {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -22,18 +21,14 @@ const ContactUs = () => {
     };
     
     try {
-      const res = await fetch(`${API_URL}/api/support`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
+      await api.createSupportTicket({
+        name: data.name as string,
+        email: data.email as string,
+        subject: data.subject as string,
+        category: 'Others',
+        message: data.message as string
       });
-      
-      if (!res.ok) {
-        throw new Error('Failed to send message');
-      }
-      
+
       setStatus('sent');
       form.reset();
       

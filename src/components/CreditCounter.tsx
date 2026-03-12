@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getAuthHeaders } from '../authClient';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from '../services/api';
 
 const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredits, onManageSubscription, onNavigate }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,14 +30,8 @@ const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredi
 
   const fetchCreditStatus = async () => {
     try {
-      const headers = await getAuthHeaders();
-      if (!headers.Authorization) return;
-      
-      const res = await fetch(`${API_URL}/api/credits/status`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setCreditStatus(data);
-      }
+      const data = await api.getCreditStatus();
+      setCreditStatus(data);
     } catch (e) {
       console.error('Failed to fetch credit status:', e);
     }

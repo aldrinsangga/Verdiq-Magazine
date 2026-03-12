@@ -1,8 +1,6 @@
 import React from 'react';
 import AdminDashboard from './AdminDashboard';
-import { getAuthHeaders } from '../authClient';
-
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+import { api } from '../services/api';
 
 interface AdminDashboardWrapperProps {
   currentUser: any;
@@ -75,22 +73,11 @@ const AdminDashboardWrapper: React.FC<AdminDashboardWrapperProps> = ({
 
     const fetchUsers = async () => {
       try {
-        const headers = await getAuthHeaders();
-        const res = await fetch(`${API_URL}/api/users`, { headers });
-        
-        if (!isMounted) return;
-        
-        if (res.ok) {
-          const list = await res.json();
-          if (isMounted) {
-            setLocalUsers(list);
-            setUsersRef.current(list);
-            setAllReviewsRef.current(list.flatMap((u: any) => u.history || []));
-          }
-        } else {
-          if (isMounted) {
-            setError('Failed to load users');
-          }
+        const list = await api.getAllUsers();
+        if (isMounted) {
+          setLocalUsers(list);
+          setUsersRef.current(list);
+          setAllReviewsRef.current(list.flatMap((u: any) => u.history || []));
         }
       } catch (e) {
         console.error('AdminDashboardWrapper: Fetch error:', e);
