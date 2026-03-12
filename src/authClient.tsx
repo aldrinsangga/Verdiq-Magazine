@@ -64,10 +64,13 @@ export const safeJson = async (response: Response) => {
 
 export const getCurrentUser = async () => {
   try {
+    const session = getSession();
+    if (!session?.id) return null;
+
     const headers = await getAuthHeaders();
     if (!headers.Authorization) return null;
 
-    const response = await fetch(`${API_URL}/api/users/${getSession()?.id}`, { headers });
+    const response = await fetch(`${API_URL}/api/users/${session.id}`, { headers });
     if (response.ok) {
       return await response.json();
     }

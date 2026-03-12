@@ -1,11 +1,8 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import { supabase, verifyJWT, getUserById, uploadToStorage } from "./supabaseClient.ts";
 import { UserAccount, Review } from "../types.ts";
 import { client as paypalClient, paypal } from "./paypal.ts";
-
-dotenv.config({ override: true });
 
 const app = express();
 
@@ -164,23 +161,26 @@ app.post("/api/auth/login", async (req, res, next) => {
 
 app.post("/api/auth/signup", async (req, res, next) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, name } = req.body;
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
-    if (error) {
-      return res.status(400).json({ message: error.message, detail: error.message });
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized", detail: "Valid auth token required" });
     }
 
-    if (!data.session || !data.user) {
-      return res.status(400).json({ message: "Signup failed", detail: "No session returned" });
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (existingUser) {
+      const fullUser = await getFullUser(userId);
+      return res.json(fullUser);
     }
 
     const newUser = {
-      id: data.user.id,
+      id: userId,
       email,
       name,
       credits: 10,
@@ -194,7 +194,7 @@ app.post("/api/auth/signup", async (req, res, next) => {
       .insert(newUser);
 
     const sanitized = sanitizeUser(newUser);
-    res.json({ ...sanitized, session: { access_token: data.session.access_token } });
+    res.json(sanitized);
   } catch (error) {
     next(error);
   }
