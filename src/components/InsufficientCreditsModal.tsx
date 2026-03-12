@@ -1,7 +1,11 @@
 import React from 'react';
 
-const InsufficientCreditsModal = ({ isOpen, onClose, required, onBuyCredits }: any) => {
+const InsufficientCreditsModal = ({ isOpen, onClose, requiredCredits, currentCredits, action, isFreeUser, onBuyCredits }: any) => {
   if (!isOpen) return null;
+  
+  const isMagazine = action === 'publish';
+  const isEdit = action === 'edit';
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-slate-900 p-8 rounded-[40px] border border-white/10 max-w-md w-full text-center">
@@ -11,7 +15,15 @@ const InsufficientCreditsModal = ({ isOpen, onClose, required, onBuyCredits }: a
           </svg>
         </div>
         <h2 className="text-3xl font-black mb-4 tracking-tighter uppercase">Insufficient <span className="text-red-500">Credits.</span></h2>
-        <p className="text-slate-400 mb-8 leading-relaxed">You need <span className="text-white font-bold">{required} credits</span> to perform this action. Top up your account to continue.</p>
+        <p className="text-slate-400 mb-8 leading-relaxed">
+          {isMagazine 
+            ? `Publishing to the Magazine requires ${requiredCredits} credits. ` 
+            : isEdit
+            ? `Editing a review requires ${requiredCredits} credits. `
+            : `Generating a review requires ${requiredCredits} credits. `}
+          You currently have <span className="text-white font-bold">{currentCredits} credits</span>. 
+          Top up your account to continue.
+        </p>
         
         <div className="space-y-3">
           <button 

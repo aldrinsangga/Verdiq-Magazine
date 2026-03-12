@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAudio }) => {
   // Filter reviews that have podcast and are published
-  const podcastReviews = reviews.filter(r => (r.podcastAudio || r.hasPodcast || r.podcastAudioUrl) && r.isPublished);
+  const podcastReviews = reviews.filter(r => (r.podcastAudio || r.hasPodcast || r.podcastAudioUrl) && r.isPublished && !r.isDeleted);
   const [activeId, setActiveId] = useState(initialPodcastId || podcastReviews[0]?.id || null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -228,7 +228,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
   const sidebarPodcasts = podcastReviews.slice(0, 7);
 
   return (
-    <div className="max-w-[1440px] mx-auto px-8 py-16" data-testid="podcasts">
+    <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-12 md:py-16" data-testid="podcasts">
       <audio 
         ref={audioRef} 
         preload="metadata"
@@ -246,10 +246,10 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
       {/* Marketplace Header */}
       <div className="border-b border-slate-900 pb-6 mb-12 flex flex-col md:flex-row md:items-end justify-between gap-8">
         <div>
-          <h1 className="text-7xl font-black tracking-tighter leading-none mb-4">VERDIQ SESSIONS</h1>
+          <h1 className="text-4xl sm:text-7xl font-black tracking-tighter leading-none mb-4 uppercase">Verdiq Sessions</h1>
           <p className="text-emerald-500 font-bold uppercase tracking-[0.5em] text-xs">MUSIC REVIEW PODCAST</p>
         </div>
-        <div className="text-right hidden md:block">
+        <div className="text-left md:text-right">
           <p className="text-slate-500 font-black uppercase text-sm">Global Feed</p>
           <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">{podcastReviews.length} Episodes Live</p>
         </div>
@@ -259,9 +259,9 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
         {/* Main Player */}
         <div className="flex-1">
           {/* Active Episode */}
-          <div className="card-premium !p-8 mb-10" data-testid="active-podcast">
+          <div className="card-premium !p-4 sm:!p-8 mb-10" data-testid="active-podcast">
             <div className="flex flex-col md:flex-row gap-8 items-center">
-              <div className="w-full md:w-96 h-96 rounded-[40px] overflow-hidden flex-shrink-0 shadow-2xl border border-white/5 relative group">
+              <div className="w-full md:w-96 h-64 sm:h-96 rounded-[24px] md:rounded-[40px] overflow-hidden flex-shrink-0 shadow-2xl border border-white/5 relative group">
                 <img 
                   src={activeReview?.featuredImage || activeReview?.imageUrl || `https://picsum.photos/seed/${activeReview?.id}/600/600`} 
                   alt={activeReview?.songTitle}
@@ -278,8 +278,8 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                   </div>
                   <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/50 border border-emerald-500/20 px-2 py-0.5 rounded">Marketplace Session</span>
                 </div>
-                <h2 className="text-5xl font-black text-white mb-2 tracking-tighter leading-none">{activeReview?.songTitle.toUpperCase()}</h2>
-                <p className="text-slate-400 text-2xl font-light mb-6 italic">by {activeReview?.artistName}</p>
+                <h2 className="text-3xl sm:text-5xl font-black text-white mb-2 tracking-tighter leading-none uppercase">{activeReview?.songTitle}</h2>
+                <p className="text-slate-400 text-lg sm:text-2xl font-light mb-6 italic">by {activeReview?.artistName}</p>
                 
                 {/* Player Controls */}
                 <div className="space-y-6">
@@ -287,15 +287,15 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                     <button
                       onClick={() => handlePlay(activeReview?.id)}
                       disabled={isLoading}
-                      className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center hover:bg-emerald-400 transition-all hover:scale-110 shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50"
+                      className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-500 rounded-full flex items-center justify-center hover:bg-emerald-400 transition-all hover:scale-110 shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50"
                       data-testid="play-btn"
                     >
                       {isLoading ? (
-                        <div className="w-8 h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin" />
                       ) : isPlaying && activeId === activeReview?.id ? (
-                        <Pause className="w-8 h-8 text-slate-950 fill-current" />
+                        <Pause className="w-6 h-6 sm:w-8 sm:h-8 text-slate-950 fill-current" />
                       ) : (
-                        <Play className="w-8 h-8 text-slate-950 fill-current ml-1" />
+                        <Play className="w-6 h-6 sm:w-8 sm:h-8 text-slate-950 fill-current ml-1" />
                       )}
                     </button>
                     
@@ -471,9 +471,9 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                     {activeId === review.id && isPlaying && (
                       <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                         <div className="flex gap-0.5">
-                          <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse" style={{ animationDelay: '300ms' }} />
+                          <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse [animation-delay:0ms]" />
+                          <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse [animation-delay:150ms]" />
+                          <span className="w-1 h-4 bg-emerald-500 rounded animate-pulse [animation-delay:300ms]" />
                         </div>
                       </div>
                     )}

@@ -1,15 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Reply } from 'lucide-react';
+import { getAuthHeaders } from '../authClient';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
-const SUBSCRIPTION_PLANS = {
-  curious: { name: 'Curious (Free)', credits: 0, price: '$0' },
-  artist: { name: 'Artist', credits: 15, price: '$12/mo' },
-  label: { name: 'Label', credits: 60, price: '$49/mo' }
-};
+interface AdminDashboardProps {
+  users?: any[];
+  onUpdateUser?: (user: any) => void;
+  onDeleteUser?: (id: string) => void;
+  onUpdateReview?: (userId: string, review: any) => void;
+  styleGuides?: any[];
+  onAddStyleGuide?: (guide: any) => void;
+  onUpdateStyleGuide?: (id: string, guide: any) => void;
+  onDeleteStyleGuide?: (id: string) => void;
+  onNavigate?: (view: any, reviewId?: any) => void;
+}
 
-const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview, styleGuides = [], onAddStyleGuide, onUpdateStyleGuide, onDeleteStyleGuide }) => {
+const AdminDashboard = ({ 
+  users = [], 
+  onUpdateUser, 
+  onDeleteUser, 
+  onUpdateReview, 
+  styleGuides = [], 
+  onAddStyleGuide, 
+  onUpdateStyleGuide, 
+  onDeleteStyleGuide, 
+  onNavigate 
+}: AdminDashboardProps) => {
   const [activeTab, setActiveTab] = useState('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
@@ -21,6 +38,12 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [podcasts, setPodcasts] = useState([]);
   const [loadingPodcasts, setLoadingPodcasts] = useState(false);
+  const [supportTickets, setSupportTickets] = useState([]);
+  const [loadingTickets, setLoadingTickets] = useState(false);
+  const [supportTab, setSupportTab] = useState('open');
+  const [respondingTo, setRespondingTo] = useState(null);
+  const [adminReply, setAdminReply] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
   
   // Style Guide state
   const [isStyleModalOpen, setIsStyleModalOpen] = useState(false);
@@ -37,9 +60,11 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
   // Loading states for buttons
   const [savingUser, setSavingUser] = useState(false);
   const [addingCredits, setAddingCredits] = useState(false);
-  const [togglingStatus, setTogglingStatus] = useState(null);
+  const [earnings, setEarnings] = useState({ purchases: [], totalEarnings: 0 });
+  const [loadingEarnings, setLoadingEarnings] = useState(false);
   const [publishingReview, setPublishingReview] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
+  const [togglingStatus, setTogglingStatus] = useState(null);
 
   // Defensive check for users
   const safeUsers = Array.isArray(users) ? users : [];
@@ -67,14 +92,13 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
   );
 
   // Stats
-  const totalSubscribers = safeUsers.filter(u => u.isSubscribed).length;
   const totalCreditsInSystem = safeUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
   const publishedReviews = allReviews.filter(r => r.isPublished).length;
+  const totalEarnings = earnings.totalEarnings;
 
   const handleEditUser = (user) => {
     setEditingUser({ 
       ...user,
-      subscription_type: user.subscription_type || 'curious',
       is_disabled: user.is_disabled || false
     });
   };
@@ -107,15 +131,7 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
     
     setSavingUser(true);
     try {
-      // Update is_subscribed based on plan
-      const isSubscribed = editingUser.subscription_type && editingUser.subscription_type !== 'curious';
-      const updatedUser = {
-        ...editingUser,
-        isSubscribed: isSubscribed,
-        is_subscribed: isSubscribed
-      };
-      
-      await onUpdateUser(updatedUser);
+      await onUpdateUser(editingUser);
       setEditingUser(null);
     } catch (error) {
       console.error('Error saving user:', error);
@@ -146,6 +162,107 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
     }
   };
 
+  useEffect(() => {
+    if (activeTab === 'earnings') {
+      fetchEarnings();
+    } else if (activeTab === 'support') {
+      fetchSupportTickets();
+    }
+  }, [activeTab]);
+
+  const fetchSupportTickets = async () => {
+    setLoadingTickets(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/support`, {
+        headers: { ...headers, 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log("Fetched support tickets:", data);
+        setSupportTickets(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Failed to fetch support tickets, status:", res.status, errData);
+      }
+    } catch (err) {
+      console.error("Failed to fetch support tickets:", err);
+    } finally {
+      setLoadingTickets(false);
+    }
+  };
+
+  const handleUpdateTicketStatus = async (id: string, status: string) => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/support/${id}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        fetchSupportTickets();
+      }
+    } catch (err) {
+      console.error("Failed to update ticket status:", err);
+    }
+  };
+
+  const handleDeleteTicket = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this ticket?')) return;
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/support/${id}`, {
+        method: 'DELETE',
+        headers
+      });
+      if (res.ok) {
+        fetchSupportTickets();
+      }
+    } catch (err) {
+      console.error("Failed to delete ticket:", err);
+    }
+  };
+
+  const handleSendAdminReply = async (ticketId) => {
+    if (!adminReply.trim()) return;
+    setSendingReply(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/support/${ticketId}/message`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: adminReply })
+      });
+      if (res.ok) {
+        setAdminReply('');
+        setRespondingTo(null);
+        fetchSupportTickets();
+      }
+    } catch (err) {
+      console.error("Failed to send admin reply:", err);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const fetchEarnings = async () => {
+    setLoadingEarnings(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/earnings`, {
+        headers
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEarnings(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch earnings:", err);
+    } finally {
+      setLoadingEarnings(false);
+    }
+  };
   const handleToggleUserStatus = async (user) => {
     setTogglingStatus(user.id);
     try {
@@ -254,16 +371,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
     }
   };
 
-  const getPlanBadge = (user) => {
-    if (!user.isSubscribed && !user.is_subscribed) return { label: 'Free', color: 'bg-slate-700 text-slate-300' };
-    const plan = user.subscription_type || 'curious';
-    switch(plan) {
-      case 'label': return { label: 'Label', color: 'bg-purple-500/20 text-purple-400' };
-      case 'artist': return { label: 'Artist', color: 'bg-emerald-500/20 text-emerald-400' };
-      default: return { label: 'Free', color: 'bg-slate-700 text-slate-300' };
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-6 py-12" data-testid="admin-dashboard">
       {/* Header */}
@@ -273,10 +380,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
           <p className="text-slate-500">Manage users, subscriptions, credits, and reviews</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-emerald-500/10 px-4 py-2 rounded-xl border border-emerald-500/20">
-            <p className="text-[10px] font-black uppercase text-emerald-500">Subscribers</p>
-            <p className="text-2xl font-black text-white">{totalSubscribers}</p>
-          </div>
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Total Users</p>
             <p className="text-2xl font-black text-white">{safeUsers.length}</p>
@@ -289,6 +392,10 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
             <p className="text-[10px] font-black uppercase text-amber-500">Credits Pool</p>
             <p className="text-2xl font-black text-white">{totalCreditsInSystem}</p>
           </div>
+          <div className="bg-emerald-500/10 px-4 py-2 rounded-xl border border-emerald-500/20">
+            <p className="text-[10px] font-black uppercase text-emerald-500">Total Earnings</p>
+            <p className="text-2xl font-black text-white">${totalEarnings.toFixed(2)}</p>
+          </div>
         </div>
       </div>
 
@@ -298,8 +405,9 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
           { id: 'users', label: 'Users', icon: '👥' },
           { id: 'reviews', label: 'Reviews', icon: '📝' },
           { id: 'podcasts', label: 'Podcasts', icon: '🎙️' },
-          { id: 'subscriptions', label: 'Subscriptions', icon: '💳' },
+          { id: 'earnings', label: 'Earnings', icon: '💰' },
           { id: 'style', label: 'Style Guides', icon: '🎨' },
+          { id: 'support', label: 'Support', icon: '🎫' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -350,7 +458,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
               <thead className="bg-slate-900">
                 <tr>
                   <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">User</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Plan</th>
                   <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Credits</th>
                   <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Status</th>
                   <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Reviews</th>
@@ -359,7 +466,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
               </thead>
               <tbody>
                 {filteredUsers.map(user => {
-                  const planBadge = getPlanBadge(user);
                   return (
                     <tr key={user.id} className={`border-t border-slate-800 hover:bg-slate-900/50 ${user.is_disabled ? 'opacity-50' : ''}`}>
                       <td className="px-6 py-4">
@@ -372,11 +478,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
                             <p className="text-xs text-slate-500">{user.email}</p>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${planBadge.color}`}>
-                          {planBadge.label}
-                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-emerald-500 font-bold text-lg">{user.credits || 0}</span>
@@ -493,9 +594,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
                   <h2 className="text-2xl font-black text-white">{selectedUser.name}</h2>
                   <p className="text-slate-500">{selectedUser.email}</p>
                   <div className="flex items-center gap-2 mt-2">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${getPlanBadge(selectedUser).color}`}>
-                      {getPlanBadge(selectedUser).label}
-                    </span>
                     {selectedUser.is_disabled ? (
                       <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400">Disabled</span>
                     ) : (
@@ -543,8 +641,8 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
                 <p className="text-3xl font-black text-white">{selectedUser.history?.filter(r => r.isPublished).length || 0}</p>
               </div>
               <div className="bg-slate-800/50 rounded-xl p-4">
-                <p className="text-[10px] font-black uppercase text-slate-500">Plan</p>
-                <p className="text-xl font-black text-white">{SUBSCRIPTION_PLANS[selectedUser.subscription_type || 'curious']?.name || 'Free'}</p>
+                <p className="text-[10px] font-black uppercase text-slate-500">Account Type</p>
+                <p className="text-xl font-black text-white">{selectedUser.role === 'admin' ? 'Admin' : 'User'}</p>
               </div>
             </div>
 
@@ -801,98 +899,63 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
         </div>
       )}
 
-      {/* SUBSCRIPTIONS TAB */}
-      {activeTab === 'subscriptions' && (
+      {/* EARNINGS TAB */}
+      {activeTab === 'earnings' && (
         <div className="space-y-6">
-          {/* Subscription Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="glass rounded-2xl p-6 border border-slate-800">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center">
-                  <span className="text-xl">🆓</span>
-                </div>
-                <div>
-                  <p className="text-slate-500 text-xs uppercase font-bold">Free (Curious)</p>
-                  <p className="text-2xl font-black text-white">{safeUsers.filter(u => !u.isSubscribed && !u.is_subscribed).length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="glass rounded-2xl p-6 border border-emerald-500/20">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
-                  <span className="text-xl">🎵</span>
-                </div>
-                <div>
-                  <p className="text-emerald-500 text-xs uppercase font-bold">Artist</p>
-                  <p className="text-2xl font-black text-white">{safeUsers.filter(u => u.subscription_type === 'artist').length}</p>
-                </div>
-              </div>
-            </div>
-            <div className="glass rounded-2xl p-6 border border-purple-500/20">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                  <span className="text-xl">🏷️</span>
-                </div>
-                <div>
-                  <p className="text-purple-500 text-xs uppercase font-bold">Label</p>
-                  <p className="text-2xl font-black text-white">{safeUsers.filter(u => u.subscription_type === 'label').length}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Subscribers List */}
           <div className="glass rounded-3xl border border-slate-800 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-800">
-              <h3 className="font-bold text-white">Active Subscribers</h3>
+            <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="font-bold text-white">Purchase History</h3>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase text-slate-500">Total Revenue</p>
+                <p className="text-xl font-black text-emerald-500">${earnings.totalEarnings.toFixed(2)}</p>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-slate-900">
                   <tr>
                     <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">User</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Plan</th>
+                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Date</th>
                     <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Credits</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Monthly Credits</th>
-                    <th className="text-right px-6 py-4 text-[10px] font-black uppercase text-slate-500">Actions</th>
+                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase text-slate-500">Amount</th>
+                    <th className="text-right px-6 py-4 text-[10px] font-black uppercase text-slate-500">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {safeUsers.filter(u => u.isSubscribed || u.is_subscribed).map(user => (
-                    <tr key={user.id} className="border-t border-slate-800 hover:bg-slate-900/50">
+                  {loadingEarnings ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto" />
+                      </td>
+                    </tr>
+                  ) : earnings.purchases.map(purchase => (
+                    <tr key={purchase.id} className="border-t border-slate-800 hover:bg-slate-900/50">
                       <td className="px-6 py-4">
                         <div>
-                          <p className="font-bold text-white">{user.name}</p>
-                          <p className="text-xs text-slate-500">{user.email}</p>
+                          <p className="font-bold text-white">{purchase.userName || 'Unknown'}</p>
+                          <p className="text-xs text-slate-500">{purchase.userEmail}</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${getPlanBadge(user).color}`}>
-                          {getPlanBadge(user).label}
-                        </span>
+                      <td className="px-6 py-4 text-slate-400">
+                        {new Date(purchase.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-emerald-500 font-bold">{user.credits || 0}</span>
+                        <span className="text-emerald-500 font-bold">+{purchase.credits}</span>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-slate-400">
-                          {SUBSCRIPTION_PLANS[user.subscription_type]?.credits || 0}/month
-                        </span>
+                      <td className="px-6 py-4 text-white font-bold">
+                        ${purchase.amount.toFixed(2)}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => handleEditUser(user)}
-                          className="text-emerald-500 hover:text-emerald-400 text-xs font-bold"
-                        >
-                          Manage
-                        </button>
+                        <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-500 text-[10px] font-black uppercase">
+                          {purchase.status}
+                        </span>
                       </td>
                     </tr>
                   ))}
-                  {safeUsers.filter(u => u.isSubscribed || u.is_subscribed).length === 0 && (
+                  {!loadingEarnings && earnings.purchases.length === 0 && (
                     <tr>
-                      <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
-                        No subscribers yet
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                        No purchases found
                       </td>
                     </tr>
                   )}
@@ -964,6 +1027,214 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'support' && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-white">Support Tickets</h2>
+              <p className="text-slate-500 text-sm">Manage user inquiries and technical support</p>
+            </div>
+            <button 
+              onClick={fetchSupportTickets}
+              className="bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-700 transition-colors flex items-center gap-2"
+            >
+              {loadingTickets ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
+            </button>
+          </div>
+
+          {/* Support Sub-tabs */}
+          <div className="flex gap-4 border-b border-slate-800 pb-4 overflow-x-auto">
+            {[
+              { id: 'open', label: 'New Tickets', count: supportTickets.filter(t => t.status === 'open').length },
+              { id: 'follow-up', label: 'Follow Up', count: supportTickets.filter(t => t.status === 'follow-up').length },
+              { id: 'resolved', label: 'Resolved', count: supportTickets.filter(t => t.status === 'resolved').length },
+              { id: 'closed', label: 'Closed', count: supportTickets.filter(t => t.status === 'closed').length },
+              { id: 'deleted', label: 'Deleted', count: supportTickets.filter(t => t.status === 'deleted').length },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setSupportTab(tab.id)}
+                className={`pb-2 text-[10px] font-black uppercase tracking-widest transition-all relative ${
+                  supportTab === tab.id ? 'text-emerald-500' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {tab.label} ({tab.count})
+                {supportTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {loadingTickets && supportTickets.length === 0 ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            </div>
+          ) : supportTickets.filter(t => t.status === supportTab).length === 0 ? (
+            <div className="text-center py-20 glass rounded-3xl border border-slate-800">
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">No {supportTab} tickets found.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {supportTickets.filter(t => t.status === supportTab).map(ticket => (
+                <div key={ticket.id} className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+                  <div className="p-6 border-b border-slate-800">
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="text-xl font-black text-white tracking-tight">{ticket.subject}</h3>
+                          <span className={`px-2 py-1 rounded text-[8px] font-black uppercase tracking-widest ${
+                            ticket.status === 'open' ? 'bg-emerald-500/10 text-emerald-500' :
+                            ticket.status === 'resolved' ? 'bg-blue-500/10 text-blue-500' :
+                            ticket.status === 'follow-up' ? 'bg-amber-500/10 text-amber-400' :
+                            'bg-slate-800 text-slate-500'
+                          }`}>
+                            {ticket.status}
+                          </span>
+                          <span className="px-2 py-1 rounded bg-slate-800 text-slate-400 text-[8px] font-black uppercase tracking-widest">
+                            {ticket.category}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-slate-800 rounded-full flex items-center justify-center text-emerald-500 font-black text-[10px]">
+                              {ticket.name?.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-slate-300 font-bold">{ticket.name}</span>
+                            <span className="text-slate-500">({ticket.email})</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <span className="w-1 h-1 rounded-full bg-slate-700" />
+                            <span>ID: {ticket.id}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-500">
+                            <span className="w-1 h-1 rounded-full bg-slate-700" />
+                            <span>{new Date(ticket.createdAt).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {ticket.status !== 'follow-up' && (
+                          <button 
+                            onClick={() => handleUpdateTicketStatus(ticket.id, 'follow-up')}
+                            className="px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-500 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/20 transition-all"
+                          >
+                            Follow Up
+                          </button>
+                        )}
+                        {ticket.status !== 'resolved' && (
+                          <button 
+                            onClick={() => handleUpdateTicketStatus(ticket.id, 'resolved')}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/20 transition-all"
+                          >
+                            Resolve
+                          </button>
+                        )}
+                        {ticket.status !== 'closed' && (
+                          <button 
+                            onClick={() => handleUpdateTicketStatus(ticket.id, 'closed')}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-300 text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 transition-all"
+                          >
+                            Close
+                          </button>
+                        )}
+                        {ticket.status !== 'deleted' && (
+                          <button 
+                            onClick={() => handleUpdateTicketStatus(ticket.id, 'deleted')}
+                            className="px-3 py-1.5 rounded-xl bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all"
+                          >
+                            Delete
+                          </button>
+                        )}
+                        {ticket.status === 'deleted' && (
+                          <button 
+                            onClick={() => handleDeleteTicket(ticket.id)}
+                            className="px-3 py-1.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-600 transition-all"
+                          >
+                            Perm Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 space-y-6 bg-slate-950/50">
+                    {/* Initial Message */}
+                    <div className="flex flex-col items-start">
+                      <div className="max-w-[80%] bg-slate-800 rounded-2xl rounded-tl-none p-4 border border-white/5 shadow-xl">
+                        <p className="text-sm text-slate-200 leading-relaxed">{ticket.message}</p>
+                        <div className="flex items-center gap-2 mt-3">
+                          <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Initial Message</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Replies */}
+                    {ticket.messages?.map((msg, i) => (
+                      <div key={i} className={`flex flex-col ${msg.sender === 'admin' ? 'items-end' : 'items-start'}`}>
+                        <div className={`max-w-[80%] p-4 rounded-2xl border shadow-xl ${
+                          msg.sender === 'admin' 
+                            ? 'bg-emerald-500 text-slate-950 rounded-tr-none border-emerald-400/30' 
+                            : 'bg-slate-800 text-white rounded-tl-none border-white/5'
+                        }`}>
+                          <p className="text-sm leading-relaxed">{msg.text}</p>
+                          <div className={`flex items-center gap-2 mt-3 text-[10px] font-black uppercase tracking-widest ${
+                            msg.sender === 'admin' ? 'text-slate-900/60' : 'text-slate-500'
+                          }`}>
+                            <span>{msg.sender === 'admin' ? 'Support Reply' : 'User Reply'}</span>
+                            <span className="opacity-50">•</span>
+                            <span>{new Date(msg.createdAt).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Response Form */}
+                    <div className="pt-4 mt-8 border-t border-slate-800">
+                      {respondingTo === ticket.id ? (
+                        <div className="space-y-4">
+                          <textarea
+                            value={adminReply}
+                            onChange={e => setAdminReply(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-2xl px-6 py-4 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 resize-none"
+                            placeholder="Type your response to the user..."
+                            rows={4}
+                          />
+                          <div className="flex justify-end gap-3">
+                            <button
+                              onClick={() => { setRespondingTo(null); setAdminReply(''); }}
+                              className="px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleSendAdminReply(ticket.id)}
+                              disabled={sendingReply || !adminReply.trim()}
+                              className="px-8 py-2 rounded-xl bg-emerald-500 text-slate-950 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-400 transition-all disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {sendingReply ? <Loader2 className="w-4 h-4 animate-spin" /> : <Reply className="w-4 h-4" />}
+                              Send Response
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setRespondingTo(ticket.id)}
+                          className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-800 text-slate-500 hover:border-emerald-500/50 hover:text-emerald-500 transition-all flex items-center justify-center gap-2 group"
+                        >
+                          <Reply className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Click to respond to this ticket</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1194,20 +1465,6 @@ const AdminDashboard = ({ users = [], onUpdateUser, onDeleteUser, onUpdateReview
                   disabled
                   className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-slate-500 cursor-not-allowed"
                 />
-              </div>
-
-              {/* Subscription Plan */}
-              <div>
-                <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2">Subscription Plan</label>
-                <select
-                  value={editingUser.subscription_type || 'curious'}
-                  onChange={e => setEditingUser({...editingUser, subscription_type: e.target.value})}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                >
-                  {Object.entries(SUBSCRIPTION_PLANS).map(([key, plan]) => (
-                    <option key={key} value={key}>{plan.name} ({plan.price})</option>
-                  ))}
-                </select>
               </div>
 
               {/* Credits */}

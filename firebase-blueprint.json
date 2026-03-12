@@ -1,5 +1,20 @@
 {
   "entities": {
+    "SupportTicket": {
+      "title": "Support Ticket",
+      "description": "A support request from the contact form",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "resolved", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "subject", "message", "status", "createdAt"]
+    },
     "User": {
       "title": "User",
       "description": "User account information",
@@ -9,12 +24,11 @@
         "email": { "type": "string" },
         "name": { "type": "string" },
         "credits": { "type": "integer" },
-        "isSubscribed": { "type": "boolean" },
         "role": { "type": "string", "enum": ["admin", "user"] },
         "mfaEnabled": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "email", "name", "credits", "isSubscribed", "role"]
+      "required": ["id", "email", "name", "credits", "role"]
     },
     "Review": {
       "title": "Review",
@@ -29,24 +43,29 @@
         "headline": { "type": "string" },
         "hook": { "type": "string" },
         "isPublished": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" },
         "rating": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
         "hasPodcast": { "type": "boolean" }
       },
       "required": ["id", "userId", "songTitle", "artistName", "createdAt"]
     },
-    "Invoice": {
-      "title": "Invoice",
-      "description": "Subscription invoice",
+    "Purchase": {
+      "title": "Purchase",
+      "description": "Credit purchase record",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
-        "date": { "type": "string" },
-        "amount": { "type": "string" },
-        "status": { "type": "string", "enum": ["Paid", "Pending"] },
-        "plan": { "type": "string" }
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "amount": { "type": "number" },
+        "credits": { "type": "integer" },
+        "status": { "type": "string", "enum": ["completed", "pending", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "paymentMethod": { "type": "string" }
       },
-      "required": ["id", "date", "amount", "status", "plan"]
+      "required": ["id", "userId", "amount", "credits", "status", "createdAt"]
     },
     "StyleGuide": {
       "title": "Style Guide",
@@ -109,9 +128,9 @@
       "schema": "Review",
       "description": "Track review documents"
     },
-    "/users/{userId}/invoices/{invoiceId}": {
-      "schema": "Invoice",
-      "description": "User invoices"
+    "/purchases/{purchaseId}": {
+      "schema": "Purchase",
+      "description": "Global purchase records for earnings tracking"
     },
     "/styleGuides/{guideId}": {
       "schema": "StyleGuide",
@@ -124,6 +143,10 @@
     "/podcasts/{episodeId}": {
       "schema": "PodcastEpisode",
       "description": "Podcast episodes"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "User support requests"
     }
   }
 }

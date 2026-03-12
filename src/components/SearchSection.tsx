@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload } from 'lucide-react';
 import Waveform from './Waveform';
 
-const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) => {
+const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, onNavigate }) => {
   const [formData, setFormData] = useState({
     trackName: '',
     artistName: '',
@@ -13,9 +13,14 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
   const [selectedFile, setSelectedFile] = useState(null);
   const [featuredPhoto, setFeaturedPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [artistPhoto, setArtistPhoto] = useState(null);
+  const [artistPhotoPreview, setArtistPhotoPreview] = useState(null);
+  
+  const [hasConsented, setHasConsented] = useState(false);
   
   const fileInputRef = useRef(null);
   const photoInputRef = useRef(null);
+  const artistPhotoInputRef = useRef(null);
 
   const [progress, setProgress] = useState(0);
 
@@ -53,6 +58,18 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
     }
   };
 
+  const handleArtistPhotoChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setArtistPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setArtistPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     // Validate required fields: track file, track name, artist name, cover art
@@ -72,11 +89,16 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
       alert('Please upload cover art');
       return;
     }
+    if (!artistPhoto) {
+      alert('Please upload an artist photo');
+      return;
+    }
     
     onAnalyze({
       ...formData,
       audioFile: selectedFile,
-      featuredPhoto: featuredPhoto
+      featuredPhoto: featuredPhoto,
+      artistPhoto: artistPhoto
     });
   };
 
@@ -120,7 +142,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
   ];
 
   return (
-    <div className="relative pt-20 pb-16 px-6" data-testid="search-section">
+    <div className="relative pt-12 pb-12 px-6 overflow-hidden" data-testid="search-section">
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(0); }
@@ -132,31 +154,39 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
         .animate-marquee-slow:hover {
           animation-play-state: paused;
         }
+        @keyframes progress-pulse {
+          0% { width: 10%; }
+          50% { width: 85%; }
+          100% { width: 40%; }
+        }
+        .animate-progress {
+          animation: progress-pulse 4s ease-in-out infinite;
+        }
       `}</style>
 
       {/* Hero / Submission Section */}
       <div className="max-w-6xl mx-auto relative z-10 mb-24">
         <div className="text-center mb-12">
-          <h1 className="text-7xl md:text-8xl font-extrabold mb-8 tracking-tighter leading-none">
+          <h1 className="text-5xl sm:text-7xl md:text-8xl font-extrabold mb-6 tracking-tighter leading-none">
             <span className="gradient-text">Submit Your Track</span>
           </h1>
-          <p className="text-2xl text-slate-400 font-light max-w-3xl mx-auto leading-relaxed">
+          <p className="text-lg sm:text-2xl text-slate-400 font-light max-w-3xl mx-auto leading-relaxed px-4">
             Upload your track for an industry-standard review and technical audit.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-12 card-premium !p-8 md:!p-16 relative overflow-hidden group" data-testid="submission-form">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8 card-premium !p-8 md:!p-12 relative overflow-hidden group" data-testid="submission-form">
           <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           
-          <div className="space-y-8 relative z-10">
+          <div className="space-y-4 relative z-10 min-w-0">
             {/* Audio Upload */}
             <div>
               <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
-                Upload Track <span className="text-red-400">*</span>
+                Upload Track
               </label>
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className={`relative border-2 border-dashed rounded-[32px] p-12 transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group/upload ${selectedFile ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800 hover:border-emerald-500/30 bg-slate-900/30'}`}
+                className={`relative border-2 border-dashed rounded-[32px] p-6 transition-all cursor-pointer flex flex-col items-center justify-center gap-4 group/upload ${selectedFile ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-800 hover:border-emerald-500/30 bg-slate-900/30'}`}
                 data-testid="audio-upload"
               >
                 <input 
@@ -170,17 +200,17 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
                 <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center group-hover/upload:scale-110 transition-transform shadow-2xl border border-white/5">
                   <Upload className="w-8 h-8 text-emerald-500" />
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-white">{selectedFile ? selectedFile.name : 'Upload Master Track'}</p>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-[0.1em] mt-1">WAV, MP3, AIFF Max 20MB (Required)</p>
+                <div className="text-center w-full px-4">
+                  <p className="text-lg font-bold text-white truncate max-w-full">{selectedFile ? selectedFile.name : 'Upload Master Track'}</p>
+                  <p className="text-[10px] text-slate-500 uppercase tracking-[0.1em] mt-1">WAV, MP3, AIFF Max 20MB</p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">
-                  Track Name <span className="text-red-400">*</span>
+                  Track Name
                 </label>
                 <input 
                   required
@@ -193,7 +223,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
               </div>
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">
-                  Artist Name <span className="text-red-400">*</span>
+                  Artist Name
                 </label>
                 <input 
                   required
@@ -206,33 +236,66 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
               </div>
             </div>
 
-            {/* Featured Photo Upload */}
-            <div>
-              <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
-                Cover Art <span className="text-red-400">*</span>
-              </label>
-              <div 
-                onClick={() => photoInputRef.current?.click()}
-                className={`relative border border-slate-800 rounded-2xl p-6 transition-all cursor-pointer flex items-center gap-6 group/photo hover:border-emerald-500/30 ${photoPreview ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-slate-900/50'}`}
-                data-testid="photo-upload"
-              >
-                <input 
-                  type="file" 
-                  ref={photoInputRef} 
-                  onChange={handlePhotoChange} 
-                  className="hidden" 
-                  accept="image/*"
-                />
-                <div className="w-16 h-16 bg-slate-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-white/5">
-                  {photoPreview ? (
-                    <img src={photoPreview} className="w-full h-full object-cover" alt="Preview" />
-                  ) : (
-                    <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Featured Photo Upload */}
+              <div>
+                <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
+                  Cover Art
+                </label>
+                <div 
+                  onClick={() => photoInputRef.current?.click()}
+                  className={`relative border border-slate-800 rounded-2xl p-4 transition-all cursor-pointer flex items-center gap-4 group/photo hover:border-emerald-500/30 ${photoPreview ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-slate-900/50'}`}
+                  data-testid="photo-upload"
+                >
+                  <input 
+                    type="file" 
+                    ref={photoInputRef} 
+                    onChange={handlePhotoChange} 
+                    className="hidden" 
+                    accept="image/*"
+                  />
+                  <div className="w-16 h-16 bg-slate-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-white/5">
+                    {photoPreview ? (
+                      <img src={photoPreview} className="w-full h-full object-cover" alt="Preview" />
+                    ) : (
+                      <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    )}
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <p className="text-base font-bold text-white truncate">{featuredPhoto ? featuredPhoto.name : 'Cover Art'}</p>
+                    <p className="text-xs text-slate-500 mt-1">JPG, PNG, or WebP</p>
+                  </div>
                 </div>
-                <div className="flex-grow">
-                  <p className="text-base font-bold text-white">{featuredPhoto ? featuredPhoto.name : 'Upload Cover Art'}</p>
-                  <p className="text-xs text-slate-500 mt-1">JPG, PNG, or WebP (Required)</p>
+              </div>
+
+              {/* Artist Photo Upload */}
+              <div>
+                <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
+                  Artist Photo
+                </label>
+                <div 
+                  onClick={() => artistPhotoInputRef.current?.click()}
+                  className={`relative border border-slate-800 rounded-2xl p-4 transition-all cursor-pointer flex items-center gap-4 group/artist-photo hover:border-emerald-500/30 ${artistPhotoPreview ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-slate-900/50'}`}
+                  data-testid="artist-photo-upload"
+                >
+                  <input 
+                    type="file" 
+                    ref={artistPhotoInputRef} 
+                    onChange={handleArtistPhotoChange} 
+                    className="hidden" 
+                    accept="image/*"
+                  />
+                  <div className="w-16 h-16 bg-slate-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-white/5">
+                    {artistPhotoPreview ? (
+                      <img src={artistPhotoPreview} className="w-full h-full object-cover" alt="Artist Preview" />
+                    ) : (
+                      <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    )}
+                  </div>
+                  <div className="flex-grow min-w-0">
+                    <p className="text-base font-bold text-white truncate">{artistPhoto ? artistPhoto.name : 'Artist Photo'}</p>
+                    <p className="text-xs text-slate-500 mt-1">JPG, PNG, or WebP</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -251,22 +314,43 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
               />
             </div>
 
+            <div className="mt-6 flex items-start gap-3 px-1">
+              <div className="flex items-center h-5">
+                <input
+                  id="consent"
+                  type="checkbox"
+                  checked={hasConsented}
+                  onChange={(e) => setHasConsented(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-emerald-500/50 focus:ring-offset-0 transition-colors cursor-pointer"
+                />
+              </div>
+              <label htmlFor="consent" className="text-[11px] text-slate-400 leading-tight cursor-pointer select-none">
+                I represent that I own or have all necessary rights to this track and its assets. I agree to the 
+                <button type="button" onClick={() => onNavigate?.('terms')} className="text-emerald-500 hover:underline mx-1">Terms & Conditions</button> 
+                and 
+                <button type="button" onClick={() => onNavigate?.('privacy')} className="text-emerald-500 hover:underline ml-1">Privacy Policy</button>.
+              </label>
+            </div>
+
             <button
               type="submit"
-              disabled={isLoading || !selectedFile || !formData.trackName || !formData.artistName || !featuredPhoto}
-              className="btn-primary !py-6 !text-xl !rounded-[24px] mt-10"
+              disabled={isLoading || !selectedFile || !formData.trackName || !formData.artistName || !featuredPhoto || !hasConsented}
+              className={`btn-primary !py-6 !text-xl !rounded-[24px] mt-6 transition-all duration-500 ${isLoading ? 'bg-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.4)]' : ''}`}
               data-testid="analyze-btn"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-3">
-                  <svg className="animate-spin h-6 w-6 text-emerald-500" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-6 w-6 text-slate-950" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  <span className="text-emerald-500">{status || 'Initializing Studio...'}</span>
+                  <span className="text-slate-950 font-black uppercase tracking-widest">{status || 'Initializing Studio...'}</span>
                 </span>
               ) : (
-                'Run Analysis'
+                <span className="flex flex-col items-center">
+                  <span>Run Analysis</span>
+                  <span className="text-[10px] opacity-60 font-black tracking-[0.2em] mt-1">- 10 CREDITS -</span>
+                </span>
               )}
             </button>
 
@@ -276,7 +360,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
                   <div className="flex justify-between items-end">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">Studio Status</span>
-                      <span className="text-xs font-bold text-white truncate max-w-[200px]">{status || 'Initializing...'}</span>
+                      <span className="text-sm font-black text-emerald-400 uppercase tracking-tight">{status || 'Initializing...'}</span>
                     </div>
                     <span className="text-xl font-black text-emerald-500 font-mono">{Math.floor(progress)}%</span>
                   </div>
@@ -318,61 +402,114 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
         )}
       </div>
 
-      {/* Why You Need It Section */}
-      <section className="max-w-[1440px] mx-auto px-8 mb-24">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-          <div className="order-2 lg:order-1">
-            <div className="relative rounded-[60px] overflow-hidden border border-white/5 shadow-2xl bg-slate-900 group/reality min-h-[550px] flex items-center justify-center">
+      {/* The Verdiq Experience Section */}
+      <section className="max-w-[1440px] mx-auto px-4 md:px-8 mb-40 py-12 md:py-24 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
+          <div className="order-2 lg:order-1 relative py-10">
+            {/* Magazine Screenshot Simulation */}
+            <div className="relative z-10 rounded-[24px] overflow-hidden border border-white/10 shadow-2xl bg-slate-900 transform -rotate-2 hover:rotate-0 transition-transform duration-700 group/mag min-h-[300px]">
               <img 
-                src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
-                alt="Professional studio microphone" 
-                className="w-full h-full min-h-[550px] object-cover transition-transform duration-1000 group-hover/reality:scale-110"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80";
-                }}
+                src="https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?auto=format&fit=crop&q=80&w=800" 
+                alt="Magazine Preview" 
+                className="w-full h-auto opacity-80 group-hover/mag:opacity-100 transition-opacity duration-700"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-              <div className="absolute bottom-10 left-10 right-10 glass p-8 rounded-3xl">
-                <p className="text-emerald-500 font-black text-[10px] uppercase tracking-[0.3em] mb-3">The Reality Check</p>
-                <p className="text-white text-2xl font-display italic leading-tight">"Friends tell you it's fire. Verdiq tells you why it'll sell."</p>
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6 p-6 glass rounded-2xl border border-white/5">
+                 <p className="text-emerald-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">Editorial Feature</p>
+                 <p className="text-white text-lg font-bold italic">"A masterclass in spectral balance and lyrical depth..."</p>
               </div>
             </div>
+            
+            {/* Podcast Screenshot Simulation */}
+            <div className="absolute -bottom-4 -right-2 md:-right-8 z-20 w-3/4 rounded-[32px] overflow-hidden border border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.2)] bg-slate-950 transform rotate-3 hover:rotate-0 transition-transform duration-700 group/pod">
+              <div className="p-6 md:p-8 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <svg className="w-6 h-6 text-slate-950 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">The Verdiq Session</p>
+                    <p className="text-white font-bold text-sm">Wolf & Sloane Debate</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 animate-progress" />
+                  </div>
+                  <div className="flex justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                    <span>01:24</span>
+                    <span>03:45</span>
+                  </div>
+                  <p className="text-xs text-slate-400 italic leading-relaxed">
+                    "Sloane: The way the vocal sits in that 2kHz pocket is exactly what labels are looking for right now..."
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Decorative Elements */}
+            <div className="absolute top-0 -left-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-[80px] -z-10" />
           </div>
+
           <div className="order-1 lg:order-2">
-            <h2 className="text-6xl font-black text-white mb-8 tracking-tighter leading-none">BEYOND THE <br/><span className="gradient-text">ECHO CHAMBER.</span></h2>
-            <p className="text-slate-400 text-2xl font-light leading-relaxed mb-8">
-              Subjectivity is a trap. Independent artists often suffer from a lack of objective, technical feedback before they spend thousands on marketing. 
+            <h2 className="text-4xl md:text-6xl font-black text-white mb-10 tracking-tighter leading-none">YOUR MUSIC, <br/><span className="gradient-text">IMMORTALIZED.</span></h2>
+            <p className="text-slate-400 text-xl md:text-2xl font-light leading-relaxed mb-12">
+              We don't just give you a score. We give you a legacy. Every analysis generates a professional-grade media package designed to impress labels and engage your fanbase.
             </p>
             <div className="space-y-8">
               {[
-                { title: "No Flattery", desc: "Pure algorithmic analysis doesn't care about your feelings—it cares about your frequencies." },
-                { title: "Technical Perfection", desc: "Know if your mix is radio-ready or if your dynamic range is crushing your impact." },
-                { title: "Market Context", desc: "Understand where your track sits in the current international music scene." }
+                { 
+                  title: "The Editorial Feature", 
+                  desc: "A professional magazine feature that puts your music into words. Ready for your EPK, social media, or pitching to curators.",
+                  icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 01.707.293l5.414 5.414a1 1 0 01.293.707V18a2 2 0 01-2 2z" /></svg>
+                },
+                { 
+                  title: "The Verdiq Session Podcast", 
+                  desc: "Listen to Wolf & Sloane—our virtual industry veterans—debate your track's market potential in a high-fidelity audio session.",
+                  icon: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                }
               ].map((item, idx) => (
-                <div key={idx} className="flex gap-6">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-1 border border-emerald-500/20">
-                    <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
+                <div key={idx} className="flex gap-6 group/item">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0 mt-1 border border-emerald-500/20 group-hover/item:bg-emerald-500 group-hover/item:text-slate-950 transition-all duration-500 shadow-lg shadow-emerald-500/5">
+                    {item.icon}
                   </div>
                   <div>
-                    <h4 className="text-white text-xl font-bold mb-2">{item.title}</h4>
+                    <h4 className="text-white text-xl font-bold mb-2 group-hover/item:text-emerald-400 transition-colors">{item.title}</h4>
                     <p className="text-slate-500 text-base leading-relaxed">{item.desc}</p>
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-12 flex flex-wrap gap-4">
+              <button 
+                type="button"
+                onClick={() => onNavigate?.('magazine')}
+                className="px-8 py-4 bg-white text-slate-950 font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-emerald-500 transition-all shadow-xl shadow-white/5"
+              >
+                View Magazine
+              </button>
+              <button 
+                type="button"
+                onClick={() => onNavigate?.('podcasts')}
+                className="px-8 py-4 bg-slate-900 text-white border border-white/10 font-black uppercase tracking-widest text-xs rounded-2xl hover:border-emerald-500/50 transition-all"
+              >
+                View Podcasts
+              </button>
             </div>
           </div>
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section className="bg-slate-900/30 border-y border-slate-900 py-24 mb-24">
-        <div className="max-w-[1440px] mx-auto px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-6xl font-black text-white mb-6 tracking-tighter uppercase">THE STUDIO <span className="text-emerald-500">WORKFLOW.</span></h2>
-            <p className="text-slate-500 text-xl max-w-2xl mx-auto">From raw master to professional editorial in under 60 seconds.</p>
+      <section className="bg-slate-900/30 border-y border-slate-900 py-16 md:py-24 mb-24 overflow-hidden">
+        <div className="max-w-[1440px] mx-auto px-4 md:px-8">
+          <div className="text-center mb-12 md:mb-16">
+            <h2 className="text-4xl md:text-6xl font-black text-white mb-6 tracking-tighter uppercase">THE STUDIO <span className="text-emerald-500">WORKFLOW.</span></h2>
+            <p className="text-slate-500 text-lg md:text-xl max-w-2xl mx-auto">From raw master to professional editorial in under 60 seconds.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
             {[
               { 
                 step: "01", 
@@ -418,43 +555,43 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
       </section>
 
       {/* How it Helps Your Music (Artist Benefits) */}
-      <section className="max-w-7xl mx-auto px-6 mb-20">
-        <div className="bg-emerald-500 rounded-[60px] p-8 lg:p-16 overflow-hidden relative">
+      <section className="max-w-7xl mx-auto px-4 md:px-6 mb-20">
+        <div className="bg-emerald-500 rounded-[32px] md:rounded-[60px] p-6 sm:p-8 lg:p-16 overflow-hidden relative">
           <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none rotate-12 translate-x-20">
             <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
           </div>
           
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div>
-              <h2 className="text-5xl lg:text-7xl font-black text-slate-950 tracking-tighter leading-none mb-6">BUILD YOUR <br/>PRESS KIT <br/>WITH DATA.</h2>
+              <h2 className="text-4xl sm:text-5xl lg:text-7xl font-black text-slate-950 tracking-tighter leading-none mb-6">BUILD YOUR <br/>PRESS KIT <br/>WITH DATA.</h2>
               <div className="space-y-6">
-                <div className="flex gap-6">
-                  <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center flex-shrink-0 text-emerald-500 shadow-2xl">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                <div className="flex gap-4 sm:gap-6">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-950 rounded-2xl flex items-center justify-center flex-shrink-0 text-emerald-500 shadow-2xl">
+                    <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   </div>
                   <div>
-                    <h4 className="text-slate-900 text-2xl font-black mb-2">Long-form PR Assets</h4>
-                    <p className="text-slate-800 font-bold opacity-80">Stop struggling with bios. Use our editorial reviews as the foundation for your next EPK.</p>
+                    <h4 className="text-slate-900 text-xl sm:text-2xl font-black mb-2">Long-form PR Assets</h4>
+                    <p className="text-slate-800 font-bold opacity-80 text-sm sm:text-base">Stop struggling with bios. Use our editorial reviews as the foundation for your next EPK.</p>
                   </div>
                 </div>
-                <div className="flex gap-6">
-                  <div className="w-14 h-14 bg-slate-950 rounded-2xl flex items-center justify-center flex-shrink-0 text-emerald-500 shadow-2xl">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+                <div className="flex gap-4 sm:gap-6">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-950 rounded-2xl flex items-center justify-center flex-shrink-0 text-emerald-500 shadow-2xl">
+                    <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
                   </div>
                   <div>
-                    <h4 className="text-slate-900 text-2xl font-black mb-2">DSP Optimization</h4>
-                    <p className="text-slate-800 font-bold opacity-80">Get the exact BPM, Key, and Energy mood mapping required for Spotify for Artists and Apple Music.</p>
+                    <h4 className="text-slate-900 text-xl sm:text-2xl font-black mb-2">DSP Optimization</h4>
+                    <p className="text-slate-800 font-bold opacity-80 text-sm sm:text-base">Get the exact BPM, Key, and Energy mood mapping required for Spotify for Artists and Apple Music.</p>
                   </div>
                 </div>
               </div>
             </div>
             <div className="relative">
-              <div className="bg-slate-950 p-8 rounded-[40px] shadow-2xl rotate-2">
+              <div className="bg-slate-950 p-6 sm:p-8 rounded-[32px] md:rounded-[40px] shadow-2xl rotate-2">
                 <div className="flex items-center gap-4 mb-6">
-                   <div className="w-12 h-12 bg-emerald-500 rounded-full" />
+                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-500 rounded-full" />
                    <div>
-                     <div className="h-4 w-32 bg-slate-800 rounded mb-2" />
-                     <div className="h-3 w-20 bg-slate-800 rounded opacity-50" />
+                     <div className="h-4 w-24 sm:w-32 bg-slate-800 rounded mb-2" />
+                     <div className="h-3 w-16 sm:w-20 bg-slate-800 rounded opacity-50" />
                    </div>
                 </div>
                 <div className="space-y-4">
@@ -470,8 +607,8 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
                   </div>
                 </div>
               </div>
-              <div className="absolute -bottom-10 -right-10 bg-white p-6 rounded-3xl shadow-2xl -rotate-6 hidden lg:block">
-                 <p className="text-slate-950 font-black text-3xl">9.4/10</p>
+              <div className="absolute -bottom-6 -right-6 sm:-bottom-10 sm:-right-10 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-2xl -rotate-6 hidden sm:block">
+                 <p className="text-slate-950 font-black text-2xl sm:text-3xl">9.4/10</p>
                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Verdiq Score</p>
               </div>
             </div>
@@ -480,10 +617,10 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed }) 
       </section>
 
       {/* Testimonials Section */}
-      <section className="max-w-[100vw] overflow-hidden px-8 mb-24">
-        <div className="text-center mb-16">
+      <section className="w-full overflow-hidden px-4 md:px-8 mb-24">
+        <div className="text-center mb-12 md:mb-16">
           <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-emerald-500 mb-6">The Verdict from the Industry</h2>
-          <h3 className="text-5xl md:text-6xl font-black text-white tracking-tighter">Loved by Creators, <br/><span className="gradient-text">Trusted by Critics.</span></h3>
+          <h3 className="text-4xl md:text-6xl font-black text-white tracking-tighter">Loved by Creators, <br/><span className="gradient-text">Trusted by Critics.</span></h3>
         </div>
 
         <div className="relative overflow-hidden py-10">

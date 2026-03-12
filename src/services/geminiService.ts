@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
+const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+
 // Initialize Gemini API
 // Note: process.env.GEMINI_API_KEY is injected by the platform
 const getAI = () => new GoogleGenAI({ apiKey: (process.env as any).GEMINI_API_KEY || "" });
@@ -44,7 +46,7 @@ const REVIEW_SCHEMA = {
       required: ["timestamp", "description"]
     },
     whoIsItFor: { type: Type.STRING },
-    rating: { type: Type.NUMBER },
+    rating: { type: Type.NUMBER, description: "Overall rating from 0.0 to 10.0" },
     analysis: {
       type: Type.OBJECT,
       properties: {
@@ -97,7 +99,7 @@ const REVIEW_SCHEMA = {
     marketScore: {
       type: Type.OBJECT,
       properties: {
-        overallScore: { type: Type.NUMBER },
+        overallScore: { type: Type.NUMBER, description: "Market potential score from 0 to 100" },
         marketStatus: { type: Type.STRING },
         releaseConfidence: { type: Type.STRING },
         microCopy: { type: Type.STRING },
@@ -107,7 +109,7 @@ const REVIEW_SCHEMA = {
             genreMomentum: {
               type: Type.OBJECT,
               properties: {
-                score: { type: Type.NUMBER },
+                score: { type: Type.NUMBER, description: "Score from 0 to 100" },
                 signal: { type: Type.STRING },
                 insight: { type: Type.STRING }
               }
@@ -115,14 +117,14 @@ const REVIEW_SCHEMA = {
             platformFit: {
               type: Type.OBJECT,
               properties: {
-                score: { type: Type.NUMBER },
+                score: { type: Type.NUMBER, description: "Score from 0 to 100" },
                 platforms: {
                   type: Type.ARRAY,
                   items: {
                     type: Type.OBJECT,
                     properties: {
                       name: { type: Type.STRING },
-                      stars: { type: Type.NUMBER }
+                      stars: { type: Type.NUMBER, description: "1-5 stars" }
                     }
                   }
                 },
@@ -132,7 +134,7 @@ const REVIEW_SCHEMA = {
             marketDifferentiation: {
               type: Type.OBJECT,
               properties: {
-                score: { type: Type.NUMBER },
+                score: { type: Type.NUMBER, description: "Score from 0 to 100" },
                 insight: { type: Type.STRING }
               }
             },
@@ -140,14 +142,14 @@ const REVIEW_SCHEMA = {
               type: Type.OBJECT,
               properties: {
                 profile: { type: Type.STRING },
-                score: { type: Type.NUMBER },
+                score: { type: Type.NUMBER, description: "Score from 0 to 100" },
                 insight: { type: Type.STRING }
               }
             },
             releaseTiming: {
               type: Type.OBJECT,
               properties: {
-                score: { type: Type.NUMBER },
+                score: { type: Type.NUMBER, description: "Score from 0 to 100" },
                 signal: { type: Type.STRING },
                 insight: { type: Type.STRING }
               }
@@ -162,7 +164,7 @@ const REVIEW_SCHEMA = {
             brandAlignment: {
               type: Type.OBJECT,
               properties: {
-                score: { type: Type.NUMBER },
+                score: { type: Type.NUMBER, description: "Score from 0 to 100" },
                 insight: { type: Type.STRING }
               }
             }
@@ -186,13 +188,13 @@ const REVIEW_SCHEMA = {
   ]
 };
 
-export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, preset }: any) => {
+export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, artistPhotoBase64, artistPhotoMimeType, preset }: any) => {
   const ai = getAI();
   
   // Fetch style guides for training
   let styleGuidesContext = "";
   try {
-    const res = await fetch('/api/public/style-guides');
+    const res = await fetch(`${API_URL}/api/public/style-guides`);
     if (res.ok) {
       const guides = await res.json();
       if (guides && guides.length > 0) {
@@ -200,7 +202,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
         guides.forEach((guide: any, index: number) => {
           styleGuidesContext += `\nExample ${index + 1} (${guide.type} from ${guide.source}):\n${guide.content}\n`;
         });
-        styleGuidesContext += "\nINSTRUCTION: Analyze the writing style, vocabulary, tone, and structure of the examples above. Mimic this professional, sharp, and authoritative music criticism voice in your review. Avoid generic AI phrasing like 'tapestry of sound' or 'sonic journey'. Be specific, opinionated, and culturally aware.\n";
+        styleGuidesContext += "\nINSTRUCTION: You MUST strictly adopt the professional, sharp, and authoritative music criticism voice found in the examples above. This is NOT optional. Use their specific vocabulary, sentence length variation, and critical perspective. If your output sounds like a generic AI assistant, it is a failure. Be specific, opinionated, and culturally aware. Write like a human critic who has listened to thousands of records.\n";
       }
     }
   } catch (e) {
@@ -217,11 +219,34 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     
     REVIEW WRITING INSTRUCTIONS:
     Write a fully human-sounding music review that feels natural, emotionally sharp, and specific.
+    The 'reviewBody' MUST be exactly 5 paragraphs long. Use actual double newlines to separate paragraphs.
+    
+    HYPERLINK INSTRUCTIONS:
+    - You MUST include at least 5 relevant hyperlinks within the 'reviewBody'.
+    - Use the provided 'googleSearch' tool to find real, accurate URLs.
+    - CRITICAL: DO NOT use Spotify artist links as they are often broken.
+    - PREFER: Wikipedia articles, official artist websites, Google Knowledge Graph links, or established music databases like AllMusic or Discogs.
+    - Use Markdown format: [Link Text](URL).
+    - Links should point to: The artist's history, similar established artists, genre-defining articles, or relevant music history.
+    - Example: "[Radiohead](https://en.wikipedia.org/wiki/Radiohead)" or "[Hyperpop](https://en.wikipedia.org/wiki/Hyperpop)".
+    - Ensure the links feel integrated into the narrative of the review.
+    
+    CRITICAL STYLE CONSTRAINTS:
+    - DO NOT use generic AI filler words: "Ultimately", "Landscape", "Tapestry", "Sonic journey", "In conclusion", "Testament", "Masterpiece", "Vibrant", "Seamlessly", "Evocative", "Captivating", "Resonate", "Delve", "Dive into", "Unfold", "Crafted", "Rich", "Lush", "Intricate".
+    - DO NOT use the phrase "The song is a..." or "This track is a...".
+    - AVOID being overly positive. Be a critical, professional journalist. If something is weak, say it.
+    - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary and sentence structure.
+    - Be specific about the production. Mention specific instruments or textures you hear.
+    
+    SCORING INSTRUCTIONS:
+    - 'rating' MUST be on a scale of 0.0 to 10.0 (e.g., 8.4).
+    - ALL 'marketScore' values (overallScore and all sub-scores in the breakdown) MUST be on a scale of 0 to 100 (e.g., 94).
+    
     Output must be valid JSON matching the schema.
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-flash-latest",
+    model: "gemini-3.1-pro-preview",
     contents: [
       { text: prompt },
       {
@@ -233,24 +258,28 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     ],
     config: {
       responseMimeType: "application/json",
-      responseSchema: REVIEW_SCHEMA as any
+      responseSchema: REVIEW_SCHEMA as any,
+      tools: [{ googleSearch: {} }]
     }
   });
 
   const review = JSON.parse(response.text || "{}");
   
-  // Image transformation (optional)
-  let imageUrl = `https://picsum.photos/seed/${artistName}-${trackName}/800/800`;
-  if (imageBase64 && imageMimeType) {
+  // Cover Art (at top of review) - use original if provided
+  let imageUrl = imageBase64 ? `data:${imageMimeType};base64,${imageBase64}` : `https://picsum.photos/seed/${artistName}-${trackName}/800/800`;
+  
+  // Artist Photo transformation (optional) - targets the artist photo
+  let artistPhotoUrl = null;
+  if (artistPhotoBase64 && artistPhotoMimeType) {
     try {
       const imgResponse = await ai.models.generateContent({
         model: "gemini-2.5-flash-image",
         contents: [
-          { text: `Transform this artist image into a magazine-cover style featured image with the word VERDIQ in the background. Preset: ${preset || 'dark'}` },
+          { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` },
           {
             inlineData: {
-              data: imageBase64,
-              mimeType: imageMimeType
+              data: artistPhotoBase64,
+              mimeType: artistPhotoMimeType
             }
           }
         ]
@@ -258,19 +287,22 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
       
       for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
-          imageUrl = `data:image/png;base64,${part.inlineData.data}`;
+          artistPhotoUrl = `data:image/png;base64,${part.inlineData.data}`;
           break;
         }
       }
     } catch (e) {
-      console.error("Image transformation failed", e);
+      console.error("Artist photo transformation failed", e);
+      // Fallback to original artist photo if AI fails
+      artistPhotoUrl = `data:${artistPhotoMimeType};base64,${artistPhotoBase64}`;
     }
   }
 
   return { 
     ...review, 
     id: Math.random().toString(36).substring(2, 11), 
-    imageUrl, 
+    imageUrl,
+    artistPhotoUrl,
     createdAt: new Date().toISOString() 
   };
 };

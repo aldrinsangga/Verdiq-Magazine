@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { PayPalButtons } from "@paypal/react-paypal-js";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
-const Pricing = ({ onUpgrade, currentUser, initialTab = 'plans' }) => {
+const Pricing = ({ onUpgrade, currentUser }) => {
   const [loading, setLoading] = useState(null);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [checkoutItem, setCheckoutItem] = useState(null); // { id: string, name: string, price: string }
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reset processing state when checkout item changes
+  useEffect(() => {
+    if (checkoutItem) {
+      setIsProcessing(false);
+    }
+  }, [checkoutItem]);
 
   // Handle PayPal return
   useEffect(() => {
@@ -14,45 +23,12 @@ const Pricing = ({ onUpgrade, currentUser, initialTab = 'plans' }) => {
     const payerId = params.get('PayerID');
     const type = params.get('type');
     
-    if (paymentId && payerId) {
-      if (type === 'topup') {
-        executeTopUp(paymentId, payerId);
-      } else {
-        executePayment(paymentId, payerId);
-      }
+    if (paymentId && payerId && type === 'topup') {
+      executeTopUp(paymentId, payerId);
     }
   }, []);
 
   const getAuthToken = () => localStorage.getItem('verdiq_token');
-
-  const executePayment = async (paymentId, payerId) => {
-    setLoading('executing');
-    setError(null);
-    
-    try {
-      const res = await fetch(`${API_URL}/api/subscription/execute`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`
-        },
-        body: JSON.stringify({ paymentId, payerId })
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        window.history.replaceState({}, document.title, window.location.pathname);
-        onUpgrade(data);
-      } else {
-        const err = await res.json();
-        setError(err.detail || 'Payment failed');
-      }
-    } catch (e) {
-      setError('Payment processing failed');
-    } finally {
-      setLoading(null);
-    }
-  };
 
   const executeTopUp = async (paymentId, payerId) => {
     setLoading('executing');
@@ -83,148 +59,74 @@ const Pricing = ({ onUpgrade, currentUser, initialTab = 'plans' }) => {
     }
   };
 
-  const handleSubscribe = async (planId) => {
-    if (planId === 'curious') return;
-    
-    setLoading(planId);
-    setError(null);
-    
+  const handleTopUp = (packageId) => {
+    const pkg = topUpPackages.find(p => p.id === packageId);
+    setCheckoutItem({ id: packageId, name: `${pkg.credits} Credits`, price: pkg.price });
+  };
+
+  const createOrder = async (data, actions, packageId) => {
+    setIsProcessing(true);
     try {
-      const returnUrl = `${window.location.origin}${window.location.pathname}?view=pricing`;
-      const cancelUrl = `${window.location.origin}${window.location.pathname}?view=pricing&cancelled=true`;
-      
-      const res = await fetch(`${API_URL}/api/subscription/create`, {
+      const res = await fetch(`${API_URL}/api/paypal/create-order`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${getAuthToken()}`
         },
-        body: JSON.stringify({ planId, returnUrl, cancelUrl })
+        body: JSON.stringify({ packageId })
       });
       
-      if (res.ok) {
-        const data = await res.json();
-        if (data.error) {
-          setError(data.message || 'Payment service unavailable');
-          return;
-        }
-        if (data.approval_url) {
-          window.location.href = data.approval_url;
-        } else {
-          setError('Failed to get payment URL');
-        }
+      const order = await res.json();
+      if (order.id) {
+        return order.id;
       } else {
-        const err = await res.json();
-        setError(err.detail || 'Failed to create payment');
+        throw new Error(order.message || 'Failed to create order');
       }
     } catch (e) {
-      setError('Failed to connect to payment service');
+      setError(e.message || 'Failed to connect to PayPal');
+      throw e;
     } finally {
-      setLoading(null);
+      setIsProcessing(false);
     }
   };
 
-  const handleTopUp = async (packageId) => {
-    setLoading(packageId);
-    setError(null);
-    
+  const onApprove = async (data, actions, packageId) => {
+    setLoading('executing');
+    setIsProcessing(true);
     try {
-      const returnUrl = `${window.location.origin}${window.location.pathname}?view=pricing&type=topup`;
-      const cancelUrl = `${window.location.origin}${window.location.pathname}?view=pricing&cancelled=true`;
-      
-      const res = await fetch(`${API_URL}/api/credits/topup`, {
+      const res = await fetch(`${API_URL}/api/paypal/capture-order`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${getAuthToken()}`
         },
-        body: JSON.stringify({ packageId, returnUrl, cancelUrl })
+        body: JSON.stringify({ orderId: data.orderID, packageId })
       });
       
       if (res.ok) {
-        const data = await res.json();
-        if (data.error) {
-          setError(data.message || 'Payment service unavailable');
-          return;
-        }
-        if (data.approval_url) {
-          window.location.href = data.approval_url;
-        }
+        const result = await res.json();
+        onUpgrade({ ...result, type: 'topup' });
+        // Small delay before closing modal to allow PayPal SDK to finish cleanup
+        setTimeout(() => {
+          setCheckoutItem(null);
+        }, 500);
       } else {
         const err = await res.json();
-        setError(err.detail || 'Failed to create payment');
+        setError(err.message || 'Payment capture failed');
       }
     } catch (e) {
-      setError('Failed to connect to payment service');
+      setError('Payment processing failed');
     } finally {
       setLoading(null);
+      setIsProcessing(false);
     }
   };
-
-  const plans = [
-    {
-      id: 'curious',
-      name: 'Curious',
-      price: '$0',
-      period: '/month',
-      features: [
-        '3 credits on signup (one-time)',
-        '1 full review to start',
-        'Basic analysis only',
-        'Web-view only',
-      ],
-      disabledFeatures: [
-        'No PDF download',
-        'No priority processing',
-        'No magazine publishing'
-      ],
-      cta: 'Current Plan',
-      popular: false,
-      disabled: true
-    },
-    {
-      id: 'artist',
-      name: 'Artist',
-      price: '$12',
-      period: '/month',
-      credits: '15 credits',
-      features: [
-        '15 Credits per month',
-        'Deep Technical Analysis',
-        'SEO Optimizer',
-        'Download as PDF',
-        'Priority Processing',
-        'Publish to Magazine',
-        'Podcast Review'
-      ],
-      cta: 'Upgrade to Artist',
-      popular: true
-    },
-    {
-      id: 'label',
-      name: 'Label',
-      price: '$49',
-      period: '/month',
-      credits: '60 credits',
-      features: [
-        '60 Credits per month',
-        'Deep Technical Analysis',
-        'SEO Optimizer',
-        'Download as PDF',
-        'Priority Processing',
-        'Publish to Magazine',
-        'Podcast Review'
-      ],
-      cta: 'Get Label Access',
-      popular: false
-    }
-  ];
 
   const topUpPackages = [
-    { id: 'topup_10', credits: 10, price: '$10', bonus: null },
-    { id: 'topup_25', credits: 25, price: '$20', bonus: '+5 bonus' },
-    { id: 'topup_55', credits: 55, price: '$40', bonus: '+15 bonus' },
-    { id: 'topup_120', credits: 120, price: '$80', bonus: '+40 bonus', popular: true }
+    { id: 'topup_15', credits: 15, price: '$15', bonus: null },
+    { id: 'topup_35', credits: 35, price: '$25', bonus: '+10 bonus' },
+    { id: 'topup_80', credits: 80, price: '$50', bonus: '+30 bonus' },
+    { id: 'topup_140', credits: 140, price: '$85', bonus: '+55 bonus', popular: true }
   ];
 
   return (
@@ -265,16 +167,13 @@ const Pricing = ({ onUpgrade, currentUser, initialTab = 'plans' }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
           {topUpPackages.map((pkg) => (
-            <button
+            <div
               key={pkg.id}
-              onClick={() => handleTopUp(pkg.id)}
-              disabled={loading === pkg.id}
-              className={`relative p-8 rounded-[40px] text-center transition-all flex flex-col items-center justify-center bg-slate-900 border border-white/10 hover:scale-105 hover:shadow-2xl hover:shadow-emerald-500/10 hover:border-emerald-500/30 ${
+              className={`relative p-8 rounded-[40px] text-center transition-all flex flex-col items-center justify-center bg-slate-900 border border-white/10 ${
                 pkg.popular 
                   ? 'border-emerald-500 ring-1 ring-emerald-500/20 scale-105 z-10' 
                   : ''
-              } disabled:opacity-50`}
-              data-testid={`topup-${pkg.id}-btn`}
+              }`}
             >
               {pkg.popular && (
                 <span className="absolute -top-4 left-1/2 -translate-x-1/2 bg-emerald-500 text-slate-950 text-[10px] font-black px-6 py-1.5 rounded-full uppercase tracking-[0.2em] shadow-xl">
@@ -283,50 +182,113 @@ const Pricing = ({ onUpgrade, currentUser, initialTab = 'plans' }) => {
               )}
               <p className="text-6xl font-black text-white mb-2 tracking-tighter">{pkg.credits}</p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6">Credits</p>
-              <p className="text-3xl font-black text-emerald-500 mb-2">{pkg.price}</p>
+              <p className="text-3xl font-black text-emerald-500 mb-6">{pkg.price}</p>
+              
+              <button
+                onClick={() => handleTopUp(pkg.id)}
+                className="mt-auto w-full py-4 bg-emerald-500 text-slate-950 rounded-full font-black uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Select
+              </button>
+
               {pkg.bonus && (
-                <p className="text-xs font-bold text-emerald-400/80 uppercase tracking-widest">{pkg.bonus}</p>
+                <p className="text-xs font-bold text-emerald-400/80 uppercase tracking-widest mt-4">{pkg.bonus}</p>
               )}
-              {loading === pkg.id && (
-                <div className="absolute inset-0 bg-slate-950/80 rounded-[40px] flex items-center justify-center">
-                  <svg className="w-8 h-8 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                </div>
-              )}
-            </button>
+            </div>
           ))}
         </div>
 
         {/* Credit Info */}
         <div className="max-w-3xl mx-auto text-center bg-slate-900/50 rounded-[40px] p-8 border border-slate-800">
           <h3 className="text-2xl font-black text-white mb-8 uppercase tracking-tighter">Credit Usage</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
             <div className="bg-slate-800/50 rounded-3xl p-8 border border-white/5">
-              <p className="text-emerald-500 font-black text-5xl mb-2 tracking-tighter">3</p>
+              <p className="text-emerald-500 font-black text-5xl mb-2 tracking-tighter">10</p>
               <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Credits per Analysis</p>
               <p className="text-slate-600 text-xs mt-4 leading-relaxed">Includes spectral analysis, editorial review, and podcast generation.</p>
             </div>
             <div className="bg-slate-800/50 rounded-3xl p-8 border border-white/5">
-              <p className="text-emerald-500 font-black text-5xl mb-2 tracking-tighter">3</p>
+              <p className="text-emerald-500 font-black text-5xl mb-2 tracking-tighter">5</p>
               <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Credits to Publish</p>
               <p className="text-slate-600 text-xs mt-4 leading-relaxed">Publish your review and podcast to the public magazine and global feed.</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-3xl p-8 border border-white/5">
+              <p className="text-emerald-500 font-black text-5xl mb-2 tracking-tighter">3</p>
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Credits to Edit</p>
+              <p className="text-slate-600 text-xs mt-4 leading-relaxed">Edit your generated reviews to perfect the narrative.</p>
             </div>
           </div>
           <p className="text-slate-500 text-xs mt-6 font-medium uppercase tracking-[0.2em]">Purchased credits never expire and stay in your studio forever.</p>
         </div>
       </div>
 
-      {/* PayPal Trust Badge */}
-      <div className="flex items-center justify-center gap-4 mt-12">
-        <div className="flex items-center gap-2 text-slate-500">
-          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42c-.003.02-.007.038-.01.057-1.2 6.152-5.317 8.263-10.575 8.263h-2.678c-.636 0-1.178.466-1.276 1.1l-1.376 8.731-.39 2.476a.566.566 0 0 0 .559.652h3.915c.557 0 1.032-.404 1.12-.95l.046-.238.888-5.635.057-.31a1.136 1.136 0 0 1 1.12-.95h.705c4.564 0 8.135-1.852 9.177-7.207.435-2.24.21-4.11-.94-5.422-.347-.397-.77-.733-1.26-1.005z"/>
-          </svg>
-          <span className="text-xs font-bold uppercase tracking-widest">Secure payments via PayPal</span>
+      {/* Checkout Modal */}
+      {checkoutItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={() => setCheckoutItem(null)}></div>
+          <div className="relative w-full max-w-md max-h-[90vh] bg-slate-900 border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-y-auto">
+            <button 
+              onClick={() => setCheckoutItem(null)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors z-10"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="text-center mb-8">
+              <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-400 mb-2">Secure Checkout</p>
+              <h3 className="text-3xl font-black text-white uppercase tracking-tighter">{checkoutItem.name}</h3>
+              <p className="text-slate-300 mt-2 text-sm font-medium">Complete your purchase via PayPal</p>
+            </div>
+
+            <div className="bg-slate-950/80 rounded-3xl p-6 mb-8 border border-white/10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Item</span>
+                <span className="text-white font-bold text-sm">{checkoutItem.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Total Amount</span>
+                <span className="text-emerald-400 font-black text-3xl tracking-tighter">{checkoutItem.price}</span>
+              </div>
+            </div>
+
+            <div className="min-h-[150px] bg-white rounded-3xl p-6 shadow-inner relative">
+              {isProcessing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-3xl z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Processing...</p>
+                  </div>
+                </div>
+              )}
+              <PayPalButtons 
+                style={{ 
+                  layout: "vertical", 
+                  color: "blue", 
+                  shape: "pill", 
+                  label: "pay",
+                  height: 45
+                }}
+                createOrder={(data, actions) => createOrder(data, actions, checkoutItem.id)}
+                onApprove={(data, actions) => onApprove(data, actions, checkoutItem.id)}
+                onCancel={() => {
+                  setTimeout(() => setCheckoutItem(null), 500);
+                }}
+                onError={(err) => {
+                  console.error("PayPal Error:", err);
+                  setError("PayPal checkout failed. Please try again.");
+                  setTimeout(() => setCheckoutItem(null), 500);
+                }}
+              />
+            </div>
+
+            <p className="text-[10px] text-slate-400 text-center mt-8 font-bold uppercase tracking-widest">
+              Secure encrypted transaction
+            </p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

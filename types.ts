@@ -89,6 +89,7 @@ export interface Review {
   podcastAudio?: string; // Base64 encoded podcast audio
   hasPodcast?: boolean; // Whether a podcast has been generated
   songAudio?: string; // Base64 encoded original song audio for background
+  artistPhotoUrl?: string; // Transformed artist photo URL
 }
 
 export interface MagazineArticle {
@@ -121,6 +122,7 @@ export interface PodcastEpisode {
 export interface SubmissionData {
   audioFile: File;
   featuredPhoto?: File;
+  artistPhoto?: File;
   trackName: string;
   artistName: string;
   lyrics?: string;
@@ -128,12 +130,16 @@ export interface SubmissionData {
   stylePreset?: 'dark' | 'minimal' | 'high-contrast';
 }
 
-export interface Invoice {
+export interface Purchase {
   id: string;
-  date: string;
-  amount: string;
-  status: 'Paid' | 'Pending';
-  plan: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  amount: number;
+  credits: number;
+  status: 'completed' | 'pending' | 'failed';
+  createdAt: string;
+  paymentMethod?: string;
 }
 
 export interface UserAccount {
@@ -141,12 +147,32 @@ export interface UserAccount {
   email: string;
   name: string;
   credits: number;
-  isSubscribed: boolean;
   history: Review[];
-  invoices: Invoice[];
+  purchases: Purchase[];
   password?: string; 
   role: 'admin' | 'user';
   mfaEnabled?: boolean;
+}
+
+export interface SupportMessage {
+  sender: 'user' | 'admin';
+  text: string;
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId?: string;
+  name: string;
+  email: string;
+  subject: string;
+  category: 'Technical Support' | 'Billing & Credits' | 'Feedback & Suggestion' | 'Others';
+  message: string;
+  status: 'open' | 'resolved' | 'follow-up' | 'closed' | 'deleted';
+  createdAt: string;
+  updatedAt?: string;
+  messages?: SupportMessage[];
+  hasUnreadReply?: boolean;
 }
 
 export type AppView = 'landing' | 'review' | 'dashboard' | 'pricing' | 'magazine' | 'podcasts' | 'auth' | 'account' | 'admin' | 'privacy' | 'terms' | 'faq' | 'contact' | 'guide';

@@ -5,12 +5,14 @@ import { ensureDbReady } from "./server/firebase.ts";
 async function startServer() {
   const PORT = 3000;
 
-  console.log("Checking database connectivity (non-blocking)...");
-  ensureDbReady().then(() => {
+  console.log("Checking database connectivity...");
+  try {
+    await ensureDbReady();
     console.log("Database check complete.");
-  }).catch(err => {
+  } catch (err) {
     console.error("Database check failed:", err);
-  });
+    // Continue anyway, but log the failure
+  }
   
   console.log("Starting server...");
 
@@ -24,7 +26,7 @@ async function startServer() {
   } else {
     const express = (await import('express')).default;
     app.use(express.static("dist"));
-    app.get("/{*path}", (req, res) => {
+    app.get("*", (req, res) => {
       res.sendFile("dist/index.html", { root: "." });
     });
   }

@@ -10,7 +10,8 @@ import {
   updateProfile,
   User,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendEmailVerification
 } from 'firebase/auth';
 import { auth } from './firebase';
 
@@ -54,7 +55,19 @@ export const clearSession = () => {
 /**
  * Get auth headers for API calls
  */
-export const getAuthHeaders = () => {
+export const getAuthHeaders = async () => {
+  // Try to get fresh token from Firebase first
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      const token = await user.getIdToken();
+      return { 'Authorization': `Bearer ${token}` };
+    } catch (e) {
+      console.error('Failed to get fresh token from Firebase:', e);
+    }
+  }
+
+  // Fallback to stored session token
   const session = getSession();
   if (session?.session?.access_token) {
     return { 'Authorization': `Bearer ${session.session.access_token}` };
@@ -73,7 +86,7 @@ export const isAuthenticated = () => {
 /**
  * Safely parse JSON from a response
  */
-const safeJson = async (res: Response) => {
+export const safeJson = async (res: Response) => {
   const text = await res.text();
   try {
     return JSON.parse(text);
@@ -121,6 +134,11 @@ export const login = async (email, password) => {
     saveSession(sessionData);
     return sessionData;
   } catch (error: any) {
+    let errorMessage = error.message;
+    if (error.code === 'auth/invalid-credential') {
+      errorMessage = 'Invalid email or password. Please try again.';
+    }
+    
     console.error('Login error details:', {
       code: error.code,
       message: error.message,
@@ -129,7 +147,7 @@ export const login = async (email, password) => {
         authDomain: auth.app.options.authDomain
       }
     });
-    throw error;
+    throw { ...error, message: errorMessage };
   }
 };
 
@@ -140,6 +158,9 @@ export const signup = async (email, password, name) => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
   await updateProfile(user, { displayName: name });
+  
+  // Send verification email
+  await sendEmailVerification(user);
   
   const res = await fetch(`${API_URL}/api/auth/signup`, {
     method: 'POST',
@@ -160,6 +181,22 @@ export const signup = async (email, password, name) => {
   
   saveSession(data);
   return data;
+};
+
+/**
+ * Send verification email to current user
+ */
+export const sendVerificationEmail = async () => {
+  if (auth.currentUser) {
+    await sendEmailVerification(auth.currentUser);
+  }
+};
+
+/**
+ * Check if the current user's email is verified
+ */
+export const isEmailVerified = () => {
+  return auth.currentUser?.emailVerified || false;
 };
 
 /**
@@ -256,6 +293,11 @@ export const loginWithGoogle = async () => {
     saveSession(sessionData);
     return sessionData;
   } catch (error: any) {
+    let errorMessage = error.message;
+    if (error.code === 'auth/invalid-credential') {
+      errorMessage = 'There was a problem with the Google login configuration. Please contact support.';
+    }
+
     console.error('Google Login error details:', {
       code: error.code,
       message: error.message,
@@ -264,9 +306,11 @@ export const loginWithGoogle = async () => {
         authDomain: auth.app.options.authDomain
       }
     });
-    throw error;
+    throw { ...error, message: errorMessage };
   }
 };
+
+export { auth };
 
 export default {
   saveSession,
@@ -279,5 +323,7 @@ export default {
   logout,
   getCurrentUser,
   requestPasswordReset,
-  loginWithGoogle
+  loginWithGoogle,
+  sendVerificationEmail,
+  isEmailVerified
 };

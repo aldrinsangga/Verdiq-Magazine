@@ -57,7 +57,7 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
         className="flex items-center gap-3 p-1.5 pr-3 rounded-full bg-slate-900 border border-white/5 hover:border-emerald-500/30 transition-all group border-none"
         data-testid="profile-trigger"
       >
-        <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/20 overflow-hidden">
+        <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-slate-950 font-black text-sm shadow-lg shadow-emerald-500/20 overflow-hidden group-hover:rotate-[360deg] transition-transform duration-700">
           {user?.avatarUrl ? (
             <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
           ) : (

@@ -22,9 +22,8 @@ async function getDb(): Promise<DatabaseSchema> {
           password: 'admin123',
           name: 'Verdiq Admin',
           credits: 9999,
-          isSubscribed: true,
           history: [],
-          invoices: [],
+          purchases: [],
           role: 'admin'
         }
       ]

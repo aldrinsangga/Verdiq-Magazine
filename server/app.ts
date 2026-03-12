@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase.ts";
 import firebaseConfig from "../firebase-applet-config.json";
 import { UserAccount, Review } from "../types.ts";
+import { client as paypalClient, paypal } from "./paypal.ts";
 
 dotenv.config({ override: true });
 
@@ -24,7 +25,12 @@ const sanitizeUser = (user: any): Omit<UserAccount, 'password'> => {
 // Helper to verify Firebase ID token and get user
 const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string | null> => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const idToken = authHeader.split('Bearer ')[1];
+  const idToken = authHeader.split('Bearer ')[1]?.trim();
+  
+  if (!idToken || idToken === 'null' || idToken === 'undefined') {
+    return null;
+  }
+  
   try {
     // If it's a mock token from our login, return the ID
     if (idToken.startsWith('mock-jwt-token-')) {
@@ -57,6 +63,18 @@ const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string
   }
 };
 
+// Helper to sanitize user and include history
+const getFullUser = async (userId: string) => {
+  const userDoc = await db.collection('users').doc(userId).get();
+  if (!userDoc.exists) return null;
+  
+  const user = userDoc.data();
+  const reviewsSnapshot = await db.collection('reviews').where('userId', '==', userId).orderBy('createdAt', 'desc').get();
+  const history = reviewsSnapshot.docs.map(doc => doc.data());
+  
+  return sanitizeUser({ ...user, history });
+};
+
 // Middleware to check if user is admin
 const isAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
@@ -71,9 +89,11 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
     let userEmail = user?.email;
     if (!userEmail && !req.headers.authorization?.includes('mock-jwt-token-')) {
       try {
-        const idToken = req.headers.authorization!.split('Bearer ')[1];
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
-        userEmail = decodedToken.email;
+        const idToken = req.headers.authorization!.split('Bearer ')[1]?.trim();
+        if (idToken && idToken !== 'null' && idToken !== 'undefined') {
+          const decodedToken = await adminAuth.verifyIdToken(idToken);
+          userEmail = decodedToken.email;
+        }
       } catch (e) {
         console.warn("[isAdmin] Could not get email from token", e);
       }
@@ -175,8 +195,7 @@ app.post("/api/auth/signup", async (req, res, next) => {
       email,
       password,
       name,
-      credits: 3,
-      isSubscribed: false,
+      credits: 10,
       role: 'user',
       mfaEnabled: false,
       createdAt: new Date().toISOString()
@@ -230,13 +249,9 @@ app.get("/api/users/:id", async (req, res, next) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const userDoc = await db.collection('users').doc(id).get();
-    if (userDoc.exists) {
-      const user = userDoc.data();
-      // Fetch history from reviews collection
-      const reviewsSnapshot = await db.collection('reviews').where('userId', '==', id).orderBy('createdAt', 'desc').get();
-      const history = reviewsSnapshot.docs.map(doc => doc.data());
-      res.json(sanitizeUser({ ...user, history }));
+    const fullUser = await getFullUser(id);
+    if (fullUser) {
+      res.json(fullUser);
     } else {
       res.status(404).json({ message: "User not found" });
     }
@@ -267,8 +282,8 @@ app.put("/api/users/:id", async (req, res) => {
   if (update.history) delete update.history;
 
   await db.collection('users').doc(id).update(update);
-  const updatedDoc = await db.collection('users').doc(id).get();
-  res.json(sanitizeUser(updatedDoc.data()));
+  const fullUser = await getFullUser(id);
+  res.json(fullUser);
 });
 
 app.delete("/api/users/:id", isAdmin, async (req, res) => {
@@ -288,12 +303,185 @@ app.get("/api/credits/status", async (req, res) => {
   if (!user) return res.status(404).json({ message: "User not found" });
   
   res.json({ 
-    credits: user.credits, 
-    isSubscribed: user.isSubscribed || false, 
-    plan: user.isSubscribed ? 'pro' : 'free' 
+    credits: user.credits,
+    isSubscribed: !!user.isSubscribed,
+    features: user.isSubscribed ? {
+      publish_magazine: true,
+      pdf_download: true,
+      edit_reviews: true,
+      priority_support: true
+    } : {
+      publish_magazine: false,
+      pdf_download: false,
+      edit_reviews: false,
+      priority_support: false
+    }
   });
 });
 
+// Earnings & Purchases (Admin only)
+app.get("/api/admin/earnings", isAdmin, async (req, res, next) => {
+  try {
+    const snapshot = await db.collection('purchases').orderBy('createdAt', 'desc').get();
+    const purchases = snapshot.docs.map(doc => doc.data());
+    const totalEarnings = purchases.reduce((sum, p) => sum + (p.amount || 0), 0);
+    res.json({ purchases, totalEarnings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Mock purchase recording (for top-up simulation)
+app.post("/api/credits/topup/execute", async (req, res, next) => {
+  try {
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { paymentId, payerId, packageId } = req.body;
+    
+    // This is now a legacy endpoint, but we'll keep it as a fallback for mock testing
+    // In a real app, you'd verify with PayPal here.
+    
+    const packages: Record<string, { credits: number, price: number }> = {
+      'topup_15': { credits: 15, price: 15 },
+      'topup_35': { credits: 35, price: 25 },
+      'topup_80': { credits: 80, price: 50 },
+      'topup_140': { credits: 140, price: 85 }
+    };
+
+    const pkg = packages[packageId] || { credits: 10, price: 10 };
+    
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    const user = userDoc.data();
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const purchaseId = `pur_${Math.random().toString(36).substring(2, 11)}`;
+    const purchase = {
+      id: purchaseId,
+      userId,
+      userName: user.name,
+      userEmail: user.email,
+      amount: pkg.price,
+      credits: pkg.credits,
+      status: 'completed',
+      createdAt: new Date().toISOString(),
+      paymentMethod: 'PayPal'
+    };
+
+    await db.collection('purchases').doc(purchaseId).set(purchase);
+    
+    const newCredits = (user.credits || 0) + pkg.credits;
+    await userRef.update({ credits: newCredits });
+
+    res.json({ success: true, credits: newCredits, purchase });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PayPal Order Creation
+app.post("/api/paypal/create-order", async (req, res, next) => {
+  try {
+    const { packageId } = req.body;
+    const packages: Record<string, { credits: number, price: number, name: string }> = {
+      'topup_15': { credits: 15, price: 15, name: '15 Credits Top-up' },
+      'topup_35': { credits: 35, price: 25, name: '35 Credits Top-up' },
+      'topup_80': { credits: 80, price: 50, name: '80 Credits Top-up' },
+      'topup_140': { credits: 140, price: 85, name: '140 Credits Top-up' }
+    };
+
+    const pkg = packages[packageId];
+    if (!pkg) return res.status(400).json({ message: "Invalid package" });
+
+    const request = new paypal.orders.OrdersCreateRequest();
+    request.prefer("return=representation");
+    request.requestBody({
+      intent: "CAPTURE",
+      purchase_units: [
+        {
+          amount: {
+            currency_code: "USD",
+            value: pkg.price.toString(),
+          },
+          description: pkg.name
+        },
+      ],
+    });
+
+    const order = await paypalClient().execute(request);
+    res.json({ id: order.result.id });
+  } catch (error) {
+    console.error("PayPal Create Order Error:", error);
+    next(error);
+  }
+});
+
+// PayPal Order Capture
+app.post("/api/paypal/capture-order", async (req, res, next) => {
+  try {
+    const { orderId, packageId } = req.body;
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const request = new paypal.orders.OrdersCaptureRequest(orderId);
+    request.requestBody({} as any);
+
+    const capture = await paypalClient().execute(request);
+
+    if (capture.result.status === "COMPLETED") {
+      // Update user credits
+      const packages: Record<string, { credits: number, price: number }> = {
+        'topup_15': { credits: 15, price: 15 },
+        'topup_35': { credits: 35, price: 25 },
+        'topup_80': { credits: 80, price: 50 },
+        'topup_140': { credits: 140, price: 85 }
+      };
+
+      const pkg = packages[packageId];
+      if (!pkg) return res.status(400).json({ message: "Invalid package" });
+
+      const userRef = db.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+      const user = userDoc.data();
+
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const purchaseId = `pur_${orderId}`;
+      const purchase = {
+        id: purchaseId,
+        userId,
+        userName: user.name,
+        userEmail: user.email,
+        amount: pkg.price,
+        credits: pkg.credits,
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+        paymentMethod: 'PayPal',
+        paypalOrderId: orderId
+      };
+
+      await db.collection('purchases').doc(purchaseId).set(purchase);
+      
+      const newCredits = (user.credits || 0) + pkg.credits;
+      await userRef.update({ credits: newCredits });
+
+      res.json({ success: true, credits: newCredits, purchase });
+    } else {
+      res.status(400).json({ message: "Payment not completed" });
+    }
+  } catch (error) {
+    console.error("PayPal Capture Order Error:", error);
+    next(error);
+  }
+});
+
+// PayPal Subscription Order Creation
+// Removed as per user request (Credit model only)
+
+// PayPal Subscription Order Capture
+// Removed as per user request (Credit model only)
 app.get("/api/health", async (req, res) => {
   try {
     // Test Firestore connection
@@ -317,7 +505,7 @@ app.post("/api/credits/check", async (req, res, next) => {
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const cost = 3;
+    const cost = action === 'publish' ? 5 : (action === 'edit' ? 3 : 10);
     const userDoc = await db.collection('users').doc(userId).get();
     const user = userDoc.data();
     
@@ -344,7 +532,7 @@ app.post("/api/credits/deduct", async (req, res, next) => {
 
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const cost = 3;
+    const cost = action === 'publish' ? 5 : (action === 'edit' ? 3 : 10);
     
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
@@ -441,7 +629,8 @@ app.post("/api/reviews", async (req, res, next) => {
     
     if (userDoc.exists) {
       const user = userDoc.data();
-      const newCredits = Math.max(0, (user?.credits || 0) - 3);
+      const cost = 10;
+      const newCredits = Math.max(0, (user?.credits || 0) - cost);
       
       // Save review to separate collection
       const reviewId = review.id || Math.random().toString(36).substring(2, 11);
@@ -457,16 +646,16 @@ app.post("/api/reviews", async (req, res, next) => {
           delete reviewToSave.podcastAudio;
         }
       }
-      
+
       if (review.songAudio && review.songAudio.length > 1000) {
-        const url = await uploadToStorage(review.songAudio, `songs/${reviewId}.mp3`, 'audio/mpeg');
+        const url = await uploadToStorage(review.songAudio, `songs/${reviewId}.wav`, 'audio/wav');
         if (url) {
           reviewToSave.songAudio = url;
         } else {
           delete reviewToSave.songAudio;
         }
       }
-
+      
       if (review.imageUrl && review.imageUrl.startsWith('data:image')) {
         const base64 = review.imageUrl.split(',')[1];
         const mimeType = review.imageUrl.split(';')[0].split(':')[1];
@@ -476,14 +665,24 @@ app.post("/api/reviews", async (req, res, next) => {
           reviewToSave.imageUrl = url;
         }
       }
+
+      if (review.artistPhotoUrl && review.artistPhotoUrl.startsWith('data:image')) {
+        const base64 = review.artistPhotoUrl.split(',')[1];
+        const mimeType = review.artistPhotoUrl.split(';')[0].split(':')[1];
+        const ext = mimeType.split('/')[1] || 'png';
+        const url = await uploadToStorage(base64, `artist_photos/${reviewId}.${ext}`, mimeType);
+        if (url) {
+          reviewToSave.artistPhotoUrl = url;
+        }
+      }
       
       await db.collection('reviews').doc(reviewId).set(reviewToSave);
       
       // Update user credits
       await userRef.update({ credits: newCredits });
       
-      const updatedUserDoc = await userRef.get();
-      res.json(sanitizeUser(updatedUserDoc.data()));
+      const fullUser = await getFullUser(userId);
+      res.json(fullUser);
     } else {
       res.status(404).json({ message: "User not found" });
     }
@@ -518,16 +717,16 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
         delete reviewToUpdate.podcastAudio;
       }
     }
-    
+
     if (review.songAudio && review.songAudio.length > 1000 && !review.songAudio.startsWith('http')) {
-      const url = await uploadToStorage(review.songAudio, `songs/${reviewId}.mp3`, 'audio/mpeg');
+      const url = await uploadToStorage(review.songAudio, `songs/${reviewId}.wav`, 'audio/wav');
       if (url) {
         reviewToUpdate.songAudio = url;
       } else {
         delete reviewToUpdate.songAudio;
       }
     }
-
+    
     if (review.imageUrl && review.imageUrl.startsWith('data:image')) {
       const base64 = review.imageUrl.split(',')[1];
       const mimeType = review.imageUrl.split(';')[0].split(':')[1];
@@ -535,6 +734,16 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
       const url = await uploadToStorage(base64, `images/${reviewId}.${ext}`, mimeType);
       if (url) {
         reviewToUpdate.imageUrl = url;
+      }
+    }
+
+    if (review.artistPhotoUrl && review.artistPhotoUrl.startsWith('data:image')) {
+      const base64 = review.artistPhotoUrl.split(',')[1];
+      const mimeType = review.artistPhotoUrl.split(';')[0].split(':')[1];
+      const ext = mimeType.split('/')[1] || 'png';
+      const url = await uploadToStorage(base64, `artist_photos/${reviewId}.${ext}`, mimeType);
+      if (url) {
+        reviewToUpdate.artistPhotoUrl = url;
       }
     }
 
@@ -669,6 +878,174 @@ app.delete("/api/style-guides/:id", isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     await db.collection('styleGuides').doc(id).delete();
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Support Tickets API
+app.post("/api/support", async (req, res, next) => {
+  try {
+    const { name, email, subject, category, message } = req.body;
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    
+    console.log(`[Support] Received message from ${email}: [${category}] ${subject}`);
+    
+    if (!name || !email || !subject || !category || !message) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    
+    const newTicket = {
+      userId: userId || null,
+      name,
+      email,
+      subject,
+      category,
+      message,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      messages: [],
+      hasUnreadReply: false
+    };
+    
+    const ticketRef = await db.collection('support_tickets').add(newTicket);
+    console.log("Created support ticket:", ticketRef.id, newTicket);
+    res.status(201).json({ id: ticketRef.id, ...newTicket });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/support/my-tickets", async (req, res, next) => {
+  try {
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    
+    const snapshot = await db.collection('support_tickets').where('userId', '==', userId).get();
+    const tickets = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+    
+    tickets.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json(tickets);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/support/:id/message", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!text) return res.status(400).json({ message: "Message text is required" });
+    
+    const userDoc = await db.collection('users').doc(userId).get();
+    const user = userDoc.data();
+    const isAdminUser = user?.role === 'admin' || user?.email === 'verdiqmag@gmail.com';
+    
+    const ticketRef = db.collection('support_tickets').doc(id);
+    const ticketDoc = await ticketRef.get();
+    
+    if (!ticketDoc.exists) return res.status(404).json({ message: "Ticket not found" });
+    
+    const ticket = ticketDoc.data();
+    
+    // Check if user owns the ticket or is admin
+    if (ticket?.userId !== userId && !isAdminUser) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    
+    const newMessage = {
+      sender: isAdminUser ? 'admin' : 'user',
+      text,
+      createdAt: new Date().toISOString()
+    };
+    
+    const updateData: any = {
+      messages: [...(ticket?.messages || []), newMessage],
+      updatedAt: new Date().toISOString()
+    };
+    
+    if (isAdminUser) {
+      updateData.hasUnreadReply = true;
+    } else {
+      updateData.status = 'open'; // Re-open if user replies? Or just keep as is.
+    }
+    
+    await ticketRef.update(updateData);
+    res.json({ success: true, message: newMessage });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/support/:id/read", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = await getUserIdFromAuth(req.headers.authorization);
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    
+    const ticketRef = db.collection('support_tickets').doc(id);
+    const ticketDoc = await ticketRef.get();
+    
+    if (!ticketDoc.exists) return res.status(404).json({ message: "Ticket not found" });
+    if (ticketDoc.data()?.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+    
+    await ticketRef.update({ hasUnreadReply: false });
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/support", isAdmin, async (req, res, next) => {
+  try {
+    console.log("[Admin] Fetching support tickets...");
+    const snapshot = await db.collection('support_tickets').get();
+    console.log(`[Admin] Found ${snapshot.size} tickets`);
+    const tickets = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as any[];
+    
+    // Sort in memory to avoid requiring a Firestore composite index
+    tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    res.json(tickets);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/admin/support/:id", isAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    const allowedStatuses = ['open', 'resolved', 'follow-up', 'closed', 'deleted'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+    
+    const ticketRef = db.collection('support_tickets').doc(id);
+    await ticketRef.update({ status, updatedAt: new Date().toISOString() });
+    
+    const updatedTicket = (await ticketRef.get()).data();
+    res.json({ id, ...updatedTicket });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/support/:id", isAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await db.collection('support_tickets').doc(id).delete();
     res.json({ success: true });
   } catch (error) {
     next(error);

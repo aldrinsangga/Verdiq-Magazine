@@ -3,7 +3,7 @@ import { getAuthHeaders } from '../authClient';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
-const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredits, onManageSubscription }) => {
+const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredits, onManageSubscription, onNavigate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [creditStatus, setCreditStatus] = useState(null);
   const dropdownRef = useRef(null);
@@ -32,7 +32,7 @@ const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredi
 
   const fetchCreditStatus = async () => {
     try {
-      const headers = getAuthHeaders();
+      const headers = await getAuthHeaders();
       if (!headers.Authorization) return;
       
       const res = await fetch(`${API_URL}/api/credits/status`, { headers });
@@ -101,10 +101,14 @@ const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredi
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Credit Costs</p>
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-400">Review Generation</span>
-              <span className="font-bold text-white">3 credits</span>
+              <span className="font-bold text-white">10 credits</span>
             </div>
             <div className="flex items-center justify-between text-sm mt-1">
               <span className="text-slate-400">Magazine Submission</span>
+              <span className="font-bold text-white">5 credits</span>
+            </div>
+            <div className="flex items-center justify-between text-sm mt-1">
+              <span className="text-slate-400">Edit Review</span>
               <span className="font-bold text-white">3 credits</span>
             </div>
           </div>
@@ -132,7 +136,7 @@ const CreditCounter = ({ credits, monthlyCredits, plan, isSubscribed, onBuyCredi
             </button>
             
             <button
-              onClick={() => { setIsOpen(false); window.location.href = '/?view=account'; }}
+              onClick={() => { setIsOpen(false); onNavigate?.('account'); }}
               className="w-full text-slate-400 py-2 text-sm font-bold hover:text-white transition-colors"
               data-testid="billing-history-btn"
             >
