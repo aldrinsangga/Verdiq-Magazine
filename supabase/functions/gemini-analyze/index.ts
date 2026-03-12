@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
   `;
 
     // Call Gemini API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-06-05:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -302,13 +302,24 @@ Deno.serve(async (req: Request) => {
     }
 
     const data = await response.json();
-    const reviewText = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!reviewText) {
-      throw new Error("No review generated");
+    const parts = data.candidates?.[0]?.content?.parts;
+    if (!parts || parts.length === 0) {
+      const finishReason = data.candidates?.[0]?.finishReason;
+      throw new Error(`No review generated. Finish reason: ${finishReason || 'unknown'}. Full response: ${JSON.stringify(data).slice(0, 500)}`);
     }
 
-    const review = JSON.parse(reviewText);
+    const reviewText = parts.find((p: any) => p.text)?.text;
+    if (!reviewText) {
+      throw new Error(`No text in response parts: ${JSON.stringify(parts).slice(0, 500)}`);
+    }
+
+    let review: any;
+    try {
+      review = JSON.parse(reviewText);
+    } catch (e) {
+      throw new Error(`Failed to parse Gemini JSON response: ${reviewText.slice(0, 500)}`);
+    }
 
     // Handle images
     let imageUrl = imageBase64 ? `data:${imageMimeType};base64,${imageBase64}` : `https://picsum.photos/seed/${artistName}-${trackName}/800/800`;
@@ -316,7 +327,7 @@ Deno.serve(async (req: Request) => {
     let artistPhotoUrl = null;
     if (artistPhotoBase64 && artistPhotoMimeType) {
       try {
-        const imgResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`, {
+        const imgResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -334,7 +345,10 @@ Deno.serve(async (req: Request) => {
                   }
                 ]
               }
-            ]
+            ],
+            generationConfig: {
+              response_modalities: ["TEXT", "IMAGE"]
+            }
           })
         });
 
@@ -342,7 +356,7 @@ Deno.serve(async (req: Request) => {
           const imgData = await imgResponse.json();
           const inlineData = imgData.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData;
           if (inlineData) {
-            artistPhotoUrl = `data:image/png;base64,${inlineData.data}`;
+            artistPhotoUrl = `data:${inlineData.mimeType};base64,${inlineData.data}`;
           }
         }
       } catch (e) {
