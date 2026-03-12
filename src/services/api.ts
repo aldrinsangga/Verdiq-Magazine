@@ -1,5 +1,35 @@
 import { supabase } from '../supabaseClient';
 
+// Convert snake_case to camelCase
+function toCamelCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(toCamelCase);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, key) => {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      acc[camelKey] = toCamelCase(obj[key]);
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+}
+
+// Convert camelCase to snake_case for specific keys
+function toSnakeCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(toSnakeCase);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, key) => {
+      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      acc[snakeKey] = toSnakeCase(obj[key]);
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+}
+
 async function getAuthUserId(): Promise<string | null> {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.user?.id || null;
@@ -26,10 +56,10 @@ export const api = {
     const { data, error } = await supabase
       .from('reviews')
       .select('*')
-      .eq('isPublished', true)
-      .order('createdAt', { ascending: false });
+      .eq('is_published', true)
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return toCamelCase(data || []);
   },
 
   async getPublicReview(id: string) {
@@ -39,40 +69,40 @@ export const api = {
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
-    return data;
+    return toCamelCase(data);
   },
 
   async getPublicStyleGuides() {
     const { data, error } = await supabase
-      .from('styleGuides')
+      .from('style_guides')
       .select('*');
     if (error) throw error;
-    return data || [];
+    return toCamelCase(data || []);
   },
 
   async getPodcastStats() {
     const { data, error } = await supabase
       .from('reviews')
-      .select('id, playCount')
-      .eq('hasPodcast', true);
+      .select('id, play_count')
+      .eq('has_podcast', true);
     if (error) throw error;
     const playCounts: Record<string, number> = {};
-    (data || []).forEach(r => { playCounts[r.id] = r.playCount || 0; });
+    (data || []).forEach(r => { playCounts[r.id] = r.play_count || 0; });
     return { play_counts: playCounts };
   },
 
   async recordPodcastPlay(id: string) {
     const { data: review, error: fetchError } = await supabase
       .from('reviews')
-      .select('playCount')
+      .select('play_count')
       .eq('id', id)
       .maybeSingle();
     if (fetchError) throw fetchError;
     if (!review) throw new Error('Podcast not found');
-    const newCount = (review.playCount || 0) + 1;
+    const newCount = (review.play_count || 0) + 1;
     const { error } = await supabase
       .from('reviews')
-      .update({ playCount: newCount })
+      .update({ play_count: newCount })
       .eq('id', id);
     if (error) throw error;
     return { play_count: newCount };
@@ -85,7 +115,7 @@ export const api = {
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
-    return data;
+    return toCamelCase(data);
   },
 
   // ---- Auth-required: Users ----
@@ -105,11 +135,10 @@ export const api = {
     const { data: reviews } = await supabase
       .from('reviews')
       .select('*')
-      .eq('userId', id)
-      .order('createdAt', { ascending: false });
+      .eq('user_id', id)
+      .order('created_at', { ascending: false });
 
-    const { password, ...safe } = user as any;
-    return { ...safe, history: reviews || [] };
+    return toCamelCase({ ...user, history: reviews || [] });
   },
 
   async getAllUsers() {
@@ -126,12 +155,11 @@ export const api = {
       const { data: reviews } = await supabase
         .from('reviews')
         .select('*')
-        .eq('userId', user.id)
-        .order('createdAt', { ascending: false });
-      const { password, ...safe } = user;
-      return { ...safe, history: reviews || [] };
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      return { ...user, history: reviews || [] };
     }));
-    return result;
+    return toCamelCase(result);
   },
 
   async updateUser(id: string, update: any) {
@@ -141,9 +169,10 @@ export const api = {
     if (!admin && update.role) delete update.role;
     if (update.history) delete update.history;
 
+    const snakeUpdate = toSnakeCase(update);
     const { error } = await supabase
       .from('users')
-      .update(update)
+      .update(snakeUpdate)
       .eq('id', id);
     if (error) throw error;
 
@@ -168,7 +197,7 @@ export const api = {
     const userId = await requireAuth();
     const { data: user, error } = await supabase
       .from('users')
-      .select('credits, isSubscribed')
+      .select('credits, is_subscribed')
       .eq('id', userId)
       .maybeSingle();
     if (error) throw error;
@@ -176,8 +205,8 @@ export const api = {
 
     return {
       credits: user.credits,
-      isSubscribed: !!(user as any).isSubscribed,
-      features: (user as any).isSubscribed ? {
+      isSubscribed: !!user.is_subscribed,
+      features: user.is_subscribed ? {
         publish_magazine: true, pdf_download: true, edit_reviews: true, priority_support: true
       } : {
         publish_magazine: false, pdf_download: false, edit_reviews: false, priority_support: false
@@ -234,7 +263,8 @@ export const api = {
     const cost = 10;
     const newCredits = Math.max(0, (user.credits || 0) - cost);
     const reviewId = review.id || Math.random().toString(36).substring(2, 11);
-    const reviewToSave = { ...review, id: reviewId, userId };
+
+    const reviewToSave = toSnakeCase({ ...review, id: reviewId, userId });
 
     const { error: insertError } = await supabase
       .from('reviews')
@@ -255,9 +285,10 @@ export const api = {
     const admin = await isAdminUser(authUserId);
     if (userId !== authUserId && !admin) throw new Error('Forbidden');
 
+    const reviewToUpdate = toSnakeCase(review);
     const { error } = await supabase
       .from('reviews')
-      .update(review)
+      .update(reviewToUpdate)
       .eq('id', reviewId);
     if (error) throw error;
     return { success: true };
@@ -266,27 +297,27 @@ export const api = {
   // ---- Style Guides (Admin) ----
   async getStyleGuides() {
     const { data, error } = await supabase
-      .from('styleGuides')
+      .from('style_guides')
       .select('*')
-      .order('createdAt', { ascending: false });
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return toCamelCase(data || []);
   },
 
   async createStyleGuide(guide: any) {
     const guideId = guide.id || Math.random().toString(36).substring(2, 11);
-    const toSave = { ...guide, id: guideId, createdAt: new Date().toISOString() };
+    const toSave = toSnakeCase({ ...guide, id: guideId, createdAt: new Date().toISOString() });
     const { error } = await supabase
-      .from('styleGuides')
+      .from('style_guides')
       .insert(toSave);
     if (error) throw error;
-    return toSave;
+    return toCamelCase(toSave);
   },
 
   async updateStyleGuide(id: string, update: any) {
     const { error } = await supabase
-      .from('styleGuides')
-      .update(update)
+      .from('style_guides')
+      .update(toSnakeCase(update))
       .eq('id', id);
     if (error) throw error;
     return { success: true };
@@ -294,7 +325,7 @@ export const api = {
 
   async deleteStyleGuide(id: string) {
     const { error } = await supabase
-      .from('styleGuides')
+      .from('style_guides')
       .delete()
       .eq('id', id);
     if (error) throw error;
@@ -305,7 +336,7 @@ export const api = {
   async createSupportTicket(ticket: { name: string; email: string; subject: string; category: string; message: string }) {
     const userId = await getAuthUserId();
     const ticketId = Math.random().toString(36).substring(2, 11);
-    const newTicket = {
+    const newTicket = toSnakeCase({
       id: ticketId,
       userId: userId || null,
       ...ticket,
@@ -313,12 +344,12 @@ export const api = {
       createdAt: new Date().toISOString(),
       messages: [],
       hasUnreadReply: false
-    };
+    });
     const { error } = await supabase
       .from('support_tickets')
       .insert(newTicket);
     if (error) throw error;
-    return newTicket;
+    return toCamelCase(newTicket);
   },
 
   async getMyTickets() {
@@ -326,10 +357,10 @@ export const api = {
     const { data, error } = await supabase
       .from('support_tickets')
       .select('*')
-      .eq('userId', userId)
-      .order('createdAt', { ascending: false });
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return toCamelCase(data || []);
   },
 
   async addTicketMessage(ticketId: string, text: string) {
@@ -348,14 +379,14 @@ export const api = {
       .eq('id', ticketId)
       .maybeSingle();
     if (fetchError || !ticket) throw new Error('Ticket not found');
-    if (ticket.userId !== userId && !isAdmin) throw new Error('Forbidden');
+    if (ticket.user_id !== userId && !isAdmin) throw new Error('Forbidden');
 
     const newMessage = { sender: isAdmin ? 'admin' : 'user', text, createdAt: new Date().toISOString() };
     const updateData: any = {
       messages: [...(ticket.messages || []), newMessage],
-      updatedAt: new Date().toISOString()
+      updated_at: new Date().toISOString()
     };
-    if (isAdmin) updateData.hasUnreadReply = true;
+    if (isAdmin) updateData.has_unread_reply = true;
     else updateData.status = 'open';
 
     const { error } = await supabase
@@ -363,21 +394,21 @@ export const api = {
       .update(updateData)
       .eq('id', ticketId);
     if (error) throw error;
-    return { success: true, message: newMessage };
+    return { success: true, message: toCamelCase(newMessage) };
   },
 
   async markTicketRead(ticketId: string) {
     const userId = await requireAuth();
     const { data: ticket } = await supabase
       .from('support_tickets')
-      .select('userId')
+      .select('user_id')
       .eq('id', ticketId)
       .maybeSingle();
-    if (!ticket || ticket.userId !== userId) throw new Error('Forbidden');
+    if (!ticket || ticket.user_id !== userId) throw new Error('Forbidden');
 
     const { error } = await supabase
       .from('support_tickets')
-      .update({ hasUnreadReply: false })
+      .update({ has_unread_reply: false })
       .eq('id', ticketId);
     if (error) throw error;
     return { success: true };
@@ -392,9 +423,9 @@ export const api = {
     const { data, error } = await supabase
       .from('support_tickets')
       .select('*')
-      .order('createdAt', { ascending: false });
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data || [];
+    return toCamelCase(data || []);
   },
 
   async updateTicketStatus(ticketId: string, status: string) {
@@ -404,7 +435,7 @@ export const api = {
 
     const { error } = await supabase
       .from('support_tickets')
-      .update({ status, updatedAt: new Date().toISOString() })
+      .update({ status, updated_at: new Date().toISOString() })
       .eq('id', ticketId);
     if (error) throw error;
 
@@ -413,7 +444,7 @@ export const api = {
       .select('*')
       .eq('id', ticketId)
       .maybeSingle();
-    return data;
+    return toCamelCase(data);
   },
 
   async deleteTicket(ticketId: string) {
@@ -438,10 +469,10 @@ export const api = {
     const { data: purchases, error } = await supabase
       .from('purchases')
       .select('*')
-      .order('createdAt', { ascending: false });
+      .order('created_at', { ascending: false });
     if (error) throw error;
     const totalEarnings = (purchases || []).reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
-    return { purchases: purchases || [], totalEarnings };
+    return { purchases: toCamelCase(purchases || []), totalEarnings };
   },
 
   // ---- MFA (Mock) ----
@@ -449,10 +480,10 @@ export const api = {
     const userId = await requireAuth();
     const { data } = await supabase
       .from('users')
-      .select('mfaEnabled')
+      .select('mfa_enabled')
       .eq('id', userId)
       .maybeSingle();
-    return { mfa_enabled: data?.mfaEnabled || false };
+    return { mfa_enabled: data?.mfa_enabled || false };
   },
 
   async setupMFA() {
@@ -467,7 +498,7 @@ export const api = {
     if (code === '123456' || code === '000000') {
       const { error } = await supabase
         .from('users')
-        .update({ mfaEnabled: true })
+        .update({ mfa_enabled: true })
         .eq('id', userId);
       if (error) throw error;
       return { success: true };
@@ -488,11 +519,10 @@ export const api = {
       .eq('id', data.user.id)
       .maybeSingle();
 
-    const { password: pw, ...safe } = (user || { id: data.user.id, email: data.user.email }) as any;
-    return { ...safe, session: { access_token: data.session.access_token } };
+    return toCamelCase({ ...(user || { id: data.user.id, email: data.user.email }), session: { access_token: data.session.access_token } });
   },
 
-  // ---- Credits Top-up (no PayPal - simple recording) ----
+  // ---- Credits Top-up ----
   async executeTopup(packageId: string) {
     const userId = await requireAuth();
     const packages: Record<string, { credits: number; price: number }> = {
@@ -514,14 +544,14 @@ export const api = {
     const purchaseId = `pur_${Math.random().toString(36).substring(2, 11)}`;
     const purchase = {
       id: purchaseId,
-      userId,
-      userName: user.name,
-      userEmail: user.email,
+      user_id: userId,
+      user_name: user.name,
+      user_email: user.email,
       amount: pkg.price,
       credits: pkg.credits,
       status: 'completed',
-      createdAt: new Date().toISOString(),
-      paymentMethod: 'PayPal'
+      created_at: new Date().toISOString(),
+      payment_method: 'PayPal'
     };
 
     const { error: insertError } = await supabase.from('purchases').insert(purchase);
@@ -534,6 +564,6 @@ export const api = {
       .eq('id', userId);
     if (updateError) throw updateError;
 
-    return { success: true, credits: newCredits, purchase };
+    return { success: true, credits: newCredits, purchase: toCamelCase(purchase) };
   }
 };
