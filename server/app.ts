@@ -161,28 +161,39 @@ app.post("/api/auth/login", async (req, res, next) => {
 
 app.post("/api/auth/signup", async (req, res, next) => {
   try {
-    const { email, name } = req.body;
+    const { email, password, name } = req.body;
 
-    const userId = await getUserIdFromAuth(req.headers.authorization);
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized", detail: "Valid auth token required" });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
 
-    if (existingUser) {
-      const fullUser = await getFullUser(userId);
-      return res.json(fullUser);
+    if (authError) {
+      return res.status(400).json({ message: authError.message });
+    }
+
+    if (!authData.user) {
+      return res.status(400).json({ message: "Failed to create user" });
+    }
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (signInError || !signInData.session) {
+      return res.status(400).json({ message: "Account created but login failed. Please try logging in." });
     }
 
     const newUser = {
-      id: userId,
+      id: authData.user.id,
       email,
-      name,
+      name: name || '',
       credits: 10,
       role: 'user',
       mfaEnabled: false,
@@ -194,7 +205,13 @@ app.post("/api/auth/signup", async (req, res, next) => {
       .insert(newUser);
 
     const sanitized = sanitizeUser(newUser);
-    res.json(sanitized);
+    res.json({
+      ...sanitized,
+      session: {
+        access_token: signInData.session.access_token,
+        refresh_token: signInData.session.refresh_token
+      }
+    });
   } catch (error) {
     next(error);
   }

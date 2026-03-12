@@ -115,34 +115,28 @@ export const login = async (email: string, password: string) => {
 
 export const signup = async (email: string, password: string, name: string) => {
   try {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
-    if (error) throw error;
-    if (!data.session || !data.user) throw new Error('Signup failed');
-
-    const token = data.session.access_token;
-    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
     const response = await fetch(`${API_URL}/api/auth/signup`, {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, name })
     });
 
     if (!response.ok) {
-      throw new Error('Failed to create user profile');
+      const err = await response.json().catch(() => ({ message: 'Signup failed' }));
+      throw new Error(err.message || 'Signup failed');
     }
 
     const userData = await response.json();
-    const sessionData = {
-      ...userData,
-      session: { access_token: token }
-    };
-    saveSession(sessionData);
-    return sessionData;
+
+    if (userData.session?.access_token) {
+      await supabase.auth.setSession({
+        access_token: userData.session.access_token,
+        refresh_token: userData.session.refresh_token || ''
+      });
+    }
+
+    saveSession(userData);
+    return userData;
   } catch (error: any) {
     console.error('Signup error:', error);
     throw error;
