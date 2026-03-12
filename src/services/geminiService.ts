@@ -38,13 +38,35 @@ export const generatePodcast = async (review: any) => {
     throw new Error('You must be logged in to generate a podcast');
   }
 
-  const { data, error } = await supabase.functions.invoke('gemini-podcast', {
-    body: { review }
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/gemini-podcast`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'Apikey': supabaseAnonKey,
+    },
+    body: JSON.stringify({ review }),
   });
 
-  if (error) {
-    throw new Error(error.message || 'Failed to generate podcast');
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    let errorMessage = `HTTP ${response.status}`;
+    try {
+      const errJson = JSON.parse(responseText);
+      errorMessage = errJson.error || errJson.message || errorMessage;
+    } catch {
+      errorMessage = responseText || errorMessage;
+    }
+    throw new Error(`Podcast generation error: ${errorMessage}`);
   }
 
-  return data;
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    throw new Error('Invalid response from podcast service');
+  }
 };
