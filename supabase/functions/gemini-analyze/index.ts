@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
   `;
 
     // Call Gemini API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -327,7 +327,7 @@ Deno.serve(async (req: Request) => {
     let artistPhotoUrl = null;
     if (artistPhotoBase64 && artistPhotoMimeType) {
       try {
-        const imgResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${apiKey}`, {
+        const imgResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
