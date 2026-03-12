@@ -81,3 +81,12 @@ export const db = {
     }
   }
 };
+
+export async function ensureDbReady(): Promise<void> {
+  try {
+    await getDb();
+  } catch (error) {
+    console.error("Database initialization error:", error);
+    throw error;
+  }
+}
