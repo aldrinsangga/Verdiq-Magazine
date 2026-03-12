@@ -60,6 +60,9 @@ Deno.serve(async (req: Request) => {
     const script = scriptData.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // Generate audio
+    console.log("Script generated, length:", script.length);
+    console.log("Starting audio generation...");
+
     const audioResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
@@ -96,7 +99,8 @@ Deno.serve(async (req: Request) => {
     const pcmData = audioData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
     if (!pcmData) {
-      throw new Error("No audio generated");
+      const finishReason = audioData.candidates?.[0]?.finishReason;
+      throw new Error(`No audio generated. Finish reason: ${finishReason || 'unknown'}. Response: ${JSON.stringify(audioData).slice(0, 500)}`);
     }
 
     // Convert base64 PCM to WAV format
