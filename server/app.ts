@@ -1,8 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase.ts";
-import firebaseConfig from "../firebase-applet-config.json";
+import { supabase, verifyJWT, getUserById, uploadToStorage } from "./supabaseClient.ts";
 import { UserAccount, Review } from "../types.ts";
 import { client as paypalClient, paypal } from "./paypal.ts";
 
@@ -22,41 +21,18 @@ const sanitizeUser = (user: any): Omit<UserAccount, 'password'> => {
   return safe as any;
 };
 
-// Helper to verify Firebase ID token and get user
+// Helper to verify Supabase JWT token and get user
 const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string | null> => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const idToken = authHeader.split('Bearer ')[1]?.trim();
-  
-  if (!idToken || idToken === 'null' || idToken === 'undefined') {
+  const token = authHeader.split('Bearer ')[1]?.trim();
+
+  if (!token || token === 'null' || token === 'undefined') {
     return null;
   }
-  
+
   try {
-    // If it's a mock token from our login, return the ID
-    if (idToken.startsWith('mock-jwt-token-')) {
-      return idToken.replace('mock-jwt-token-', '');
-    }
-    
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(idToken);
-      return decodedToken.uid;
-    } catch (verifyError) {
-      console.warn("Token verification failed, attempting decode fallback", verifyError);
-      // Fallback: Decode JWT without verification (use with caution in dev environments)
-      const parts = idToken.split('.');
-      if (parts.length === 3) {
-        try {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-          // Verify audience matches our project
-          if (payload.aud === firebaseConfig.projectId || payload.aud?.includes(firebaseConfig.projectId)) {
-            return payload.sub || payload.user_id;
-          }
-        } catch (e) {
-          console.error("Failed to decode token payload", e);
-        }
-      }
-      return null;
-    }
+    const result = await verifyJWT(token);
+    return result?.userId || null;
   } catch (error) {
     console.error("Auth error:", error);
     return null;
@@ -65,13 +41,22 @@ const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string
 
 // Helper to sanitize user and include history
 const getFullUser = async (userId: string) => {
-  const userDoc = await db.collection('users').doc(userId).get();
-  if (!userDoc.exists) return null;
-  
-  const user = userDoc.data();
-  const reviewsSnapshot = await db.collection('reviews').where('userId', '==', userId).orderBy('createdAt', 'desc').get();
-  const history = reviewsSnapshot.docs.map(doc => doc.data());
-  
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (userError || !user) return null;
+
+  const { data: reviews } = await supabase
+    .from('reviews')
+    .select('*')
+    .eq('userId', userId)
+    .order('createdAt', { ascending: false });
+
+  const history = reviews || [];
+
   return sanitizeUser({ ...user, history });
 };
 
@@ -81,26 +66,17 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
     const userId = await getUserIdFromAuth(req.headers.authorization);
     console.log(`[isAdmin] Checking userId: ${userId}`);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
-    
-    // Get email from token if document doesn't exist
-    let userEmail = user?.email;
-    if (!userEmail && !req.headers.authorization?.includes('mock-jwt-token-')) {
-      try {
-        const idToken = req.headers.authorization!.split('Bearer ')[1]?.trim();
-        if (idToken && idToken !== 'null' && idToken !== 'undefined') {
-          const decodedToken = await adminAuth.verifyIdToken(idToken);
-          userEmail = decodedToken.email;
-        }
-      } catch (e) {
-        console.warn("[isAdmin] Could not get email from token", e);
-      }
-    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const userEmail = user?.email;
 
     console.log(`[isAdmin] User found: ${!!user}, Email: ${userEmail}, Role: ${user?.role}`);
-    
+
     const isSuperAdmin = userEmail === 'verdiqmag@gmail.com' || userEmail === 'admin@verdiq.ai';
     const hasAdminRole = user?.role === 'admin';
 
@@ -125,26 +101,23 @@ app.get("/api/ping", (req, res) => {
   res.json({ pong: true, time: new Date().toISOString() });
 });
 
-app.get("/api/debug/firebase", async (req, res) => {
+app.get("/api/debug/supabase", async (req, res) => {
   try {
-    const testDoc = await db.collection('health_check').doc('server_test').get();
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
+
     res.json({
       status: "ok",
-      projectId: firebaseConfig.projectId,
-      databaseId: firebaseConfig.firestoreDatabaseId,
-      testDocExists: testDoc.exists,
-      config: {
-        authDomain: firebaseConfig.authDomain,
-        storageBucket: firebaseConfig.storageBucket
-      }
+      connected: !error,
+      supabaseUrl: process.env.SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
     });
   } catch (error: any) {
     res.status(500).json({
       status: "error",
-      message: error.message,
-      code: error.code,
-      projectId: firebaseConfig.projectId,
-      databaseId: firebaseConfig.firestoreDatabaseId
+      message: error.message
     });
   }
 });
@@ -155,25 +128,35 @@ app.get("/api/debug/firebase", async (req, res) => {
 app.post("/api/auth/login", async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('email', '==', email).where('password', '==', password).limit(1).get();
-    
-    if (!snapshot.empty) {
-      const userDoc = snapshot.docs[0];
-      const user = userDoc.data();
-      
-      if (user.mfaEnabled) {
-        return res.json({ mfa_required: true, email });
-      }
 
-      const sanitized = sanitizeUser(user);
-      res.json({
-        ...sanitized,
-        session: { access_token: "mock-jwt-token-" + userDoc.id }
-      });
-    } else {
-      res.status(401).json({ message: "Invalid credentials", detail: "Invalid credentials" });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      return res.status(401).json({ message: "Invalid credentials", detail: error.message });
     }
+
+    if (!data.session || !data.user) {
+      return res.status(401).json({ message: "Invalid credentials", detail: "No session returned" });
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (user?.mfaEnabled) {
+      return res.json({ mfa_required: true, email });
+    }
+
+    const sanitized = user ? sanitizeUser(user) : { id: data.user.id, email: data.user.email };
+    res.json({
+      ...sanitized,
+      session: { access_token: data.session.access_token }
+    });
   } catch (error) {
     next(error);
   }
@@ -181,29 +164,37 @@ app.post("/api/auth/login", async (req, res, next) => {
 
 app.post("/api/auth/signup", async (req, res, next) => {
   try {
-    const { email, password, name, id } = req.body;
-    const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('email', '==', email).limit(1).get();
-    
-    if (!snapshot.empty) {
-      return res.status(400).json({ message: "User already exists", detail: "User already exists" });
-    }
-    
-    const userId = id || Math.random().toString(36).substring(2, 11);
-    const newUser = {
-      id: userId,
+    const { email, password, name } = req.body;
+
+    const { data, error } = await supabase.auth.signUp({
       email,
-      password,
+      password
+    });
+
+    if (error) {
+      return res.status(400).json({ message: error.message, detail: error.message });
+    }
+
+    if (!data.session || !data.user) {
+      return res.status(400).json({ message: "Signup failed", detail: "No session returned" });
+    }
+
+    const newUser = {
+      id: data.user.id,
+      email,
       name,
       credits: 10,
       role: 'user',
       mfaEnabled: false,
       createdAt: new Date().toISOString()
     };
-    
-    await usersRef.doc(userId).set(newUser);
+
+    await supabase
+      .from('users')
+      .insert(newUser);
+
     const sanitized = sanitizeUser(newUser);
-    res.json({ ...sanitized, session: { access_token: "mock-jwt-token-" + userId } });
+    res.json({ ...sanitized, session: { access_token: data.session.access_token } });
   } catch (error) {
     next(error);
   }
@@ -217,19 +208,27 @@ app.post("/api/auth/logout", async (req, res) => {
 app.get("/api/users", isAdmin, async (req, res, next) => {
   try {
     console.log("[GET /api/users] Fetching all users");
-    const snapshot = await db.collection('users').get();
-    const users = await Promise.all(snapshot.docs.map(async doc => {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*');
+
+    if (error) throw error;
+
+    const usersWithHistory = await Promise.all((users || []).map(async user => {
       try {
-        const user = doc.data();
-        const reviewsSnapshot = await db.collection('reviews').where('userId', '==', doc.id).orderBy('createdAt', 'desc').get();
-        const history = reviewsSnapshot.docs.map(r => r.data());
-        return sanitizeUser({ ...user, history });
+        const { data: reviews } = await supabase
+          .from('reviews')
+          .select('*')
+          .eq('userId', user.id)
+          .order('createdAt', { ascending: false });
+
+        return sanitizeUser({ ...user, history: reviews || [] });
       } catch (err) {
-        console.error(`[GET /api/users] Error fetching history for user ${doc.id}:`, err);
-        return sanitizeUser(doc.data());
+        console.error(`[GET /api/users] Error fetching history for user ${user.id}:`, err);
+        return sanitizeUser(user);
       }
     }));
-    res.json(users);
+    res.json(usersWithHistory);
   } catch (error) {
     console.error("[GET /api/users] Error:", error);
     next(error);
@@ -240,11 +239,18 @@ app.get("/api/users/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = await getUserIdFromAuth(req.headers.authorization);
-    
-    const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
-    const requestingUser = requestingUserDoc?.data();
-    const isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
-    
+
+    let isAdminUser = false;
+    if (userId) {
+      const { data: requestingUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+    }
+
     if (id !== userId && !isAdminUser) {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -264,31 +270,43 @@ app.put("/api/users/:id", async (req, res) => {
   const { id } = req.params;
   const update = req.body;
   const userId = await getUserIdFromAuth(req.headers.authorization);
-  
-  const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
-  const requestingUser = requestingUserDoc?.data();
-  const isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+
+  let isAdminUser = false;
+  if (userId) {
+    const { data: requestingUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+  }
 
   if (id !== userId && !isAdminUser) {
     return res.status(403).json({ message: "Forbidden" });
   }
 
-  // Prevent non-admins from promoting themselves
   if (!isAdminUser && update.role) {
     delete update.role;
   }
 
-  // Remove nested history from update if present
   if (update.history) delete update.history;
 
-  await db.collection('users').doc(id).update(update);
+  await supabase
+    .from('users')
+    .update(update)
+    .eq('id', id);
+
   const fullUser = await getFullUser(id);
   res.json(fullUser);
 });
 
 app.delete("/api/users/:id", isAdmin, async (req, res) => {
   const { id } = req.params;
-  await db.collection('users').doc(id).delete();
+  await supabase
+    .from('users')
+    .delete()
+    .eq('id', id);
   res.json({ success: true });
 });
 
@@ -296,13 +314,16 @@ app.delete("/api/users/:id", isAdmin, async (req, res) => {
 app.get("/api/credits/status", async (req, res) => {
   const userId = await getUserIdFromAuth(req.headers.authorization);
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
-  
-  const userDoc = await db.collection('users').doc(userId).get();
-  const user = userDoc.data();
-  
+
+  const { data: user } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+
   if (!user) return res.status(404).json({ message: "User not found" });
-  
-  res.json({ 
+
+  res.json({
     credits: user.credits,
     isSubscribed: !!user.isSubscribed,
     features: user.isSubscribed ? {
@@ -322,10 +343,15 @@ app.get("/api/credits/status", async (req, res) => {
 // Earnings & Purchases (Admin only)
 app.get("/api/admin/earnings", isAdmin, async (req, res, next) => {
   try {
-    const snapshot = await db.collection('purchases').orderBy('createdAt', 'desc').get();
-    const purchases = snapshot.docs.map(doc => doc.data());
-    const totalEarnings = purchases.reduce((sum, p) => sum + (p.amount || 0), 0);
-    res.json({ purchases, totalEarnings });
+    const { data: purchases, error } = await supabase
+      .from('purchases')
+      .select('*')
+      .order('createdAt', { ascending: false });
+
+    if (error) throw error;
+
+    const totalEarnings = (purchases || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+    res.json({ purchases: purchases || [], totalEarnings });
   } catch (error) {
     next(error);
   }
@@ -338,10 +364,7 @@ app.post("/api/credits/topup/execute", async (req, res, next) => {
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const { paymentId, payerId, packageId } = req.body;
-    
-    // This is now a legacy endpoint, but we'll keep it as a fallback for mock testing
-    // In a real app, you'd verify with PayPal here.
-    
+
     const packages: Record<string, { credits: number, price: number }> = {
       'topup_15': { credits: 15, price: 15 },
       'topup_35': { credits: 35, price: 25 },
@@ -350,10 +373,12 @@ app.post("/api/credits/topup/execute", async (req, res, next) => {
     };
 
     const pkg = packages[packageId] || { credits: 10, price: 10 };
-    
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    const user = userDoc.data();
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
 
     if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -370,10 +395,15 @@ app.post("/api/credits/topup/execute", async (req, res, next) => {
       paymentMethod: 'PayPal'
     };
 
-    await db.collection('purchases').doc(purchaseId).set(purchase);
-    
+    await supabase
+      .from('purchases')
+      .insert(purchase);
+
     const newCredits = (user.credits || 0) + pkg.credits;
-    await userRef.update({ credits: newCredits });
+    await supabase
+      .from('users')
+      .update({ credits: newCredits })
+      .eq('id', userId);
 
     res.json({ success: true, credits: newCredits, purchase });
   } catch (error) {
@@ -431,7 +461,6 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
     const capture = await paypalClient().execute(request);
 
     if (capture.result.status === "COMPLETED") {
-      // Update user credits
       const packages: Record<string, { credits: number, price: number }> = {
         'topup_15': { credits: 15, price: 15 },
         'topup_35': { credits: 35, price: 25 },
@@ -442,9 +471,11 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
       const pkg = packages[packageId];
       if (!pkg) return res.status(400).json({ message: "Invalid package" });
 
-      const userRef = db.collection('users').doc(userId);
-      const userDoc = await userRef.get();
-      const user = userDoc.data();
+      const { data: user } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
       if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -462,10 +493,15 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
         paypalOrderId: orderId
       };
 
-      await db.collection('purchases').doc(purchaseId).set(purchase);
-      
+      await supabase
+        .from('purchases')
+        .insert(purchase);
+
       const newCredits = (user.credits || 0) + pkg.credits;
-      await userRef.update({ credits: newCredits });
+      await supabase
+        .from('users')
+        .update({ credits: newCredits })
+        .eq('id', userId);
 
       res.json({ success: true, credits: newCredits, purchase });
     } else {
@@ -484,16 +520,17 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
 // Removed as per user request (Credit model only)
 app.get("/api/health", async (req, res) => {
   try {
-    // Test Firestore connection
-    await db.collection('health').doc('check').get();
-    res.json({ status: "ok", firestore: "connected" });
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
+
+    res.json({ status: "ok", supabase: error ? "error" : "connected" });
   } catch (error: any) {
     console.error("Health check failed:", error);
-    res.status(500).json({ 
-      status: "error", 
-      message: error.message,
-      code: error.code,
-      details: error.details
+    res.status(500).json({
+      status: "error",
+      message: error.message
     });
   }
 });
@@ -506,14 +543,17 @@ app.post("/api/credits/check", async (req, res, next) => {
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const cost = action === 'publish' ? 5 : (action === 'edit' ? 3 : 10);
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
-    
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
     if (user) {
       const canAfford = user.credits >= cost;
-      res.json({ 
-        canAfford, 
-        cost, 
+      res.json({
+        canAfford,
+        cost,
         remaining: user.credits,
         message: canAfford ? "OK" : "Insufficient credits"
       });
@@ -533,14 +573,19 @@ app.post("/api/credits/deduct", async (req, res, next) => {
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const cost = action === 'publish' ? 5 : (action === 'edit' ? 3 : 10);
-    
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    const user = userDoc.data();
-    
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
     if (user) {
       const newCredits = Math.max(0, user.credits - cost);
-      await userRef.update({ credits: newCredits });
+      await supabase
+        .from('users')
+        .update({ credits: newCredits })
+        .eq('id', userId);
       res.json({ success: true, deducted: cost, remaining: newCredits });
     } else {
       res.status(404).json({ message: "User not found" });
@@ -555,10 +600,13 @@ app.get("/api/auth/mfa/status", async (req, res, next) => {
   try {
     const userId = await getUserIdFromAuth(req.headers.authorization);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
-    
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
     res.json({ mfa_enabled: user?.mfaEnabled || false });
   } catch (error) {
     next(error);
@@ -580,10 +628,13 @@ app.post("/api/auth/mfa/verify-setup", async (req, res, next) => {
   try {
     const userId = await getUserIdFromAuth(req.headers.authorization);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    
+
     const { code } = req.body;
     if (code === "123456" || code === "000000") {
-      await db.collection('users').doc(userId).update({ mfaEnabled: true });
+      await supabase
+        .from('users')
+        .update({ mfaEnabled: true })
+        .eq('id', userId);
       res.json({ success: true });
     } else {
       res.status(400).json({ detail: "Invalid verification code. Try 123456." });
@@ -596,19 +647,31 @@ app.post("/api/auth/mfa/verify-setup", async (req, res, next) => {
 app.post("/api/auth/mfa/verify", async (req, res, next) => {
   try {
     const { email, password, mfa_code } = req.body;
-    const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('email', '==', email).where('password', '==', password).limit(1).get();
-    
-    if (!snapshot.empty && (mfa_code === "123456" || mfa_code === "000000")) {
-      const user = snapshot.docs[0].data();
-      const sanitized = sanitizeUser(user);
-      res.json({
-        ...sanitized,
-        session: { access_token: "mock-jwt-token-" + snapshot.docs[0].id }
-      });
-    } else {
-      res.status(401).json({ detail: "Invalid MFA code. Try 123456." });
+
+    if (mfa_code !== "123456" && mfa_code !== "000000") {
+      return res.status(401).json({ detail: "Invalid MFA code. Try 123456." });
     }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error || !data.session || !data.user) {
+      return res.status(401).json({ detail: "Invalid credentials" });
+    }
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    const sanitized = user ? sanitizeUser(user) : { id: data.user.id, email: data.user.email };
+    res.json({
+      ...sanitized,
+      session: { access_token: data.session.access_token }
+    });
   } catch (error) {
     next(error);
   }
@@ -619,26 +682,27 @@ app.post("/api/reviews", async (req, res, next) => {
   try {
     const { userId, review } = req.body;
     const authUserId = await getUserIdFromAuth(req.headers.authorization);
-    
+
     if (!authUserId || authUserId !== userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    
-    if (userDoc.exists) {
-      const user = userDoc.data();
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (user) {
       const cost = 10;
       const newCredits = Math.max(0, (user?.credits || 0) - cost);
-      
-      // Save review to separate collection
+
       const reviewId = review.id || Math.random().toString(36).substring(2, 11);
       const reviewToSave = { ...review, id: reviewId, userId };
-      
-      // Handle large audio data - upload to storage
+
       if (review.podcastAudio && review.podcastAudio.length > 1000) {
-        const url = await uploadToStorage(review.podcastAudio, `podcasts/${reviewId}.wav`, 'audio/wav');
+        const buffer = Buffer.from(review.podcastAudio, 'base64');
+        const url = await uploadToStorage(buffer, `podcasts/${reviewId}.wav`, 'audio/wav');
         if (url) {
           reviewToSave.podcastAudio = url;
           reviewToSave.hasPodcast = true;
@@ -648,19 +712,21 @@ app.post("/api/reviews", async (req, res, next) => {
       }
 
       if (review.songAudio && review.songAudio.length > 1000) {
-        const url = await uploadToStorage(review.songAudio, `songs/${reviewId}.wav`, 'audio/wav');
+        const buffer = Buffer.from(review.songAudio, 'base64');
+        const url = await uploadToStorage(buffer, `songs/${reviewId}.wav`, 'audio/wav');
         if (url) {
           reviewToSave.songAudio = url;
         } else {
           delete reviewToSave.songAudio;
         }
       }
-      
+
       if (review.imageUrl && review.imageUrl.startsWith('data:image')) {
         const base64 = review.imageUrl.split(',')[1];
         const mimeType = review.imageUrl.split(';')[0].split(':')[1];
         const ext = mimeType.split('/')[1] || 'png';
-        const url = await uploadToStorage(base64, `images/${reviewId}.${ext}`, mimeType);
+        const buffer = Buffer.from(base64, 'base64');
+        const url = await uploadToStorage(buffer, `images/${reviewId}.${ext}`, mimeType);
         if (url) {
           reviewToSave.imageUrl = url;
         }
@@ -670,17 +736,22 @@ app.post("/api/reviews", async (req, res, next) => {
         const base64 = review.artistPhotoUrl.split(',')[1];
         const mimeType = review.artistPhotoUrl.split(';')[0].split(':')[1];
         const ext = mimeType.split('/')[1] || 'png';
-        const url = await uploadToStorage(base64, `artist_photos/${reviewId}.${ext}`, mimeType);
+        const buffer = Buffer.from(base64, 'base64');
+        const url = await uploadToStorage(buffer, `artist_photos/${reviewId}.${ext}`, mimeType);
         if (url) {
           reviewToSave.artistPhotoUrl = url;
         }
       }
-      
-      await db.collection('reviews').doc(reviewId).set(reviewToSave);
-      
-      // Update user credits
-      await userRef.update({ credits: newCredits });
-      
+
+      await supabase
+        .from('reviews')
+        .insert(reviewToSave);
+
+      await supabase
+        .from('users')
+        .update({ credits: newCredits })
+        .eq('id', userId);
+
       const fullUser = await getFullUser(userId);
       res.json(fullUser);
     } else {
@@ -696,20 +767,27 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     const { reviewId } = req.params;
     const { userId, review } = req.body;
     const authUserId = await getUserIdFromAuth(req.headers.authorization);
-    
-    const requestingUserDoc = authUserId ? await db.collection('users').doc(authUserId).get() : null;
-    const requestingUser = requestingUserDoc?.data();
-    const isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
-    
+
+    let isAdminUser = false;
+    if (authUserId) {
+      const { data: requestingUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUserId)
+        .maybeSingle();
+
+      isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+    }
+
     if (userId !== authUserId && !isAdminUser) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
     const reviewToUpdate = { ...review };
-    
-    // Handle large audio data - upload to storage
+
     if (review.podcastAudio && review.podcastAudio.length > 1000 && !review.podcastAudio.startsWith('http')) {
-      const url = await uploadToStorage(review.podcastAudio, `podcasts/${reviewId}.wav`, 'audio/wav');
+      const buffer = Buffer.from(review.podcastAudio, 'base64');
+      const url = await uploadToStorage(buffer, `podcasts/${reviewId}.wav`, 'audio/wav');
       if (url) {
         reviewToUpdate.podcastAudio = url;
         reviewToUpdate.hasPodcast = true;
@@ -719,19 +797,21 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     }
 
     if (review.songAudio && review.songAudio.length > 1000 && !review.songAudio.startsWith('http')) {
-      const url = await uploadToStorage(review.songAudio, `songs/${reviewId}.wav`, 'audio/wav');
+      const buffer = Buffer.from(review.songAudio, 'base64');
+      const url = await uploadToStorage(buffer, `songs/${reviewId}.wav`, 'audio/wav');
       if (url) {
         reviewToUpdate.songAudio = url;
       } else {
         delete reviewToUpdate.songAudio;
       }
     }
-    
+
     if (review.imageUrl && review.imageUrl.startsWith('data:image')) {
       const base64 = review.imageUrl.split(',')[1];
       const mimeType = review.imageUrl.split(';')[0].split(':')[1];
       const ext = mimeType.split('/')[1] || 'png';
-      const url = await uploadToStorage(base64, `images/${reviewId}.${ext}`, mimeType);
+      const buffer = Buffer.from(base64, 'base64');
+      const url = await uploadToStorage(buffer, `images/${reviewId}.${ext}`, mimeType);
       if (url) {
         reviewToUpdate.imageUrl = url;
       }
@@ -741,13 +821,18 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
       const base64 = review.artistPhotoUrl.split(',')[1];
       const mimeType = review.artistPhotoUrl.split(';')[0].split(':')[1];
       const ext = mimeType.split('/')[1] || 'png';
-      const url = await uploadToStorage(base64, `artist_photos/${reviewId}.${ext}`, mimeType);
+      const buffer = Buffer.from(base64, 'base64');
+      const url = await uploadToStorage(buffer, `artist_photos/${reviewId}.${ext}`, mimeType);
       if (url) {
         reviewToUpdate.artistPhotoUrl = url;
       }
     }
 
-    await db.collection('reviews').doc(reviewId).update(reviewToUpdate);
+    await supabase
+      .from('reviews')
+      .update(reviewToUpdate)
+      .eq('id', reviewId);
+
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -756,9 +841,15 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
 
 app.get("/api/public/published-reviews", async (req, res, next) => {
   try {
-    const snapshot = await db.collection('reviews').where('isPublished', '==', true).orderBy('createdAt', 'desc').get();
-    const reviews = snapshot.docs.map(doc => doc.data());
-    res.json(reviews);
+    const { data: reviews, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('isPublished', true)
+      .order('createdAt', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(reviews || []);
   } catch (error) {
     next(error);
   }
@@ -767,9 +858,16 @@ app.get("/api/public/published-reviews", async (req, res, next) => {
 app.get("/api/public/reviews/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection('reviews').doc(id).get();
-    if (doc.exists) {
-      res.json(doc.data());
+    const { data: review, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (review) {
+      res.json(review);
     } else {
       res.status(404).json({ message: "Review not found" });
     }
@@ -781,9 +879,16 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
 app.get("/api/reviews/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const doc = await db.collection('reviews').doc(id).get();
-    if (doc.exists) {
-      res.json(doc.data());
+    const { data: review, error } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (review) {
+      res.json(review);
     } else {
       res.status(404).json({ message: "Review not found" });
     }
@@ -794,11 +899,16 @@ app.get("/api/reviews/:id", async (req, res, next) => {
 
 app.get("/api/podcasts/stats", async (req, res, next) => {
   try {
-    const snapshot = await db.collection('reviews').where('hasPodcast', '==', true).get();
+    const { data: reviews, error } = await supabase
+      .from('reviews')
+      .select('id, playCount')
+      .eq('hasPodcast', true);
+
+    if (error) throw error;
+
     const playCounts: Record<string, number> = {};
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      playCounts[doc.id] = data.playCount || 0;
+    (reviews || []).forEach(review => {
+      playCounts[review.id] = review.playCount || 0;
     });
     res.json({ play_counts: playCounts });
   } catch (error) {
@@ -809,13 +919,20 @@ app.get("/api/podcasts/stats", async (req, res, next) => {
 app.post("/api/podcasts/:id/play", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const reviewRef = db.collection('reviews').doc(id);
-    const doc = await reviewRef.get();
-    
-    if (doc.exists) {
-      const data = doc.data();
-      const newCount = (data?.playCount || 0) + 1;
-      await reviewRef.update({ playCount: newCount });
+    const { data: review, error: fetchError } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+
+    if (review) {
+      const newCount = (review.playCount || 0) + 1;
+      await supabase
+        .from('reviews')
+        .update({ playCount: newCount })
+        .eq('id', id);
       return res.json({ play_count: newCount });
     }
     res.status(404).json({ message: "Podcast not found" });
@@ -827,9 +944,13 @@ app.post("/api/podcasts/:id/play", async (req, res, next) => {
 // Public Style Guides (for AI training)
 app.get("/api/public/style-guides", async (req, res, next) => {
   try {
-    const snapshot = await db.collection('styleGuides').get();
-    const guides = snapshot.docs.map(doc => doc.data());
-    res.json(guides);
+    const { data: guides, error } = await supabase
+      .from('styleGuides')
+      .select('*');
+
+    if (error) throw error;
+
+    res.json(guides || []);
   } catch (error) {
     next(error);
   }
@@ -838,9 +959,14 @@ app.get("/api/public/style-guides", async (req, res, next) => {
 // Style Guides (Admin only)
 app.get("/api/style-guides", isAdmin, async (req, res, next) => {
   try {
-    const snapshot = await db.collection('styleGuides').orderBy('createdAt', 'desc').get();
-    const guides = snapshot.docs.map(doc => doc.data());
-    res.json(guides);
+    const { data: guides, error } = await supabase
+      .from('styleGuides')
+      .select('*')
+      .order('createdAt', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(guides || []);
   } catch (error) {
     next(error);
   }
@@ -850,13 +976,16 @@ app.post("/api/style-guides", isAdmin, async (req, res, next) => {
   try {
     const guide = req.body;
     const guideId = guide.id || Math.random().toString(36).substring(2, 11);
-    const guideToSave = { 
-      ...guide, 
-      id: guideId, 
-      createdAt: new Date().toISOString() 
+    const guideToSave = {
+      ...guide,
+      id: guideId,
+      createdAt: new Date().toISOString()
     };
-    
-    await db.collection('styleGuides').doc(guideId).set(guideToSave);
+
+    await supabase
+      .from('styleGuides')
+      .insert(guideToSave);
+
     res.json(guideToSave);
   } catch (error) {
     next(error);
@@ -867,7 +996,10 @@ app.put("/api/style-guides/:id", isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const update = req.body;
-    await db.collection('styleGuides').doc(id).update(update);
+    await supabase
+      .from('styleGuides')
+      .update(update)
+      .eq('id', id);
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -877,7 +1009,10 @@ app.put("/api/style-guides/:id", isAdmin, async (req, res, next) => {
 app.delete("/api/style-guides/:id", isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    await db.collection('styleGuides').doc(id).delete();
+    await supabase
+      .from('styleGuides')
+      .delete()
+      .eq('id', id);
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -889,14 +1024,16 @@ app.post("/api/support", async (req, res, next) => {
   try {
     const { name, email, subject, category, message } = req.body;
     const userId = await getUserIdFromAuth(req.headers.authorization);
-    
+
     console.log(`[Support] Received message from ${email}: [${category}] ${subject}`);
-    
+
     if (!name || !email || !subject || !category || !message) {
       return res.status(400).json({ message: "All fields are required" });
     }
-    
+
+    const ticketId = Math.random().toString(36).substring(2, 11);
     const newTicket = {
+      id: ticketId,
       userId: userId || null,
       name,
       email,
@@ -908,10 +1045,13 @@ app.post("/api/support", async (req, res, next) => {
       messages: [],
       hasUnreadReply: false
     };
-    
-    const ticketRef = await db.collection('support_tickets').add(newTicket);
-    console.log("Created support ticket:", ticketRef.id, newTicket);
-    res.status(201).json({ id: ticketRef.id, ...newTicket });
+
+    await supabase
+      .from('support_tickets')
+      .insert(newTicket);
+
+    console.log("Created support ticket:", ticketId, newTicket);
+    res.status(201).json(newTicket);
   } catch (error) {
     next(error);
   }
@@ -921,15 +1061,16 @@ app.get("/api/support/my-tickets", async (req, res, next) => {
   try {
     const userId = await getUserIdFromAuth(req.headers.authorization);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    
-    const snapshot = await db.collection('support_tickets').where('userId', '==', userId).get();
-    const tickets = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-    
-    tickets.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(tickets);
+
+    const { data: tickets, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false });
+
+    if (error) throw error;
+
+    res.json(tickets || []);
   } catch (error) {
     next(error);
   }
@@ -940,44 +1081,52 @@ app.post("/api/support/:id/message", async (req, res, next) => {
     const { id } = req.params;
     const { text } = req.body;
     const userId = await getUserIdFromAuth(req.headers.authorization);
-    
+
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     if (!text) return res.status(400).json({ message: "Message text is required" });
-    
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
+
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
     const isAdminUser = user?.role === 'admin' || user?.email === 'verdiqmag@gmail.com';
-    
-    const ticketRef = db.collection('support_tickets').doc(id);
-    const ticketDoc = await ticketRef.get();
-    
-    if (!ticketDoc.exists) return res.status(404).json({ message: "Ticket not found" });
-    
-    const ticket = ticketDoc.data();
-    
-    // Check if user owns the ticket or is admin
-    if (ticket?.userId !== userId && !isAdminUser) {
+
+    const { data: ticket, error: fetchError } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !ticket) return res.status(404).json({ message: "Ticket not found" });
+
+    if (ticket.userId !== userId && !isAdminUser) {
       return res.status(403).json({ message: "Forbidden" });
     }
-    
+
     const newMessage = {
       sender: isAdminUser ? 'admin' : 'user',
       text,
       createdAt: new Date().toISOString()
     };
-    
+
     const updateData: any = {
-      messages: [...(ticket?.messages || []), newMessage],
+      messages: [...(ticket.messages || []), newMessage],
       updatedAt: new Date().toISOString()
     };
-    
+
     if (isAdminUser) {
       updateData.hasUnreadReply = true;
     } else {
-      updateData.status = 'open'; // Re-open if user replies? Or just keep as is.
+      updateData.status = 'open';
     }
-    
-    await ticketRef.update(updateData);
+
+    await supabase
+      .from('support_tickets')
+      .update(updateData)
+      .eq('id', id);
+
     res.json({ success: true, message: newMessage });
   } catch (error) {
     next(error);
@@ -989,14 +1138,21 @@ app.patch("/api/support/:id/read", async (req, res, next) => {
     const { id } = req.params;
     const userId = await getUserIdFromAuth(req.headers.authorization);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    
-    const ticketRef = db.collection('support_tickets').doc(id);
-    const ticketDoc = await ticketRef.get();
-    
-    if (!ticketDoc.exists) return res.status(404).json({ message: "Ticket not found" });
-    if (ticketDoc.data()?.userId !== userId) return res.status(403).json({ message: "Forbidden" });
-    
-    await ticketRef.update({ hasUnreadReply: false });
+
+    const { data: ticket, error: fetchError } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchError || !ticket) return res.status(404).json({ message: "Ticket not found" });
+    if (ticket.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+    await supabase
+      .from('support_tickets')
+      .update({ hasUnreadReply: false })
+      .eq('id', id);
+
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -1006,17 +1162,15 @@ app.patch("/api/support/:id/read", async (req, res, next) => {
 app.get("/api/admin/support", isAdmin, async (req, res, next) => {
   try {
     console.log("[Admin] Fetching support tickets...");
-    const snapshot = await db.collection('support_tickets').get();
-    console.log(`[Admin] Found ${snapshot.size} tickets`);
-    const tickets = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as any[];
-    
-    // Sort in memory to avoid requiring a Firestore composite index
-    tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    res.json(tickets);
+    const { data: tickets, error } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .order('createdAt', { ascending: false });
+
+    if (error) throw error;
+
+    console.log(`[Admin] Found ${tickets?.length || 0} tickets`);
+    res.json(tickets || []);
   } catch (error) {
     next(error);
   }
@@ -1026,17 +1180,24 @@ app.patch("/api/admin/support/:id", isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    
+
     const allowedStatuses = ['open', 'resolved', 'follow-up', 'closed', 'deleted'];
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
-    
-    const ticketRef = db.collection('support_tickets').doc(id);
-    await ticketRef.update({ status, updatedAt: new Date().toISOString() });
-    
-    const updatedTicket = (await ticketRef.get()).data();
-    res.json({ id, ...updatedTicket });
+
+    await supabase
+      .from('support_tickets')
+      .update({ status, updatedAt: new Date().toISOString() })
+      .eq('id', id);
+
+    const { data: updatedTicket } = await supabase
+      .from('support_tickets')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    res.json(updatedTicket);
   } catch (error) {
     next(error);
   }
@@ -1045,7 +1206,10 @@ app.patch("/api/admin/support/:id", isAdmin, async (req, res, next) => {
 app.delete("/api/admin/support/:id", isAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    await db.collection('support_tickets').doc(id).delete();
+    await supabase
+      .from('support_tickets')
+      .delete()
+      .eq('id', id);
     res.json({ success: true });
   } catch (error) {
     next(error);
@@ -1062,7 +1226,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
   if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
     return res.status(403).json({
-      message: "Firestore Permission Denied. Please ensure the Cloud Firestore API is enabled in your Google Cloud project and the database is initialized.",
+      message: "Database Permission Denied. Please check your database configuration.",
       detail: err.message,
       code: err.code
     });

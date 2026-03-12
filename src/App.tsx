@@ -4,8 +4,7 @@ import Footer from './components/Footer';
 import MainContent from './components/MainContent';
 import SupportWidget from './components/SupportWidget';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
-import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson } from './authClient';
-import { onAuthStateChanged } from 'firebase/auth';
+import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, safeJson } from './authClient';
 import { analyzeTrack, generatePodcast } from './services/geminiService';
 import { UserAccount } from '../types';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
@@ -280,13 +279,8 @@ function App() {
 
   // Initial data fetch and auth listener
   useEffect(() => {
-    // Listen for auth state changes to handle email verification
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // If user is logged in, we might need to refresh their verification status
-        // But we'll let the init function handle the initial load
-      }
-    });
+    // Supabase handles auth state changes automatically through session management
+    // The init function will handle the initial load
 
     const init = async () => {
       try {
@@ -362,9 +356,8 @@ function App() {
         console.error("Failed to initialize app data", e);
       }
     };
-    
+
     init();
-    return () => unsubscribe();
   }, []);
 
   const refreshUserData = async () => {
