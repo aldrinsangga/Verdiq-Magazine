@@ -4,7 +4,13 @@ import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import firebaseConfigJson from '../firebase-applet-config.json';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const firebaseConfigJson = JSON.parse(fs.readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
 
 const firebaseConfig = {
   ...firebaseConfigJson,

@@ -1,6 +1,6 @@
-import app from "./api/app.js";
+import app from "./api/app.ts";
 import { createServer as createViteServer } from "vite";
-import { ensureDbReady } from "./api/firebase.js";
+import { ensureDbReady } from "./api/firebase.ts";
 
 async function startServer() {
   const PORT = 3000;
