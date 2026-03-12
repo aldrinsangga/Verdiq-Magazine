@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config({ override: true });
+
 import app from "./server/app.ts";
 import { createServer as createViteServer } from "vite";
 import { ensureDbReady } from "./server/db.ts";
