@@ -15,6 +15,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Unauthorized: Missing authorization header');
+    }
+
     const { review } = await req.json();
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
@@ -30,7 +35,7 @@ Deno.serve(async (req: Request) => {
     Format: Wolf: [Dialogue], Sloane: [Dialogue].
   `;
 
-    const scriptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
+    const scriptResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

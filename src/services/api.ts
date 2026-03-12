@@ -262,13 +262,41 @@ export const api = {
 
     const cost = 10;
     const newCredits = Math.max(0, (user.credits || 0) - cost);
-    const reviewId = review.id || Math.random().toString(36).substring(2, 11);
+    const reviewId = review.id || crypto.randomUUID();
 
-    const reviewToSave = toSnakeCase({ ...review, id: reviewId, userId });
+    const allowedFields: Record<string, any> = {
+      id: reviewId,
+      user_id: userId,
+      song_title: review.songTitle,
+      artist_name: review.artistName,
+      headline: review.headline,
+      hook: review.hook,
+      review_body: review.reviewBody,
+      rating: review.rating,
+      image_url: review.imageUrl,
+      artist_photo_url: review.artistPhotoUrl,
+      podcast_audio: review.podcastAudio || null,
+      has_podcast: !!review.hasPodcast,
+      is_published: review.isPublished || false,
+      is_deleted: review.isDeleted || false,
+      breakdown: review.breakdown || null,
+      analysis: review.analysis || null,
+      semantic_synergy: review.semanticSynergy || null,
+      sounds_like: review.soundsLike || null,
+      best_moment: review.bestMoment || null,
+      who_is_it_for: review.whoIsItFor || null,
+      timestamp_highlights: review.timestampHighlights || null,
+      pull_quotes: review.pullQuotes || null,
+      seo: review.seo || null,
+      similar_songs: review.similarSongs || null,
+      playlist_ideas: review.playlistIdeas || null,
+      market_score: review.marketScore || null,
+      created_at: review.createdAt || new Date().toISOString(),
+    };
 
     const { error: insertError } = await supabase
       .from('reviews')
-      .insert(reviewToSave);
+      .insert(allowedFields);
     if (insertError) throw insertError;
 
     const { error: creditError } = await supabase
@@ -285,10 +313,35 @@ export const api = {
     const admin = await isAdminUser(authUserId);
     if (userId !== authUserId && !admin) throw new Error('Forbidden');
 
-    const reviewToUpdate = toSnakeCase(review);
+    const updateFields: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (review.songTitle !== undefined) updateFields.song_title = review.songTitle;
+    if (review.artistName !== undefined) updateFields.artist_name = review.artistName;
+    if (review.headline !== undefined) updateFields.headline = review.headline;
+    if (review.hook !== undefined) updateFields.hook = review.hook;
+    if (review.reviewBody !== undefined) updateFields.review_body = review.reviewBody;
+    if (review.rating !== undefined) updateFields.rating = review.rating;
+    if (review.imageUrl !== undefined) updateFields.image_url = review.imageUrl;
+    if (review.artistPhotoUrl !== undefined) updateFields.artist_photo_url = review.artistPhotoUrl;
+    if (review.podcastAudio !== undefined) updateFields.podcast_audio = review.podcastAudio;
+    if (review.hasPodcast !== undefined) updateFields.has_podcast = review.hasPodcast;
+    if (review.isPublished !== undefined) updateFields.is_published = review.isPublished;
+    if (review.isDeleted !== undefined) updateFields.is_deleted = review.isDeleted;
+    if (review.breakdown !== undefined) updateFields.breakdown = review.breakdown;
+    if (review.analysis !== undefined) updateFields.analysis = review.analysis;
+    if (review.semanticSynergy !== undefined) updateFields.semantic_synergy = review.semanticSynergy;
+    if (review.soundsLike !== undefined) updateFields.sounds_like = review.soundsLike;
+    if (review.bestMoment !== undefined) updateFields.best_moment = review.bestMoment;
+    if (review.whoIsItFor !== undefined) updateFields.who_is_it_for = review.whoIsItFor;
+    if (review.timestampHighlights !== undefined) updateFields.timestamp_highlights = review.timestampHighlights;
+    if (review.pullQuotes !== undefined) updateFields.pull_quotes = review.pullQuotes;
+    if (review.seo !== undefined) updateFields.seo = review.seo;
+    if (review.similarSongs !== undefined) updateFields.similar_songs = review.similarSongs;
+    if (review.playlistIdeas !== undefined) updateFields.playlist_ideas = review.playlistIdeas;
+    if (review.marketScore !== undefined) updateFields.market_score = review.marketScore;
+
     const { error } = await supabase
       .from('reviews')
-      .update(reviewToUpdate)
+      .update(updateFields)
       .eq('id', reviewId);
     if (error) throw error;
     return { success: true };
