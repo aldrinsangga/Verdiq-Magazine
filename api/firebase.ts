@@ -2,9 +2,18 @@ import { initializeApp as initializeAdminApp, getApps as getAdminApps, getApp as
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import firebaseConfig from '../firebase-applet-config.json';
+import firebaseConfigJson from '../firebase-applet-config.json';
+
+const firebaseConfig = {
+  ...firebaseConfigJson,
+  apiKey: process.env.FIREBASE_API_KEY || firebaseConfigJson.apiKey,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN || firebaseConfigJson.authDomain,
+  projectId: process.env.FIREBASE_PROJECT_ID || firebaseConfigJson.projectId,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || firebaseConfigJson.storageBucket,
+  firestoreDatabaseId: process.env.FIREBASE_FIRESTORE_DATABASE_ID || firebaseConfigJson.firestoreDatabaseId,
+};
 
 // Initialize Firebase Admin SDK
 let adminApp: any;
@@ -18,11 +27,16 @@ try {
     adminApp = getAdminApp();
   }
 } catch (e: any) {
-  adminApp = getAdminApp();
+  console.warn("Failed to initialize Firebase Admin SDK:", e);
+  try {
+    adminApp = getAdminApp();
+  } catch (e2) {
+    console.warn("No Firebase Admin app available.");
+  }
 }
 
-export const adminAuth = getAdminAuth(adminApp);
-export const adminStorage = getAdminStorage(adminApp);
+export const adminAuth = adminApp ? getAdminAuth(adminApp) : null as any;
+export const adminStorage = adminApp ? getAdminStorage(adminApp) : null as any;
 
 // Initialize Firebase Client SDK
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -53,11 +67,23 @@ class FirestoreREST {
       const SERVER_PASSWORD = "a-very-secure-internal-password-123";
       
       console.log(`[FirestoreREST] Authenticating as ${SERVER_EMAIL}...`);
-      const userCredential = await signInWithEmailAndPassword(auth, SERVER_EMAIL, SERVER_PASSWORD);
-      this.token = await userCredential.user.getIdToken();
-      this.tokenExpiry = now + 3600000; // 1 hour
-      console.log(`[FirestoreREST] Authentication successful. UID: ${userCredential.user.uid}`);
-      return this.token;
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, SERVER_EMAIL, SERVER_PASSWORD);
+        this.token = await userCredential.user.getIdToken();
+        this.tokenExpiry = now + 3600000; // 1 hour
+        console.log(`[FirestoreREST] Authentication successful. UID: ${userCredential.user.uid}`);
+        return this.token;
+      } catch (signInError: any) {
+        if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/invalid-credential') {
+          console.log(`[FirestoreREST] User not found, creating ${SERVER_EMAIL}...`);
+          const userCredential = await createUserWithEmailAndPassword(auth, SERVER_EMAIL, SERVER_PASSWORD);
+          this.token = await userCredential.user.getIdToken();
+          this.tokenExpiry = now + 3600000; // 1 hour
+          console.log(`[FirestoreREST] Creation successful. UID: ${userCredential.user.uid}`);
+          return this.token;
+        }
+        throw signInError;
+      }
     } catch (e: any) {
       console.error(`[FirestoreREST] Authentication failed: ${e.message}`);
       throw e;
@@ -339,6 +365,7 @@ export const FieldValue = {
 export const uploadToStorage = async (base64Data: string, path: string, mimeType: string): Promise<string> => {
   const bucketName = firebaseConfig.storageBucket;
   try {
+    if (!adminStorage) throw new Error("adminStorage is null");
     const bucket = adminStorage.bucket(bucketName);
     const file = bucket.file(path);
     const buffer = Buffer.from(base64Data, 'base64');

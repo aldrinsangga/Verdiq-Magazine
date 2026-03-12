@@ -1,10 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase.ts";
+import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase";
 import firebaseConfig from "../firebase-applet-config.json";
-import { UserAccount, Review } from "../types.ts";
-import { client as paypalClient, paypal } from "./paypal.ts";
+import { UserAccount, Review } from "../types";
+import { client as paypalClient, paypal } from "./paypal";
 
 dotenv.config({ override: true });
 
@@ -38,8 +38,12 @@ const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string
     }
     
     try {
-      const decodedToken = await adminAuth.verifyIdToken(idToken);
-      return decodedToken.uid;
+      if (adminAuth) {
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        return decodedToken.uid;
+      } else {
+        throw new Error("adminAuth is null");
+      }
     } catch (verifyError) {
       console.warn("Token verification failed, attempting decode fallback", verifyError);
       // Fallback: Decode JWT without verification (use with caution in dev environments)
@@ -180,11 +184,14 @@ app.post("/api/auth/login", async (req, res, next) => {
 });
 
 app.post("/api/auth/signup", async (req, res, next) => {
+  console.log("[signup] Request body:", JSON.stringify(req.body));
   try {
     const { email, password, name, id } = req.body;
+    console.log("[signup] Checking if user exists:", email);
     const usersRef = db.collection('users');
     const snapshot = await usersRef.where('email', '==', email).limit(1).get();
     
+    console.log("[signup] Snapshot empty:", snapshot.empty);
     if (!snapshot.empty) {
       return res.status(400).json({ message: "User already exists", detail: "User already exists" });
     }
@@ -201,10 +208,13 @@ app.post("/api/auth/signup", async (req, res, next) => {
       createdAt: new Date().toISOString()
     };
     
+    console.log("[signup] Creating user:", userId);
     await usersRef.doc(userId).set(newUser);
+    console.log("[signup] User created successfully");
     const sanitized = sanitizeUser(newUser);
     res.json({ ...sanitized, session: { access_token: "mock-jwt-token-" + userId } });
   } catch (error) {
+    console.error("[signup] Error:", error);
     next(error);
   }
 });
