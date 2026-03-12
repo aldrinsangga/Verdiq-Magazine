@@ -1,4 +1,4 @@
-import { db } from './api/firebase.js';
+import { db } from './server/firebase.js';
 
 async function test() {
   const snapshot = await db.collection('support_tickets').get();
