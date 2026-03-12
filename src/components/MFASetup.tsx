@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, QrCode, Key, Check, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { Shield, QrCode, Key, Check, TriangleAlert as AlertTriangle, X, Loader as Loader2 } from 'lucide-react';
 import { api } from '../services/api';
 
 const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {

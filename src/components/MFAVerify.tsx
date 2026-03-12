@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Loader2, AlertTriangle } from 'lucide-react';
+import { Shield, Loader as Loader2, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { api } from '../services/api';
 
 const MFAVerify = ({ email, password, onSuccess, onCancel }) => {

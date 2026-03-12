@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, ChevronLeft, Shield, AlertCircle, CheckCircle2, Clock, Trash2, Reply } from 'lucide-react';
+import { MessageCircle, Send, X, ChevronLeft, Shield, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Clock, Trash2, Reply } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../../types';
 import { api } from '../services/api';
 

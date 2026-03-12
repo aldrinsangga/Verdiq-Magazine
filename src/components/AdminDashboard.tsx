@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Reply } from 'lucide-react';
+import { Loader as Loader2, Reply } from 'lucide-react';
 import { api } from '../services/api';
 
 interface AdminDashboardProps {
