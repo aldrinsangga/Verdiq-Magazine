@@ -293,7 +293,6 @@ Deno.serve(async (req: Request) => {
             ]
           }
         },
-        tools: [{ googleSearch: {} }]
       })
     });
 
