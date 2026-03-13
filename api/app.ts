@@ -310,7 +310,9 @@ app.get("/api/users/:id", async (req, res, next) => {
 app.put("/api/users/:id", async (req, res) => {
   const { id } = req.params;
   const update = req.body;
-  const userId = (await getUserFromAuth(req.headers.authorization))?.uid;
+  const auth = await getUserFromAuth(req.headers.authorization);
+  const userId = auth?.uid;
+  const userEmail = auth?.email;
   
   const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
   const requestingUser = requestingUserDoc?.data();
@@ -742,7 +744,9 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
   try {
     const { reviewId } = req.params;
     const { userId, review } = req.body;
-    const authUserId = await getUserIdFromAuth(req.headers.authorization);
+    const auth = await getUserFromAuth(req.headers.authorization);
+    const authUserId = auth?.uid;
+    const userEmail = auth?.email;
     
     const requestingUserDoc = authUserId ? await db.collection('users').doc(authUserId).get() : null;
     const requestingUser = requestingUserDoc?.data();

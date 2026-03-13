@@ -29,40 +29,29 @@ if (firebaseConfig.projectId) {
   process.env.GOOGLE_CLOUD_PROJECT = firebaseConfig.projectId;
 }
 
-// Initialize Firebase Admin SDK (for Auth, Storage, and Firestore)
+// Initialize Firebase Admin SDK (for Auth and Storage only)
 let adminApp: any;
 try {
   if (getAdminApps().length === 0) {
-    // Try default initialization first (works in Cloud Run/App Engine)
-    adminApp = initializeAdminApp();
-    console.log("Firebase Admin SDK initialized with defaults.");
+    adminApp = initializeAdminApp({
+      projectId: firebaseConfig.projectId
+    });
+    console.log(`Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
   } else {
     adminApp = getAdminApp();
   }
 } catch (e: any) {
-  console.log("Default Admin SDK initialization failed, trying with explicit config...");
-  try {
-    adminApp = initializeAdminApp({
-      credential: admin.credential.applicationDefault(),
-      projectId: firebaseConfig.projectId
-    });
-    console.log(`Firebase Admin SDK initialized for project: ${firebaseConfig.projectId}`);
-  } catch (e2: any) {
-    console.error("Failed to initialize Firebase Admin SDK:", e2);
-  }
+  console.error("Failed to initialize Firebase Admin SDK:", e);
 }
 
 export const adminAuth = adminApp ? getAdminAuth(adminApp) : null;
 export const adminStorage = adminApp ? getAdminStorage(adminApp) : null;
-const adminDb = adminApp ? getAdminFirestore(adminApp) : null;
 
-// Initialize Firebase Client SDK (for Auth fallback and Storage fallback)
+// Initialize Firebase Client SDK
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 
-// Export a unified db object
-// Prefer Admin SDK (bypasses rules), fallback to Client SDK wrapper if Admin fails
 const clientDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 const createClientDbWrapper = (dbInstance: any) => ({
@@ -115,21 +104,31 @@ const createClientDbWrapper = (dbInstance: any) => ({
   }
 });
 
-// If we have Admin Firestore, use it directly. Otherwise use the client wrapper.
-export const db: any = adminDb || createClientDbWrapper(clientDb);
+// Use Client SDK wrapper for db to leverage the server user session and rules
+export const db: any = createClientDbWrapper(clientDb);
 
-// Sign in as server user ONLY if we are using the Client SDK
-if (!adminDb) {
-  const signInServer = async () => {
+let serverSessionPromise: Promise<void> | null = null;
+
+// Sign in as server user to enable Client SDK with proper "isServer" permissions
+const signInServer = async () => {
+  if (serverSessionPromise) return serverSessionPromise;
+  
+  serverSessionPromise = (async () => {
     try {
       await signInWithEmailAndPassword(auth, "server-internal-v2@verdiq.ai", "server-internal-password-2026");
-      console.log("Server session established for Firestore access (Client SDK fallback).");
+      console.log("Server session established for Firestore access.");
     } catch (e: any) {
       console.error("Failed to establish server session:", e.message);
+      serverSessionPromise = null;
+      throw e;
     }
-  };
-  signInServer();
-}
+  })();
+  
+  return serverSessionPromise;
+};
+
+// Start sign in immediately
+signInServer().catch(() => {});
 
 export const FieldValue = {
   serverTimestamp: () => new Date(),
@@ -156,8 +155,9 @@ export const uploadToStorage = async (base64Data: string, path: string, mimeType
 };
 
 export const ensureDbReady = async () => {
-  console.log(`[ensureDbReady] Verifying Firestore connectivity via Client SDK...`);
+  console.log(`[ensureDbReady] Verifying Firestore connectivity...`);
   try {
+    await signInServer();
     await db.collection('health_check').limit(1).get();
     console.log("[ensureDbReady] Firestore connection verified.");
   } catch (e: any) {
