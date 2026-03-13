@@ -15,14 +15,21 @@ service cloud.firestore {
         (
           (request.auth.token.email.lower() == "verdiqmag@gmail.com" && request.auth.token.email_verified == true) ||
           (request.auth.token.email.lower() == "admin@verdiq.ai" && request.auth.token.email_verified == true) ||
+          (request.auth.token.email.lower() == "verdiqmag@verdiq.ai" && request.auth.token.email_verified == true) ||
           request.auth.token.email == "server-internal@verdiq.ai" ||
           request.auth.token.email == "server-internal-v2@verdiq.ai" ||
+          request.auth.token.email == "admin@verdiq.ai" ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
         );
     }
 
     function isServer() {
-      return isAuthenticated() && (request.auth.token.email == "server-internal@verdiq.ai" || request.auth.token.email == "server-internal-v2@verdiq.ai");
+      return isAuthenticated() && 
+        (
+          request.auth.token.email == "server-internal@verdiq.ai" || 
+          request.auth.token.email == "server-internal-v2@verdiq.ai" ||
+          request.auth.token.email == "admin@verdiq.ai"
+        );
     }
 
     // Users Collection

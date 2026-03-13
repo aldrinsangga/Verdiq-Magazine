@@ -316,6 +316,23 @@ export const loginWithGoogle = async () => {
   }
 };
 
+/**
+ * Check if the user is an admin
+ */
+export const isAdmin = (user: any) => {
+  if (!user) return false;
+  
+  const adminEmails = [
+    'verdiqmag@gmail.com',
+    'admin@verdiq.ai',
+    'verdiqmag@verdiq.ai'
+  ];
+  
+  const email = (user.email || auth.currentUser?.email || '').toLowerCase();
+  
+  return user.role === 'admin' || adminEmails.includes(email);
+};
+
 export { auth };
 
 export default {
@@ -324,6 +341,7 @@ export default {
   clearSession,
   getAuthHeaders,
   isAuthenticated,
+  isAdmin,
   login,
   signup,
   logout,

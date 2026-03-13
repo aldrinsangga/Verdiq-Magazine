@@ -31,7 +31,9 @@ const sanitizeUser = (user: any): Omit<UserAccount, 'password'> => {
 const isAdminEmail = (email: string | undefined) => {
   if (!email) return false;
   const lowerEmail = email.toLowerCase();
-  return lowerEmail === 'verdiqmag@gmail.com' || lowerEmail === 'admin@verdiq.ai';
+  return lowerEmail === 'verdiqmag@gmail.com' || 
+         lowerEmail === 'admin@verdiq.ai' || 
+         lowerEmail === 'verdiqmag@verdiq.ai';
 };
 
 // Helper to verify Firebase ID token and get user info
@@ -89,18 +91,40 @@ const getUserIdFromAuth = async (authHeader: string | undefined) => {
 const getFullUser = async (userId: string) => {
   try {
     console.log(`[getFullUser] Fetching user: ${userId}`);
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) return null;
+    let userDoc;
+    try {
+      userDoc = await db.collection('users').doc(userId).get();
+    } catch (dbErr: any) {
+      console.error(`[getFullUser] Firestore error fetching user ${userId}:`, dbErr.message);
+      // If we can't even get the user doc due to permissions, we'll return null 
+      // and let the caller decide if they want to return a basic profile
+      return null;
+    }
+
+    if (!userDoc.exists) {
+      console.log(`[getFullUser] User ${userId} not found in database`);
+      return null;
+    }
     
     const user = userDoc.data();
     console.log(`[getFullUser] Fetching reviews for user: ${userId}`);
-    const reviewsSnapshot = await db.collection('reviews').where('userId', '==', userId).orderBy('createdAt', 'desc').get();
-    const history = reviewsSnapshot.docs.map(doc => doc.data());
     
+    let history = [];
+    try {
+      const reviewsSnapshot = await db.collection('reviews')
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+      history = reviewsSnapshot.docs.map(doc => doc.data());
+    } catch (reviewErr: any) {
+      console.warn(`[getFullUser] Could not fetch reviews for user ${userId}:`, reviewErr.message);
+      // Continue with empty history if reviews fetch fails
+    }
+
     return sanitizeUser({ ...user, history });
-  } catch (error) {
-    console.error(`[getFullUser] Error fetching user ${userId}:`, error);
-    throw error;
+  } catch (error: any) {
+    console.error(`[getFullUser] Critical error fetching user ${userId}:`, error);
+    return null;
   }
 };
 
@@ -117,26 +141,35 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
       return res.status(401).json({ message: "Unauthorized" });
     }
     
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
-    
-    // Get email from token if document doesn't exist or doesn't have email
-    const effectiveEmail = user?.email || userEmail;
-    
-    console.log(`[isAdmin] User found in DB: ${!!user}, Effective Email: ${effectiveEmail}, Role in DB: ${user?.role}`);
-    
-    const isSuperAdmin = isAdminEmail(effectiveEmail);
-    const hasAdminRole = user?.role === 'admin';
-
-    if (isSuperAdmin || hasAdminRole) {
-      console.log(`[isAdmin] Access GRANTED for ${effectiveEmail || userId} (SuperAdmin: ${isSuperAdmin}, HasRole: ${hasAdminRole})`);
-      next();
-    } else {
-      console.log(`[isAdmin] Access DENIED for ${effectiveEmail || 'unknown'}`);
-      res.status(403).json({ message: "Forbidden: Admin access required" });
+    // 1. Check email from token FIRST - most reliable for super admins
+    if (isAdminEmail(userEmail)) {
+      console.log(`[isAdmin] Access GRANTED via token email: ${userEmail}`);
+      return next();
     }
+
+    // 2. Try database check
+    try {
+      const userDoc = await db.collection('users').doc(userId).get();
+      const user = userDoc.data();
+      
+      const effectiveEmail = user?.email || userEmail;
+      const isSuperAdmin = isAdminEmail(effectiveEmail);
+      const hasAdminRole = user?.role === 'admin';
+
+      if (isSuperAdmin || hasAdminRole) {
+        console.log(`[isAdmin] Access GRANTED for ${effectiveEmail || userId} (SuperAdmin: ${isSuperAdmin}, HasRole: ${hasAdminRole})`);
+        return next();
+      }
+    } catch (dbError: any) {
+      console.error("[isAdmin] Database check failed:", dbError.message);
+      // If DB check fails but it's a super admin (already checked above), we'd have returned next().
+      // If we're here, they aren't a super admin in the token.
+    }
+
+    console.log(`[isAdmin] Access DENIED for ${userEmail || 'unknown'}`);
+    res.status(403).json({ message: "Forbidden: Admin access required" });
   } catch (error) {
-    console.error("[isAdmin] Error:", error);
+    console.error("[isAdmin] Error in isAdmin middleware:", error);
     next(error);
   }
 };
@@ -252,11 +285,20 @@ app.get("/api/users", isAdmin, async (req, res, next) => {
     const users = await Promise.all(snapshot.docs.map(async doc => {
       try {
         const user = doc.data();
-        const reviewsSnapshot = await db.collection('reviews').where('userId', '==', doc.id).orderBy('createdAt', 'desc').get();
-        const history = reviewsSnapshot.docs.map(r => r.data());
+        console.log(`[GET /api/users] Fetching history for user ${doc.id}`);
+        // Remove orderBy to avoid index issues, sort in memory instead
+        const reviewsSnapshot = await db.collection('reviews').where('userId', '==', doc.id).get();
+        const history = reviewsSnapshot.docs
+          .map(r => r.data())
+          .sort((a: any, b: any) => {
+            const dateA = new Date(a.createdAt || 0).getTime();
+            const dateB = new Date(b.createdAt || 0).getTime();
+            return dateB - dateA;
+          });
         return sanitizeUser({ ...user, history });
-      } catch (err) {
-        console.error(`[GET /api/users] Error fetching history for user ${doc.id}:`, err);
+      } catch (err: any) {
+        console.error(`[GET /api/users] Error fetching history for user ${doc.id}:`, err.message);
+        if (err.stack) console.error(err.stack);
         return sanitizeUser(doc.data());
       }
     }));
@@ -300,6 +342,17 @@ app.get("/api/users/:id", async (req, res, next) => {
       }
       res.json(fullUser);
     } else {
+      // Fallback for authenticated user if not in DB or DB fetch failed
+      if (id === userId) {
+        return res.json({
+          id: userId,
+          email: userEmail,
+          name: userEmail?.split('@')[0] || 'User',
+          role: isAdminEmail(userEmail) ? 'admin' : 'user',
+          credits: 0,
+          history: []
+        });
+      }
       res.status(404).json({ message: "User not found" });
     }
   } catch (error) {

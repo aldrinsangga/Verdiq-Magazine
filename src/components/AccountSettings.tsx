@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import MFASetup from './MFASetup';
 
+import { isAdmin } from '../authClient';
+
 const AccountSettings = ({ user, session, onUpdate }) => {
   const [activeTab, setActiveTab] = useState('profile');
   const [formData, setFormData] = useState({
@@ -82,7 +84,7 @@ const AccountSettings = ({ user, session, onUpdate }) => {
           {activeTab === 'security' && (
             <div className="space-y-8">
               {/* MFA Section - Only show for admins */}
-              {(user.role === 'admin' || user.email?.toLowerCase() === 'verdiqmag@gmail.com') && (
+              {isAdmin(user) && (
                 <div>
                   <MFASetup 
                     user={user} 

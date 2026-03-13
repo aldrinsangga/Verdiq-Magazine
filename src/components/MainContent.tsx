@@ -14,7 +14,7 @@ import FAQ from './FAQ';
 import ContactUs from './ContactUs';
 import SubmissionGuide from './SubmissionGuide';
 import VerificationRequired from './VerificationRequired';
-import { auth } from '../authClient';
+import { auth, isAdmin } from '../authClient';
 
 interface MainContentProps {
   view: string;
@@ -189,7 +189,7 @@ const MainContent: React.FC<MainContentProps> = ({
           onUpdate={handleUpdateProfile} 
         />
       )}
-      {!isUnverified && view === 'admin' && (currentUser?.role === 'admin' || currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com' || auth.currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com') && (
+      {!isUnverified && view === 'admin' && isAdmin(currentUser) && (
         <AdminDashboardWrapper 
           currentUser={currentUser}
           users={users}

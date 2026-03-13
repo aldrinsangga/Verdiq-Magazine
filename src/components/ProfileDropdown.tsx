@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, CreditCard, HelpCircle, LogOut, ChevronDown, Settings } from 'lucide-react';
-import { auth } from '../authClient';
+import { auth, isAdmin as checkIsAdmin } from '../authClient';
 
 interface ProfileDropdownProps {
   user: any;
@@ -24,9 +24,7 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isAdmin = user?.role === 'admin' || 
-                  user?.email?.toLowerCase() === 'verdiqmag@gmail.com' || 
-                  auth.currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com';
+  const isAdmin = checkIsAdmin(user);
 
   const menuItems = [
     ...(isAdmin ? [{ 
