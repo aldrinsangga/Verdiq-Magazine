@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "verdiqmag@gmail.com" && request.auth.token.email_verified == true) ||
+        request.auth.token.email == "server-internal@verdiq.ai");
+    }
+
+    function isServer() {
+      return isAuthenticated() && (request.auth.token.email == "server-internal@verdiq.ai" || request.auth.token.email == "server-internal-v2@verdiq.ai");
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || isServer();
+      allow create: if isOwner(userId) || isAdmin() || isServer();
+      allow update: if isOwner(userId) || isAdmin() || isServer();
+      allow delete: if isAdmin() || isServer();
+    }
+
+    // Reviews Collection
+    match /reviews/{reviewId} {
+      allow read: if true; // Publicly readable
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin() || isServer());
+      allow delete: if isAdmin() || isServer();
+    }
+
+    // Purchases Collection
+    match /purchases/{purchaseId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin() || isServer());
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || isServer();
+      allow delete: if isAdmin() || isServer();
+    }
+
+    // Style Guides Collection
+    match /styleGuides/{guideId} {
+      allow read: if isAdmin() || isServer();
+      allow write: if isAdmin() || isServer();
+    }
+
+    // Magazine Articles Collection
+    match /magazine/{articleId} {
+      allow read: if true; // Publicly readable
+      allow write: if isAdmin() || isServer();
+    }
+
+    // Podcast Episodes Collection
+    match /podcasts/{episodeId} {
+      allow read: if true; // Publicly readable
+      allow write: if isAdmin() || isServer();
+    }
+
+    // Support Tickets Collection
+    match /support_tickets/{ticketId} {
+      allow read: if isAdmin() || isServer();
+      allow create: if true; // Anyone can create a support ticket
+      allow update: if isAdmin() || isServer();
+      allow delete: if isAdmin() || isServer();
+    }
+    
+    // Health Check
+    match /health_check/{docId} {
+      allow read, write: if isServer();
+    }
+  }
+}

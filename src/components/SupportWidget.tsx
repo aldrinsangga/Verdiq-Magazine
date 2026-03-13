@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, ChevronLeft, Shield, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Clock, Trash2, Reply } from 'lucide-react';
+import { MessageCircle, Send, X, ChevronLeft, Shield, AlertCircle, CheckCircle2, Clock, Trash2, Reply } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../../types';
-import { api } from '../services/api';
+import { getAuthHeaders } from '../authClient';
+
+const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface SupportWidgetProps {
   currentUser: any;
@@ -37,8 +39,12 @@ const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
 
   const fetchMyTickets = async () => {
     try {
-      const data = await api.getMyTickets();
-      setTickets(data);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/support/my-tickets`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setTickets(data);
+      }
     } catch (err) {
       console.error('Failed to fetch tickets:', err);
     }
@@ -51,19 +57,34 @@ const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
     setLoading(true);
     setError(null);
     try {
-      const newTicket = await api.createSupportTicket({
-        name: currentUser.name,
-        email: currentUser.email,
-        subject,
-        category,
-        message
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/support`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: currentUser.name,
+          email: currentUser.email,
+          subject,
+          category,
+          message
+        })
       });
-      setTickets([newTicket, ...tickets]);
-      setSubject('');
-      setMessage('');
-      setView('list');
-    } catch (err: any) {
-      setError(err.message || 'Network error. Please try again.');
+
+      if (res.ok) {
+        const newTicket = await res.json();
+        setTickets([newTicket, ...tickets]);
+        setSubject('');
+        setMessage('');
+        setView('list');
+      } else {
+        const data = await res.json();
+        setError(data.message || 'Failed to send message');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -75,14 +96,26 @@ const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
 
     setLoading(true);
     try {
-      const data = await api.addTicketMessage(selectedTicket.id, replyText);
-      const updatedTicket = {
-        ...selectedTicket,
-        messages: [...(selectedTicket.messages || []), data.message]
-      };
-      setSelectedTicket(updatedTicket);
-      setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-      setReplyText('');
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/support/${selectedTicket.id}/message`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ text: replyText })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const updatedTicket = {
+          ...selectedTicket,
+          messages: [...(selectedTicket.messages || []), data.message]
+        };
+        setSelectedTicket(updatedTicket);
+        setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
+        setReplyText('');
+      }
     } catch (err) {
       console.error('Failed to send reply:', err);
     } finally {
@@ -92,7 +125,11 @@ const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
 
   const markAsRead = async (ticketId: string) => {
     try {
-      await api.markTicketRead(ticketId);
+      const headers = await getAuthHeaders();
+      await fetch(`${API_URL}/api/support/${ticketId}/read`, {
+        method: 'PATCH',
+        headers
+      });
       setTickets(tickets.map(t => t.id === ticketId ? { ...t, hasUnreadReply: false } : t));
     } catch (err) {
       console.error('Failed to mark as read:', err);

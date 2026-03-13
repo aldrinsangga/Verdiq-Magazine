@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { login, signup, requestPasswordReset, saveSession, sendVerificationEmail } from '../authClient';
 import MFAVerify from './MFAVerify';
 
+const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+
 const Auth = ({ onLogin, onClose }) => {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
@@ -21,11 +23,8 @@ const Auth = ({ onLogin, onClose }) => {
     try {
       if (mode === 'signup') {
         const userData = await signup(email, password, name);
-        if (userData?.session) {
-          onLogin(userData);
-        } else {
-          setVerificationSent(true);
-        }
+        setVerificationSent(true);
+        // We don't call onLogin yet because they need to verify email
       } else if (mode === 'login') {
         try {
           const userData = await login(email, password);

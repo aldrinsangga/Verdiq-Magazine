@@ -4,11 +4,13 @@ import Footer from './components/Footer';
 import MainContent from './components/MainContent';
 import SupportWidget from './components/SupportWidget';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
-import { getSession, saveSession, clearSession, getCurrentUser } from './authClient';
+import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson } from './authClient';
+import { onAuthStateChanged } from 'firebase/auth';
 import { analyzeTrack, generatePodcast } from './services/geminiService';
 import { UserAccount } from '../types';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
-import { api } from './services/api';
+
+const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // Utility to compress base64 images
 const compressImage = (base64Str, maxWidth = 800, maxHeight = 400) => {
@@ -47,7 +49,9 @@ const saveSessionLocal = (user) => {
 };
 
 // Helper to get auth headers from localStorage
-
+const getAuthHeadersLocal = async () => {
+  return await getAuthHeaders();
+};
 
 function App() {
   // Map views to URL paths
@@ -72,10 +76,12 @@ function App() {
     Object.entries(viewToPath).map(([view, path]) => [path, view])
   );
   
+  // Function to load a review from URL
   async function loadReviewFromUrl(reviewId) {
     try {
-      const review = await api.getPublicReview(reviewId);
-      if (review) {
+      const res = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+      if (res.ok) {
+        const review = await res.json();
         setCurrentReview(review);
         navigate('review');
       }
@@ -134,8 +140,9 @@ function App() {
         const reviewId = path.split('/review/')[1];
         if (reviewId) {
           try {
-            const reviewData = await api.getPublicReview(reviewId);
-            if (reviewData) {
+            const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+            if (reviewRes.ok) {
+              const reviewData = await reviewRes.json();
               setCurrentReview({ ...reviewData, viewOnly: true });
               setView('review');
             } else {
@@ -176,53 +183,95 @@ function App() {
     }
   };
 
+  // Fetch a review with its audio data
   const fetchReviewWithAudio = async (reviewId) => {
     try {
-      const data = await api.getReview(reviewId);
-      return data;
+      console.log('=== Fetching review with audio ===');
+      console.log('Review ID:', reviewId);
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Fetched review data:', {
+          id: data.id,
+          hasPodcast: data.hasPodcast,
+          podcastAudioUrl: data.podcastAudioUrl,
+          podcastAudioPath: data.podcastAudioPath
+        });
+        return data;
+      } else {
+        console.error('Failed to fetch review:', res.status);
+      }
     } catch (e) {
       console.error('Failed to fetch review with audio:', e);
     }
     return null;
   };
 
+  // Fetch credit status
   const fetchCreditStatus = async () => {
     try {
-      const data = await api.getCreditStatus();
-      setCreditStatus(data);
-      return data;
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/credits/status`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setCreditStatus(data);
+        return data;
+      }
     } catch (e) {
       console.error('Failed to fetch credit status:', e);
     }
     return null;
   };
 
+  // Check if user can perform action (returns true if allowed, false if not)
   const checkCreditsForAction = async (action) => {
     try {
-      const data = await api.checkCredits(action);
-      if (!data.canAfford) {
-        setCreditModalConfig({
-          action,
-          required: data.cost || 0,
-          reason: (data as any).reason,
-          message: data.message,
-          isFreeUser: (data as any).reason === 'review_limit' || (data as any).reason === 'feature_locked'
-        });
-        setShowCreditModal(true);
-        return false;
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/credits/check`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.canAfford) {
+          // Show modal
+          setCreditModalConfig({
+            action,
+            required: data.cost || 0,
+            reason: data.reason,
+            message: data.message,
+            isFreeUser: data.reason === 'review_limit' || data.reason === 'feature_locked'
+          });
+          setShowCreditModal(true);
+          return false;
+        }
+        return true;
       }
-      return true;
     } catch (e) {
       console.error('Credit check error:', e);
     }
     return false;
   };
 
+  // Deduct credits for an action
   const deductCredits = async (action) => {
     try {
-      const data = await api.deductCredits(action);
-      await fetchCreditStatus();
-      return data;
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/credits/deduct`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        // Refresh credit status
+        await fetchCreditStatus();
+        return data;
+      }
     } catch (e) {
       console.error('Credit deduction error:', e);
     }
@@ -231,22 +280,31 @@ function App() {
 
   // Initial data fetch and auth listener
   useEffect(() => {
-    // Supabase handles auth state changes automatically through session management
-    // The init function will handle the initial load
+    // Listen for auth state changes to handle email verification
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // If user is logged in, we might need to refresh their verification status
+        // But we'll let the init function handle the initial load
+      }
+    });
 
     const init = async () => {
       try {
+        // Handle URL routing for shareable review links
         const path = window.location.pathname;
         const reviewMatch = path.match(/^\/review\/([a-zA-Z0-9-]+)$/);
-
+        
         if (reviewMatch) {
           const reviewId = reviewMatch[1];
+          // Fetch the public review
           try {
-            const reviewData = await api.getPublicReview(reviewId);
-            if (reviewData) {
+            const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+            if (reviewRes.ok) {
+              const reviewData = await reviewRes.json();
               setCurrentReview({ ...reviewData, viewOnly: true });
               navigate('review', reviewId);
             } else {
+              // Review not found, redirect to magazine
               navigate('magazine');
               window.history.replaceState({}, '', '/');
             }
@@ -256,6 +314,7 @@ function App() {
             window.history.replaceState({}, '', '/');
           }
         } else {
+          // Handle URL parameters for deep linking
           const params = new URLSearchParams(window.location.search);
           const urlView = params.get('view');
           if (urlView && ['landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 'guide', 'account'].includes(urlView)) {
@@ -263,25 +322,37 @@ function App() {
           }
         }
 
+        // Check for existing session in localStorage
         const savedUser = await getCurrentUser() as UserAccount | null;
         if (savedUser) {
           setCurrentUser(savedUser);
           saveSessionLocal(savedUser);
+          // Fetch credit status after login
           fetchCreditStatus();
         }
         setIsInitializing(false);
 
+        // Load published reviews for magazine/podcasts
         try {
-          const publishedReviews = await api.getPublishedReviews();
-          setAllReviews(publishedReviews);
+          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews`);
+          if (reviewsRes.ok) {
+            const publishedReviews = await reviewsRes.json();
+            setAllReviews(publishedReviews);
+          }
         } catch (e) {
           console.error("Failed to load published reviews", e);
         }
 
+        // Load all users for admin (with auth if available)
         try {
-          if (savedUser?.role === 'admin' || savedUser?.email === 'verdiqmag@gmail.com') {
-            const usersList = await api.getAllUsers();
-            setUsers(usersList);
+          const authHeaders = await getAuthHeadersLocal();
+          if (authHeaders.Authorization && (savedUser?.role === 'admin' || savedUser?.email === 'verdiqmag@gmail.com')) {
+            const usersRes = await fetch(`${API_URL}/api/users`, { headers: authHeaders });
+            if (usersRes.ok) {
+              const usersList = await usersRes.json();
+              setUsers(usersList);
+            }
+            // Fetch style guides for admin
             fetchStyleGuides();
           }
         } catch (e) {
@@ -291,22 +362,30 @@ function App() {
         console.error("Failed to initialize app data", e);
       }
     };
-
+    
     init();
+    return () => unsubscribe();
   }, []);
 
   const refreshUserData = async () => {
     if (!currentUser?.id) return;
+    const headers = await getAuthHeadersLocal();
     try {
-      const freshUser = await api.getUser(currentUser.id);
-      if (freshUser) {
+      const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
+      if (userRes.ok) {
+        const freshUser = await userRes.json();
         setCurrentUser(freshUser);
         saveSessionLocal(freshUser);
       }
+      
       fetchCreditStatus();
-      const usersList = await api.getAllUsers();
-      setUsers(usersList);
-      setAllReviews(usersList.flatMap(u => u.history || []));
+      
+      const usersRes = await fetch(`${API_URL}/api/users`, { headers });
+      if (usersRes.ok) {
+        const usersList = await safeJson(usersRes);
+        setUsers(usersList);
+        setAllReviews(usersList.flatMap(u => u.history || []));
+      }
     } catch (e) {
       console.error('Failed to refresh user data:', e);
     }
@@ -315,17 +394,27 @@ function App() {
   const handleLogin = async (user) => {
     setCurrentUser(user);
     saveSessionLocal(user);
-
+    
+    // Fetch users with auth header if admin
     try {
-      if (user.role === 'admin' || user.email === 'verdiqmag@gmail.com' || user.email === 'admin@verdiq.ai') {
-        const list = await api.getAllUsers();
+      const headers = user.session?.access_token 
+        ? { 'Authorization': `Bearer ${user.session.access_token}` }
+        : {};
+      const res = await fetch(`${API_URL}/api/users`, { headers });
+      if (res.ok) {
+        const list = await safeJson(res);
         setUsers(list);
         setAllReviews(list.flatMap(u => u.history || []));
+      } else {
+        const errorData = await safeJson(res).catch(() => ({}));
+        console.error('Failed to load users:', res.status, errorData);
       }
     } catch (e) {
       console.error('Failed to load users:', e);
     }
-
+    
+    // Only navigate to landing if we're still on the auth view
+    // This prevents overwriting navigation that happened during the async fetch
     if (view === 'auth') {
       navigate('landing');
     }
@@ -346,26 +435,56 @@ function App() {
 
   const fetchStyleGuides = async () => {
     try {
-      const data = await api.getStyleGuides();
-      setStyleGuides(data);
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/style-guides`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setStyleGuides(data);
+      }
     } catch (e) {
       console.error('Failed to fetch style guides:', e);
     }
   };
 
   const handleAddStyleGuide = async (guide) => {
-    await api.createStyleGuide(guide);
-    await fetchStyleGuides();
+    const headers = await getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/style-guides`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(guide)
+    });
+    if (res.ok) {
+      await fetchStyleGuides();
+    } else {
+      throw new Error('Failed to add style guide');
+    }
   };
 
   const handleUpdateStyleGuide = async (id, guide) => {
-    await api.updateStyleGuide(id, guide);
-    await fetchStyleGuides();
+    const headers = await getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/style-guides/${id}`, {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify(guide)
+    });
+    if (res.ok) {
+      await fetchStyleGuides();
+    } else {
+      throw new Error('Failed to update style guide');
+    }
   };
 
   const handleDeleteStyleGuide = async (id) => {
-    await api.deleteStyleGuide(id);
-    await fetchStyleGuides();
+    const headers = await getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/style-guides/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+    if (res.ok) {
+      await fetchStyleGuides();
+    } else {
+      throw new Error('Failed to delete style guide');
+    }
   };
 
   const handleAnalyze = async (data) => {
@@ -420,8 +539,11 @@ function App() {
       }
 
       setStatus("Writing editorial draft...");
-
-
+      
+      // Get auth headers for API calls
+      const authHeaders = await getAuthHeadersLocal();
+      
+      // Call the analyze service directly on frontend
       const review = await analyzeTrack({
         trackName: data.trackName,
         artistName: data.artistName,
@@ -469,8 +591,20 @@ function App() {
         podcastAudio: podcastAudio,  // Include the actual audio data
       };
       
+      // Save to backend
       setStatus("Saving to studio...");
-      const updatedUser = await api.createReview(currentUser.id, reviewForStorage);
+      const saveRes = await fetch(`${API_URL}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        body: JSON.stringify({ userId: currentUser.id, review: reviewForStorage })
+      });
+
+      if (!saveRes.ok) {
+        const errorData = await saveRes.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to save review');
+      }
+
+      const updatedUser = await saveRes.json();
       setCurrentUser(updatedUser);
       saveSessionLocal(updatedUser);
       
@@ -507,12 +641,15 @@ function App() {
         plan: updatedUser.isSubscribed ? 'pro' : 'free'
       }));
 
+      // Refresh users list ONLY if admin
       if (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') {
-        try {
-          const usersList = await api.getAllUsers();
+        const authHeaders = await getAuthHeadersLocal();
+        const usersRes = await fetch(`${API_URL}/api/users`, { headers: authHeaders });
+        if (usersRes.ok) {
+          const usersList = await usersRes.json();
           setUsers(usersList);
           setAllReviews(usersList.flatMap(u => u.history || []));
-        } catch (_) {}
+        }
       }
 
       navigate('review');
@@ -528,13 +665,19 @@ function App() {
     if (!currentUser) return;
 
     try {
+      // Check credits before publishing
       const canProceed = await checkCreditsForAction('publish');
-      if (!canProceed) return;
+      if (!canProceed) {
+        return; // Modal will be shown automatically
+      }
 
       let review = currentUser.history?.find(r => r.id === reviewId);
       if (!review) {
-        const freshUser = await api.getUser(currentUser.id);
-        if (freshUser) {
+        console.log('Review not found in local history, refreshing user data...');
+        const headers = await getAuthHeadersLocal();
+        const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
+        if (userRes.ok) {
+          const freshUser = await userRes.json();
           const fullUser = { ...freshUser, session: currentUser.session };
           setCurrentUser(fullUser);
           saveSessionLocal(fullUser);
@@ -543,36 +686,58 @@ function App() {
       }
 
       if (!review) {
+        console.error('Review not found in history:', reviewId);
         alert('Could not find this review in your history. Please try refreshing the page.');
         return;
       }
 
       const updatedReview = { ...review, isPublished: true };
-      await api.updateReview(reviewId, currentUser.id, updatedReview);
+      
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ userId: currentUser.id, review: updatedReview })
+      });
 
-      const deductRes = await deductCredits('publish');
-      if (deductRes) {
-        setCreditStatus(prev => ({ ...prev, credits: deductRes.remaining }));
+      if (res.ok) {
+        // Deduct credits for magazine submission
+        const deductRes = await deductCredits('publish');
+        if (deductRes) {
+          setCreditStatus(prev => ({
+            ...prev,
+            credits: deductRes.remaining,
+          }));
+        }
+        
+        // Fetch updated user data
+        const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
+        if (userRes.ok) {
+          const updatedUser = await userRes.json();
+          setCurrentUser(updatedUser);
+          saveSessionLocal(updatedUser);
+        }
+        
+        if (currentReview?.id === reviewId) {
+          setCurrentReview(updatedReview);
+        }
+
+        // Refresh public reviews
+        try {
+          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews`);
+          if (reviewsRes.ok) {
+            const publishedReviews = await reviewsRes.json();
+            setAllReviews(publishedReviews);
+          }
+        } catch (e) {
+          console.error("Failed to refresh published reviews", e);
+        }
+        
+        navigate('magazine');
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Failed to publish: ${errorData.message || 'Server error'}`);
       }
-
-      const updatedUser = await api.getUser(currentUser.id);
-      if (updatedUser) {
-        setCurrentUser(updatedUser);
-        saveSessionLocal(updatedUser);
-      }
-
-      if (currentReview?.id === reviewId) {
-        setCurrentReview(updatedReview);
-      }
-
-      try {
-        const publishedReviews = await api.getPublishedReviews();
-        setAllReviews(publishedReviews);
-      } catch (e) {
-        console.error("Failed to refresh published reviews", e);
-      }
-
-      navigate('magazine');
     } catch (error) {
       console.error('handlePublish error:', error);
       alert('An unexpected error occurred while publishing. Please try again.');
@@ -583,31 +748,51 @@ function App() {
     if (!currentUser) return;
 
     try {
+      // Check credits before editing
       const canProceed = await checkCreditsForAction('edit');
-      if (!canProceed) return;
-
-      await api.updateReview(updatedReview.id, updatedReview.userId || currentUser?.id, updatedReview);
-
-      const deductRes = await deductCredits('edit');
-      if (deductRes) {
-        setCreditStatus(prev => ({ ...prev, credits: deductRes.remaining }));
+      if (!canProceed) {
+        return; // Modal will be shown automatically
       }
 
-      if (currentUser?.id) {
-        const freshUser = await api.getUser(currentUser.id);
-        if (freshUser) {
-          setCurrentUser(freshUser);
-          saveSessionLocal(freshUser);
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/reviews/${updatedReview.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ userId: updatedReview.userId || currentUser?.id, review: updatedReview })
+      });
+
+      if (res.ok) {
+        // Deduct credits for editing
+        const deductRes = await deductCredits('edit');
+        if (deductRes) {
+          setCreditStatus(prev => ({
+            ...prev,
+            credits: deductRes.remaining,
+          }));
         }
-      }
-      setCurrentReview(updatedReview);
 
-      if (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') {
-        try {
-          const usersList = await api.getAllUsers();
-          setUsers(usersList);
-          setAllReviews(usersList.flatMap(u => u.history || []));
-        } catch (_) {}
+        // Fetch updated user data (the PUT returns the review, not user)
+        if (currentUser?.id) {
+          const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
+          if (userRes.ok) {
+            const freshUser = await userRes.json();
+            setCurrentUser(freshUser);
+            saveSessionLocal(freshUser);
+          }
+        }
+        setCurrentReview(updatedReview);
+
+        if (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') {
+          const usersRes = await fetch(`${API_URL}/api/users`, { headers });
+          if (usersRes.ok) {
+            const usersList = await usersRes.json();
+            setUsers(usersList);
+            setAllReviews(usersList.flatMap(u => u.history || []));
+          }
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Failed to save changes: ${errorData.message || 'Server error'}`);
       }
     } catch (error) {
       console.error('handleUpdateReview error:', error);
@@ -616,15 +801,36 @@ function App() {
   };
 
   const handleUpdateProfile = async (updatedUser) => {
+    const headers = await getAuthHeadersLocal();
+    
     try {
-      const savedUser = await api.updateUser(updatedUser.id, updatedUser);
+      const res = await fetch(`${API_URL}/api/users/${updatedUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(updatedUser)
+      });
 
+      if (res.status === 428) {
+        alert('Re-authentication required for this action. Please try again.');
+        throw new Error('Re-authentication required');
+      }
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.detail || 'Failed to update user');
+      }
+
+      const savedUser = await res.json();
+      
+      // Update current user if this is themselves
       if (currentUser?.id === savedUser.id) {
         setCurrentUser(savedUser);
         saveSessionLocal(savedUser);
       }
-
+      
+      // Update user in local state immediately (optimistic update)
       setUsers(prev => prev.map(u => u.id === savedUser.id ? { ...u, ...savedUser } : u));
+      
       return savedUser;
     } catch (error) {
       console.error('handleUpdateProfile error:', error);
@@ -638,31 +844,51 @@ function App() {
       return;
     }
     if (window.confirm("Permanently terminate this artist account? All studio history will be lost.")) {
-      try {
-        await api.deleteUser(userId);
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/users/${userId}`, { 
+        method: 'DELETE',
+        headers 
+      });
+      if (res.ok) {
         setUsers(prev => prev.filter(u => u.id !== userId));
         setAllReviews(prev => prev.filter(r => r.userId !== userId));
-      } catch (e) {
-        console.error('Delete user error:', e);
       }
     }
   };
 
   const handleAdminUpdateReview = async (review, userId) => {
-    await api.updateReview(review.id, userId, review);
+    const headers = await getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/reviews/${review.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ userId, review })
+    });
 
-    try {
-      const publishedReviews = await api.getPublishedReviews();
-      setAllReviews(publishedReviews);
-    } catch (e) {
-      console.error("Failed to refresh published reviews", e);
-    }
+    if (res.ok) {
+      // Refresh public reviews
+      try {
+        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews`);
+        if (reviewsRes.ok) {
+          const publishedReviews = await reviewsRes.json();
+          setAllReviews(publishedReviews);
+        }
+      } catch (e) {
+        console.error("Failed to refresh published reviews", e);
+      }
 
-    try {
-      const usersList = await api.getAllUsers();
-      setUsers(usersList);
-    } catch (e) {
-      console.error('Error refreshing users after review update:', e);
+      // Fetch users with auth headers
+      try {
+        const usersRes = await fetch(`${API_URL}/api/users`, { headers });
+        if (usersRes.ok) {
+          const usersList = await usersRes.json();
+          setUsers(usersList);
+        }
+      } catch (fetchError) {
+        console.error('Error refreshing users after review update:', fetchError);
+      }
+    } else {
+      const error = await res.json().catch(() => ({ detail: 'Failed to update review' }));
+      throw new Error(error.detail || 'Failed to update review');
     }
   };
 

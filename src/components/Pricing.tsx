@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { PayPalButtons } from "@paypal/react-paypal-js";
-import { api } from '../services/api';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -34,13 +33,27 @@ const Pricing = ({ onUpgrade, currentUser }) => {
   const executeTopUp = async (paymentId, payerId) => {
     setLoading('executing');
     setError(null);
-
+    
     try {
-      const data = await api.executeTopup(paymentId);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      onUpgrade({ ...data, type: 'topup' });
-    } catch (e: any) {
-      setError(e.message || 'Top-up processing failed');
+      const res = await fetch(`${API_URL}/api/credits/topup/execute`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getAuthToken()}`
+        },
+        body: JSON.stringify({ paymentId, payerId })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        window.history.replaceState({}, document.title, window.location.pathname);
+        onUpgrade({ ...data, type: 'topup' });
+      } else {
+        const err = await res.json();
+        setError(err.detail || 'Top-up failed');
+      }
+    } catch (e) {
+      setError('Top-up processing failed');
     } finally {
       setLoading(null);
     }

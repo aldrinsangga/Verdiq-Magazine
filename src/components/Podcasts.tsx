@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Share2, TrendingUp, Clock, Headphones } from 'lucide-react';
-import { api } from '../services/api';
+
+const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAudio }) => {
   // Filter reviews that have podcast and are published
@@ -54,27 +55,39 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
     }
   }, [initialPodcastId, podcastReviews.length]);
 
+  // Fetch real play counts from backend
   useEffect(() => {
     const fetchPlayCounts = async () => {
       try {
-        const data = await api.getPodcastStats();
-        if (data.play_counts) {
-          setPlayCounts(data.play_counts);
+        const res = await fetch(`${API_URL}/api/podcasts/stats`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.play_counts) {
+            setPlayCounts(data.play_counts);
+          }
         }
       } catch (e) {
         console.error('Failed to fetch play counts:', e);
       }
     };
-
+    
     fetchPlayCounts();
+    // Refresh play counts every 30 seconds
     const interval = setInterval(fetchPlayCounts, 30000);
     return () => clearInterval(interval);
   }, []);
 
+  // Track play when podcast starts playing
   const trackPlay = async (reviewId) => {
     try {
-      const data = await api.recordPodcastPlay(reviewId);
-      setPlayCounts(prev => ({ ...prev, [reviewId]: data.play_count }));
+      const res = await fetch(`${API_URL}/api/podcasts/${reviewId}/play`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Update local play count
+        setPlayCounts(prev => ({ ...prev, [reviewId]: data.play_count }));
+      }
     } catch (e) {
       console.error('Failed to track play:', e);
     }
@@ -82,17 +95,18 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
 
   const loadAudioForReview = async (reviewId) => {
     if (audioUrls[reviewId]) return audioUrls[reviewId];
-
+    
     setIsLoading(true);
     try {
-      const fullReview = await api.getReview(reviewId);
-      if (fullReview) {
+      const res = await fetch(`${API_URL}/api/reviews/${reviewId}`);
+      if (res.ok) {
+        const fullReview = await res.json();
         let url = fullReview.podcastAudioUrl || fullReview.podcastAudio || fullReview.podcast_audio_path;
-
+        
         if (url && typeof url === 'string' && !url.startsWith('http') && !url.startsWith('data:')) {
           url = `data:audio/wav;base64,${url}`;
         }
-
+        
         if (url && typeof url === 'string') {
           setAudioUrls(prev => ({ ...prev, [reviewId]: url }));
           return url;

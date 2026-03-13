@@ -14,6 +14,7 @@ import FAQ from './FAQ';
 import ContactUs from './ContactUs';
 import SubmissionGuide from './SubmissionGuide';
 import VerificationRequired from './VerificationRequired';
+import { auth } from '../authClient';
 
 interface MainContentProps {
   view: string;
@@ -76,9 +77,14 @@ const MainContent: React.FC<MainContentProps> = ({
   navigateToReview,
   navigate
 }) => {
+  const isUnverified = currentUser && auth.currentUser && !auth.currentUser.emailVerified;
+
   return (
     <main className="pt-20 pb-16">
-      {view === 'landing' && (
+      {isUnverified && view !== 'magazine' && view !== 'podcasts' && view !== 'privacy' && view !== 'terms' && view !== 'faq' && view !== 'contact' && (
+        <VerificationRequired email={auth.currentUser?.email || ''} onLogout={handleLogout} />
+      )}
+      {!isUnverified && view === 'landing' && (
         <SearchSection 
           onAnalyze={handleAnalyze} 
           isLoading={loading} 
@@ -89,7 +95,7 @@ const MainContent: React.FC<MainContentProps> = ({
         />
       )}
       {view === 'auth' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} />}
-      {!false && view === 'review' && currentReview && (
+      {!isUnverified && view === 'review' && currentReview && (
         <ReviewDisplay 
           review={currentReview} 
           viewOnly={currentReview.viewOnly}
@@ -112,7 +118,7 @@ const MainContent: React.FC<MainContentProps> = ({
           features={creditStatus?.features || {}}
         />
       )}
-      {!false && view === 'dashboard' && currentUser && (
+      {!isUnverified && view === 'dashboard' && currentUser && (
         <Dashboard 
           reviews={currentUser.history || []} 
           onUpdateReview={handleUpdateReview}
@@ -176,14 +182,14 @@ const MainContent: React.FC<MainContentProps> = ({
           }} 
         />
       )}
-      {!false && view === 'account' && currentUser && (
+      {!isUnverified && view === 'account' && currentUser && (
         <AccountSettings 
           user={currentUser} 
           session={currentUser?.session}
           onUpdate={handleUpdateProfile} 
         />
       )}
-      {!false && view === 'admin' && (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') && (
+      {!isUnverified && view === 'admin' && (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') && (
         <AdminDashboardWrapper 
           currentUser={currentUser}
           users={users}

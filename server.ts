@@ -1,12 +1,14 @@
-import dotenv from "dotenv";
-dotenv.config({ override: true });
-
-import app from "./server/app.ts";
+import app from "./api/app.ts";
 import { createServer as createViteServer } from "vite";
-import { ensureDbReady } from "./server/db.ts";
+import { ensureDbReady } from "./api/firebase.ts";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
 
   console.log("Checking database connectivity...");
   try {
@@ -17,7 +19,7 @@ async function startServer() {
     // Continue anyway, but log the failure
   }
   
-  console.log("Starting server...");
+  console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
@@ -28,14 +30,15 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const express = (await import('express')).default;
-    app.use(express.static("dist"));
+    const distPath = path.join(__dirname, "dist");
+    app.use(express.static(distPath));
     app.get("*", (req, res) => {
-      res.sendFile("dist/index.html", { root: "." });
+      res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
 

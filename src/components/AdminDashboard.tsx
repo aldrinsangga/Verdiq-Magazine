@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Loader as Loader2, Reply } from 'lucide-react';
-import { api } from '../services/api';
+import { Loader2, Reply } from 'lucide-react';
+import { getAuthHeaders } from '../authClient';
+
+const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 interface AdminDashboardProps {
   users?: any[];
@@ -171,8 +173,18 @@ const AdminDashboard = ({
   const fetchSupportTickets = async () => {
     setLoadingTickets(true);
     try {
-      const data = await api.getAdminSupportTickets();
-      setSupportTickets(data);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/support`, {
+        headers: { ...headers, 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log("Fetched support tickets:", data);
+        setSupportTickets(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        console.error("Failed to fetch support tickets, status:", res.status, errData);
+      }
     } catch (err) {
       console.error("Failed to fetch support tickets:", err);
     } finally {
@@ -182,8 +194,15 @@ const AdminDashboard = ({
 
   const handleUpdateTicketStatus = async (id: string, status: string) => {
     try {
-      await api.updateTicketStatus(id, status);
-      fetchSupportTickets();
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/support/${id}`, {
+        method: 'PATCH',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        fetchSupportTickets();
+      }
     } catch (err) {
       console.error("Failed to update ticket status:", err);
     }
@@ -192,8 +211,14 @@ const AdminDashboard = ({
   const handleDeleteTicket = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this ticket?')) return;
     try {
-      await api.deleteTicket(id);
-      fetchSupportTickets();
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/support/${id}`, {
+        method: 'DELETE',
+        headers
+      });
+      if (res.ok) {
+        fetchSupportTickets();
+      }
     } catch (err) {
       console.error("Failed to delete ticket:", err);
     }
@@ -203,10 +228,17 @@ const AdminDashboard = ({
     if (!adminReply.trim()) return;
     setSendingReply(true);
     try {
-      await api.addTicketMessage(ticketId, adminReply);
-      setAdminReply('');
-      setRespondingTo(null);
-      fetchSupportTickets();
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/support/${ticketId}/message`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: adminReply })
+      });
+      if (res.ok) {
+        setAdminReply('');
+        setRespondingTo(null);
+        fetchSupportTickets();
+      }
     } catch (err) {
       console.error("Failed to send admin reply:", err);
     } finally {
@@ -217,8 +249,14 @@ const AdminDashboard = ({
   const fetchEarnings = async () => {
     setLoadingEarnings(true);
     try {
-      const data = await api.getAdminEarnings();
-      setEarnings(data);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/earnings`, {
+        headers
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEarnings(data);
+      }
     } catch (err) {
       console.error("Failed to fetch earnings:", err);
     } finally {
