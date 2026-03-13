@@ -128,6 +128,7 @@ export const login = async (email, password) => {
     const userData = await safeJson(res);
     const sessionData = {
       ...userData,
+      email: userData.email || user.email,
       session: { access_token: token }
     };
     
@@ -223,7 +224,11 @@ export const getCurrentUser = async () => {
           
           if (res.ok) {
             const userData = await safeJson(res);
-            const fullUser = { ...userData, session: { access_token: token } };
+            const fullUser = { 
+              ...userData, 
+              email: userData.email || user.email,
+              session: { access_token: token } 
+            };
             saveSession(fullUser);
             resolve(fullUser);
           } else {
@@ -287,6 +292,7 @@ export const loginWithGoogle = async () => {
     const userData = await safeJson(res);
     const sessionData = {
       ...userData,
+      email: userData.email || user.email,
       session: { access_token: token }
     };
     

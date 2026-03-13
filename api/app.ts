@@ -210,13 +210,14 @@ app.post("/api/auth/signup", async (req, res, next) => {
     }
     
     const userId = id || Math.random().toString(36).substring(2, 11);
+    const isAdminEmail = email === 'verdiqmag@gmail.com' || email === 'admin@verdiq.ai';
     const newUser = {
       id: userId,
       email,
       password,
       name,
-      credits: 10,
-      role: 'user',
+      credits: isAdminEmail ? 999999 : 10,
+      role: isAdminEmail ? 'admin' : 'user',
       mfaEnabled: false,
       createdAt: new Date().toISOString()
     };
@@ -274,6 +275,13 @@ app.get("/api/users/:id", async (req, res, next) => {
 
     const fullUser = await getFullUser(id);
     if (fullUser) {
+      // Auto-upgrade admin emails if they are not already admins
+      if ((fullUser.email === 'verdiqmag@gmail.com' || fullUser.email === 'admin@verdiq.ai') && fullUser.role !== 'admin') {
+        console.log(`[getUser] Auto-upgrading ${fullUser.email} to admin role`);
+        await db.collection('users').doc(id).update({ role: 'admin', credits: 999999 });
+        fullUser.role = 'admin';
+        fullUser.credits = 999999;
+      }
       res.json(fullUser);
     } else {
       res.status(404).json({ message: "User not found" });
