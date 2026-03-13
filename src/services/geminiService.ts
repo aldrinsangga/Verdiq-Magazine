@@ -4,7 +4,13 @@ const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // Initialize Gemini API
 // Note: process.env.GEMINI_API_KEY is injected by the platform
-const getAI = () => new GoogleGenAI({ apiKey: (process.env as any).GEMINI_API_KEY || "" });
+const getAI = () => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("GEMINI_API_KEY is not defined in the environment.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || "" });
+};
 
 // Review schema for structured output
 const REVIEW_SCHEMA = {
