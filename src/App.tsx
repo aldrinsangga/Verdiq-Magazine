@@ -346,7 +346,7 @@ function App() {
         // Load all users for admin (with auth if available)
         try {
           const authHeaders = await getAuthHeadersLocal();
-          if (authHeaders.Authorization && (savedUser?.role === 'admin' || savedUser?.email === 'verdiqmag@gmail.com')) {
+          if (authHeaders.Authorization && (savedUser?.role === 'admin' || savedUser?.email?.toLowerCase() === 'verdiqmag@gmail.com' || auth.currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com')) {
             const usersRes = await fetch(`${API_URL}/api/users`, { headers: authHeaders });
             if (usersRes.ok) {
               const usersList = await usersRes.json();
@@ -642,7 +642,7 @@ function App() {
       }));
 
       // Refresh users list ONLY if admin
-      if (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') {
+      if (currentUser?.role === 'admin' || currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com') {
         const authHeaders = await getAuthHeadersLocal();
         const usersRes = await fetch(`${API_URL}/api/users`, { headers: authHeaders });
         if (usersRes.ok) {
@@ -782,7 +782,7 @@ function App() {
         }
         setCurrentReview(updatedReview);
 
-        if (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') {
+        if (currentUser?.role === 'admin' || currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com') {
           const usersRes = await fetch(`${API_URL}/api/users`, { headers });
           if (usersRes.ok) {
             const usersList = await usersRes.json();
@@ -902,7 +902,7 @@ function App() {
       window.scrollTo(0, 0);
       return;
     }
-    if (v === 'admin' && currentUser?.role !== 'admin' && currentUser?.email !== 'verdiqmag@gmail.com') {
+    if (v === 'admin' && currentUser?.role !== 'admin' && currentUser?.email?.toLowerCase() !== 'verdiqmag@gmail.com') {
       setView('landing');
       updateUrlForView('landing');
       window.scrollTo(0, 0);

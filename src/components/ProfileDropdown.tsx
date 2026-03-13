@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, CreditCard, HelpCircle, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { auth } from '../authClient';
 
 interface ProfileDropdownProps {
   user: any;
@@ -23,8 +24,12 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const isAdmin = user?.role === 'admin' || 
+                  user?.email?.toLowerCase() === 'verdiqmag@gmail.com' || 
+                  auth.currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com';
+
   const menuItems = [
-    ...((user?.role === 'admin' || user?.email === 'verdiqmag@gmail.com') ? [{ 
+    ...(isAdmin ? [{ 
       label: 'Admin Dashboard', 
       icon: User, 
       onClick: () => { onNavigate('admin'); setIsOpen(false); } 
@@ -66,7 +71,7 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
         </div>
         <div className="hidden lg:block text-left">
           <p className="text-[10px] font-black uppercase tracking-widest text-white leading-none mb-1">{user?.name || 'Artist'}</p>
-          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter leading-none">{(user?.role === 'admin' || user?.email === 'verdiqmag@gmail.com') ? 'Studio Admin' : 'Artist Pro'}</p>
+          <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter leading-none">{isAdmin ? 'Studio Admin' : 'Artist Pro'}</p>
         </div>
         <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
       </button>

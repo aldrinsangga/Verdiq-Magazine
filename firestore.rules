@@ -13,8 +13,10 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && 
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        (request.auth.token.email == "verdiqmag@gmail.com" && request.auth.token.email_verified == true) ||
-        request.auth.token.email == "server-internal@verdiq.ai");
+        (request.auth.token.email.lower() == "verdiqmag@gmail.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email.lower() == "admin@verdiq.ai" && request.auth.token.email_verified == true) ||
+        request.auth.token.email == "server-internal@verdiq.ai" ||
+        request.auth.token.email == "server-internal-v2@verdiq.ai");
     }
 
     function isServer() {

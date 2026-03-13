@@ -28,8 +28,14 @@ const sanitizeUser = (user: any): Omit<UserAccount, 'password'> => {
   return safe as any;
 };
 
-// Helper to verify Firebase ID token and get user
-const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string | null> => {
+const isAdminEmail = (email: string | undefined) => {
+  if (!email) return false;
+  const lowerEmail = email.toLowerCase();
+  return lowerEmail === 'verdiqmag@gmail.com' || lowerEmail === 'admin@verdiq.ai';
+};
+
+// Helper to verify Firebase ID token and get user info
+const getUserFromAuth = async (authHeader: string | undefined): Promise<{ uid: string, email?: string } | null> => {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const idToken = authHeader.split('Bearer ')[1]?.trim();
   
@@ -40,13 +46,14 @@ const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string
   try {
     // If it's a mock token from our login, return the ID
     if (idToken.startsWith('mock-jwt-token-')) {
-      return idToken.replace('mock-jwt-token-', '');
+      const uid = idToken.replace('mock-jwt-token-', '');
+      return { uid };
     }
     
     try {
       if (adminAuth) {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
-        return decodedToken.uid;
+        return { uid: decodedToken.uid, email: decodedToken.email };
       } else {
         throw new Error("adminAuth is null");
       }
@@ -59,7 +66,7 @@ const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string
           const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
           // Verify audience matches our project
           if (payload.aud === firebaseConfig.projectId || payload.aud?.includes(firebaseConfig.projectId)) {
-            return payload.sub || payload.user_id;
+            return { uid: payload.sub || payload.user_id, email: payload.email };
           }
         } catch (e) {
           console.error("Failed to decode token payload", e);
@@ -71,6 +78,11 @@ const getUserIdFromAuth = async (authHeader: string | undefined): Promise<string
     console.error("Auth error:", error);
     return null;
   }
+};
+
+const getUserIdFromAuth = async (authHeader: string | undefined) => {
+  const auth = await getUserFromAuth(authHeader);
+  return auth?.uid;
 };
 
 // Helper to sanitize user and include history
@@ -95,37 +107,32 @@ const getFullUser = async (userId: string) => {
 // Middleware to check if user is admin
 const isAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
-    const userId = await getUserIdFromAuth(req.headers.authorization);
-    console.log(`[isAdmin] Checking userId: ${userId}`);
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    const auth = await getUserFromAuth(req.headers.authorization);
+    const userId = auth?.uid;
+    const userEmail = auth?.email;
+    
+    console.log(`[isAdmin] Checking userId: ${userId}, email: ${userEmail}`);
+    if (!userId) {
+      console.log("[isAdmin] No userId found in token");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     
     const userDoc = await db.collection('users').doc(userId).get();
     const user = userDoc.data();
     
-    // Get email from token if document doesn't exist
-    let userEmail = user?.email;
-    if (!userEmail && !req.headers.authorization?.includes('mock-jwt-token-')) {
-      try {
-        const idToken = req.headers.authorization!.split('Bearer ')[1]?.trim();
-        if (idToken && idToken !== 'null' && idToken !== 'undefined') {
-          const decodedToken = await adminAuth.verifyIdToken(idToken);
-          userEmail = decodedToken.email;
-        }
-      } catch (e) {
-        console.warn("[isAdmin] Could not get email from token", e);
-      }
-    }
-
-    console.log(`[isAdmin] User found: ${!!user}, Email: ${userEmail}, Role: ${user?.role}`);
+    // Get email from token if document doesn't exist or doesn't have email
+    const effectiveEmail = user?.email || userEmail;
     
-    const isSuperAdmin = userEmail === 'verdiqmag@gmail.com' || userEmail === 'admin@verdiq.ai';
+    console.log(`[isAdmin] User found in DB: ${!!user}, Effective Email: ${effectiveEmail}, Role in DB: ${user?.role}`);
+    
+    const isSuperAdmin = isAdminEmail(effectiveEmail);
     const hasAdminRole = user?.role === 'admin';
 
     if (isSuperAdmin || hasAdminRole) {
-      console.log(`[isAdmin] Access granted for ${userEmail || userId}`);
+      console.log(`[isAdmin] Access GRANTED for ${effectiveEmail || userId} (SuperAdmin: ${isSuperAdmin}, HasRole: ${hasAdminRole})`);
       next();
     } else {
-      console.log(`[isAdmin] Access denied for ${userEmail || 'unknown'}`);
+      console.log(`[isAdmin] Access DENIED for ${effectiveEmail || 'unknown'}`);
       res.status(403).json({ message: "Forbidden: Admin access required" });
     }
   } catch (error) {
@@ -210,14 +217,14 @@ app.post("/api/auth/signup", async (req, res, next) => {
     }
     
     const userId = id || Math.random().toString(36).substring(2, 11);
-    const isAdminEmail = email === 'verdiqmag@gmail.com' || email === 'admin@verdiq.ai';
+    const isSpecialAdmin = isAdminEmail(email);
     const newUser = {
       id: userId,
       email,
       password,
       name,
-      credits: isAdminEmail ? 999999 : 10,
-      role: isAdminEmail ? 'admin' : 'user',
+      credits: isSpecialAdmin ? 999999 : 10,
+      role: isSpecialAdmin ? 'admin' : 'user',
       mfaEnabled: false,
       createdAt: new Date().toISOString()
     };
@@ -263,11 +270,14 @@ app.get("/api/users", isAdmin, async (req, res, next) => {
 app.get("/api/users/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = await getUserIdFromAuth(req.headers.authorization);
+    const auth = await getUserFromAuth(req.headers.authorization);
+    const userId = auth?.uid;
+    const userEmail = auth?.email;
     
     const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
     const requestingUser = requestingUserDoc?.data();
-    const isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+    const isSuperAdmin = isAdminEmail(userEmail) || (requestingUser && isAdminEmail(requestingUser.email));
+    const isAdminUser = isSuperAdmin || (requestingUser && requestingUser.role === 'admin');
     
     if (id !== userId && !isAdminUser) {
       return res.status(403).json({ message: "Forbidden" });
@@ -276,11 +286,17 @@ app.get("/api/users/:id", async (req, res, next) => {
     const fullUser = await getFullUser(id);
     if (fullUser) {
       // Auto-upgrade admin emails if they are not already admins
-      if ((fullUser.email === 'verdiqmag@gmail.com' || fullUser.email === 'admin@verdiq.ai') && fullUser.role !== 'admin') {
-        console.log(`[getUser] Auto-upgrading ${fullUser.email} to admin role`);
-        await db.collection('users').doc(id).update({ role: 'admin', credits: 999999 });
+      const effectiveEmail = fullUser.email || (id === userId ? userEmail : null);
+      if (isAdminEmail(effectiveEmail) && fullUser.role !== 'admin') {
+        console.log(`[getUser] Auto-upgrading ${effectiveEmail} to admin role`);
+        await db.collection('users').doc(id).update({ 
+          role: 'admin', 
+          credits: 999999,
+          email: effectiveEmail // Ensure email is stored
+        });
         fullUser.role = 'admin';
         fullUser.credits = 999999;
+        fullUser.email = effectiveEmail;
       }
       res.json(fullUser);
     } else {
@@ -294,11 +310,11 @@ app.get("/api/users/:id", async (req, res, next) => {
 app.put("/api/users/:id", async (req, res) => {
   const { id } = req.params;
   const update = req.body;
-  const userId = await getUserIdFromAuth(req.headers.authorization);
+  const userId = (await getUserFromAuth(req.headers.authorization))?.uid;
   
   const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
   const requestingUser = requestingUserDoc?.data();
-  const isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+  const isAdminUser = isAdminEmail(requestingUser?.email) || isAdminEmail(userEmail) || requestingUser?.role === 'admin';
 
   if (id !== userId && !isAdminUser) {
     return res.status(403).json({ message: "Forbidden" });
@@ -325,7 +341,7 @@ app.delete("/api/users/:id", isAdmin, async (req, res) => {
 
 // Credits
 app.get("/api/credits/status", async (req, res) => {
-  const userId = await getUserIdFromAuth(req.headers.authorization);
+  const userId = (await getUserFromAuth(req.headers.authorization))?.uid;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
   
   const userDoc = await db.collection('users').doc(userId).get();
@@ -730,7 +746,7 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     
     const requestingUserDoc = authUserId ? await db.collection('users').doc(authUserId).get() : null;
     const requestingUser = requestingUserDoc?.data();
-    const isAdminUser = requestingUser && (requestingUser.role === 'admin' || requestingUser.email === 'verdiqmag@gmail.com' || requestingUser.email === 'admin@verdiq.ai');
+    const isAdminUser = isAdminEmail(requestingUser?.email) || isAdminEmail(userEmail) || requestingUser?.role === 'admin';
     
     if (userId !== authUserId && !isAdminUser) {
       return res.status(403).json({ message: "Forbidden" });
@@ -977,7 +993,7 @@ app.post("/api/support/:id/message", async (req, res, next) => {
     
     const userDoc = await db.collection('users').doc(userId).get();
     const user = userDoc.data();
-    const isAdminUser = user?.role === 'admin' || user?.email === 'verdiqmag@gmail.com';
+    const isAdminUser = isAdminEmail(user?.email) || user?.role === 'admin';
     
     const ticketRef = db.collection('support_tickets').doc(id);
     const ticketDoc = await ticketRef.get();

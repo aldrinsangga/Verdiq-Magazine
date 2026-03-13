@@ -82,7 +82,7 @@ const AccountSettings = ({ user, session, onUpdate }) => {
           {activeTab === 'security' && (
             <div className="space-y-8">
               {/* MFA Section - Only show for admins */}
-              {(user.role === 'admin' || user.email === 'verdiqmag@gmail.com') && (
+              {(user.role === 'admin' || user.email?.toLowerCase() === 'verdiqmag@gmail.com') && (
                 <div>
                   <MFASetup 
                     user={user} 

@@ -189,7 +189,7 @@ const MainContent: React.FC<MainContentProps> = ({
           onUpdate={handleUpdateProfile} 
         />
       )}
-      {!isUnverified && view === 'admin' && (currentUser?.role === 'admin' || currentUser?.email === 'verdiqmag@gmail.com') && (
+      {!isUnverified && view === 'admin' && (currentUser?.role === 'admin' || currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com' || auth.currentUser?.email?.toLowerCase() === 'verdiqmag@gmail.com') && (
         <AdminDashboardWrapper 
           currentUser={currentUser}
           users={users}
