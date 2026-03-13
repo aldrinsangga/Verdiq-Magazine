@@ -4,11 +4,33 @@ const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // Initialize Gemini API
 // Note: process.env.GEMINI_API_KEY is injected by the platform
-const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
+let runtimeApiKey: string | null = null;
+
+const getAI = async () => {
+  if (runtimeApiKey) return new GoogleGenAI({ apiKey: runtimeApiKey });
+
+  // 1. Try build-time injected key
+  let apiKey = process.env.GEMINI_API_KEY;
+  
+  // 2. If missing, try to fetch from server (runtime environment)
+  if (!apiKey) {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        apiKey = data.geminiApiKey;
+      }
+    } catch (e) {
+      console.error("Failed to fetch runtime config", e);
+    }
+  }
+
   if (!apiKey) {
     console.error("GEMINI_API_KEY is not defined in the environment.");
+  } else {
+    runtimeApiKey = apiKey;
   }
+  
   return new GoogleGenAI({ apiKey: apiKey || "" });
 };
 
@@ -195,7 +217,7 @@ const REVIEW_SCHEMA = {
 };
 
 export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, artistPhotoBase64, artistPhotoMimeType, preset }: any) => {
-  const ai = getAI();
+  const ai = await getAI();
   
   // Fetch style guides for training
   let styleGuidesContext = "";
@@ -314,7 +336,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
 };
 
 export const generatePodcast = async (review: any) => {
-  const ai = getAI();
+  const ai = await getAI();
   
   const scriptPrompt = `
     Create a RAW, conversational, high-energy dialogue script for a music podcast session.

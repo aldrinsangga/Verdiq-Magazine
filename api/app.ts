@@ -182,6 +182,12 @@ app.get("/api/ping", (req, res) => {
   res.json({ pong: true, time: new Date().toISOString() });
 });
 
+app.get("/api/config", (req, res) => {
+  res.json({
+    geminiApiKey: process.env.GEMINI_API_KEY || ""
+  });
+});
+
 app.get("/api/debug/firebase", async (req, res) => {
   try {
     const testDoc = await db.collection('health_check').doc('server_test').get();
