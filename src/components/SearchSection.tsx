@@ -142,7 +142,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   ];
 
   return (
-    <div className="relative pt-12 pb-12 px-6 overflow-hidden" data-testid="search-section">
+    <div className="relative pt-32 pb-12 px-6 overflow-hidden" data-testid="search-section">
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(0); }
@@ -175,10 +175,10 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8 card-premium !p-8 md:!p-12 relative overflow-hidden group" data-testid="submission-form">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6 card-premium !p-6 md:!p-8 relative overflow-hidden group" data-testid="submission-form">
           <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           
-          <div className="space-y-4 relative z-10 min-w-0">
+          <div className="space-y-3 relative z-10 min-w-0">
             {/* Audio Upload */}
             <div>
               <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
@@ -207,7 +207,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">
                   Track Name
@@ -236,7 +236,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Featured Photo Upload */}
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
@@ -347,10 +347,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                   <span className="text-slate-950 font-black uppercase tracking-widest">{status || 'Initializing Studio...'}</span>
                 </span>
               ) : (
-                <span className="flex flex-col items-center">
-                  <span>Run Analysis</span>
-                  <span className="text-[10px] opacity-60 font-black tracking-[0.2em] mt-1">- 10 CREDITS -</span>
-                </span>
+                <span>Run Analysis</span>
               )}
             </button>
 

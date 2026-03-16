@@ -9,8 +9,6 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   User,
-  GoogleAuthProvider,
-  signInWithPopup,
   sendEmailVerification
 } from 'firebase/auth';
 import { auth } from './firebase';
@@ -255,68 +253,6 @@ export const requestPasswordReset = async (email) => {
 };
 
 /**
- * Login with Google
- */
-export const loginWithGoogle = async () => {
-  try {
-    const provider = new GoogleAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
-    const user = userCredential.user;
-    const token = await user.getIdToken();
-    
-    // Fetch user profile from our API
-    const res = await fetch(`${API_URL}/api/users/${user.uid}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    
-    if (!res.ok) {
-      // If user doesn't exist in our DB, create them
-      const signupRes = await fetch(`${API_URL}/api/auth/signup`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ 
-          email: user.email, 
-          password: 'google-auth-user', // Dummy password for DB
-          name: user.displayName || user.email?.split('@')[0], 
-          id: user.uid 
-        })
-      });
-      const signupData = await safeJson(signupRes);
-      saveSession({ ...signupData, session: { access_token: token } });
-      return { ...signupData, session: { access_token: token } };
-    }
-    
-    const userData = await safeJson(res);
-    const sessionData = {
-      ...userData,
-      email: userData.email || user.email,
-      session: { access_token: token }
-    };
-    
-    saveSession(sessionData);
-    return sessionData;
-  } catch (error: any) {
-    let errorMessage = error.message;
-    if (error.code === 'auth/invalid-credential') {
-      errorMessage = 'There was a problem with the Google login configuration. Please contact support.';
-    }
-
-    console.error('Google Login error details:', {
-      code: error.code,
-      message: error.message,
-      config: {
-        projectId: auth.app.options.projectId,
-        authDomain: auth.app.options.authDomain
-      }
-    });
-    throw { ...error, message: errorMessage };
-  }
-};
-
-/**
  * Check if the user is an admin
  */
 export const isAdmin = (user: any) => {
@@ -347,7 +283,6 @@ export default {
   logout,
   getCurrentUser,
   requestPasswordReset,
-  loginWithGoogle,
   sendVerificationEmail,
   isEmailVerified
 };

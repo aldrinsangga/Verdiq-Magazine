@@ -183,8 +183,10 @@ app.get("/api/ping", (req, res) => {
 });
 
 app.get("/api/config", (req, res) => {
+  const key = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  console.log(`[Config] Key found: ${!!key}${key ? ` (length: ${key.length})` : ''}`);
   res.json({
-    geminiApiKey: process.env.GEMINI_API_KEY || ""
+    geminiApiKey: key || ""
   });
 });
 

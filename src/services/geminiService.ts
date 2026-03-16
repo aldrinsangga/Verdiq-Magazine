@@ -10,7 +10,7 @@ const getAI = async () => {
   if (runtimeApiKey) return new GoogleGenAI({ apiKey: runtimeApiKey });
 
   // 1. Try build-time injected key
-  let apiKey = process.env.GEMINI_API_KEY;
+  let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
   
   // 2. If missing, try to fetch from server (runtime environment)
   if (!apiKey) {
@@ -248,6 +248,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     REVIEW WRITING INSTRUCTIONS:
     Write a fully human-sounding music review that feels natural, emotionally sharp, and specific.
     The 'reviewBody' MUST be exactly 5 paragraphs long. Use actual double newlines to separate paragraphs.
+    CRITICAL: If lyrics are provided, you MUST ensure any quotes used in the review are 100% accurate and verbatim from the provided text. Do not hallucinate or misquote lyrics.
     
     HYPERLINK INSTRUCTIONS:
     - You MUST include at least 5 relevant hyperlinks within the 'reviewBody'.
@@ -260,11 +261,18 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     - Ensure the links feel integrated into the narrative of the review.
     
     CRITICAL STYLE CONSTRAINTS:
-    - DO NOT use generic AI filler words: "Ultimately", "Landscape", "Tapestry", "Sonic journey", "In conclusion", "Testament", "Masterpiece", "Vibrant", "Seamlessly", "Evocative", "Captivating", "Resonate", "Delve", "Dive into", "Unfold", "Crafted", "Rich", "Lush", "Intricate".
-    - DO NOT use the phrase "The song is a..." or "This track is a...".
-    - AVOID being overly positive. Be a critical, professional journalist. If something is weak, say it.
+    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally".
+    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape".
+    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core".
+    - AVOID being overly positive or flowery. Be a critical, professional journalist. If something is weak, say it.
     - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary and sentence structure.
-    - Be specific about the production. Mention specific instruments or textures you hear.
+    - Be specific about the production. Mention specific instruments, mixing choices, or textures you hear.
+    
+    REVIEW STRUCTURE VARIATIONS (Choose one randomly for each review):
+    1. THE DEEP DIVE: Start with a cultural observation, then move to technical breakdown, then emotional impact.
+    2. THE COMPARATIVE: Frame the review by comparing the artist's current work to their previous work or to industry peers.
+    3. THE PRODUCTION-FIRST: Focus heavily on the technical choices and how they serve (or fail) the song's intent.
+    4. THE NARRATIVE: Tell the story of the song's vibe and how it fits into the current musical zeitgeist.
     
     SCORING INSTRUCTIONS:
     - 'rating' MUST be on a scale of 0.0 to 10.0 (e.g., 8.4).

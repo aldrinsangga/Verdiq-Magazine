@@ -3,6 +3,7 @@ import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MainContent from './components/MainContent';
 import SupportWidget from './components/SupportWidget';
+import SEO from './components/SEO';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -941,6 +942,7 @@ function App() {
       intent: "capture"
     }}>
       <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
+      <SEO view={view} currentReview={currentReview} />
       <Navigation 
         view={view}
         currentUser={currentUser}
