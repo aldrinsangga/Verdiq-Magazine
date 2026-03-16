@@ -12,7 +12,13 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
   const [duration, setDuration] = useState(0);
   const [audioUrls, setAudioUrls] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-  const [playCounts, setPlayCounts] = useState({});
+  const [playCounts, setPlayCounts] = useState(() => {
+    const initialCounts = {};
+    reviews.forEach(r => {
+      if (r.playCount) initialCounts[r.id] = r.playCount;
+    });
+    return initialCounts;
+  });
   const audioRef = useRef(null);
 
   // Update URL when podcast changes
@@ -54,6 +60,18 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
       setActiveId(podcastReviews[0].id);
     }
   }, [initialPodcastId, podcastReviews.length]);
+
+  useEffect(() => {
+    setPlayCounts(prev => {
+      const newCounts = { ...prev };
+      reviews.forEach(r => {
+        if (r.playCount !== undefined && r.playCount > (newCounts[r.id] || 0)) {
+          newCounts[r.id] = r.playCount;
+        }
+      });
+      return newCounts;
+    });
+  }, [reviews]);
 
   // Fetch real play counts from backend
   useEffect(() => {
@@ -276,7 +294,6 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                     <p className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.3em]">Now Playing</p>
                   </div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/50 border border-emerald-500/20 px-2 py-0.5 rounded">Marketplace Session</span>
                 </div>
                 <h2 className="text-3xl sm:text-5xl font-black text-white mb-2 tracking-tighter leading-none uppercase">{activeReview?.songTitle}</h2>
                 <p className="text-slate-400 text-lg sm:text-2xl font-light mb-6 italic">by {activeReview?.artistName}</p>

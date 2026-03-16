@@ -90,6 +90,13 @@ export interface Review {
   hasPodcast?: boolean; // Whether a podcast has been generated
   songAudio?: string; // Base64 encoded original song audio for background
   artistPhotoUrl?: string; // Transformed artist photo URL
+  socialLinks?: {
+    instagram?: string;
+    twitter?: string;
+    spotify?: string;
+    youtube?: string;
+    website?: string;
+  };
 }
 
 export interface MagazineArticle {

@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import SpotifyPlayer from './SpotifyPlayer';
+import { Instagram, Twitter, Youtube, Globe, Music2 } from 'lucide-react';
 
 interface ReviewEditorialProps {
   review: any;
@@ -141,6 +142,111 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
         <div className="mb-10 p-8 bg-slate-900/50 rounded-3xl border border-slate-800">
           <h3 className="text-sm font-black uppercase tracking-[0.3em] text-emerald-500 mb-4">Who Is It For</h3>
           <p className="text-slate-300 font-serif text-lg leading-relaxed">{review.whoIsItFor}</p>
+        </div>
+      )}
+
+      {/* Social Links Section */}
+      {(editMode || (review.socialLinks && Object.values(review.socialLinks).some(link => link))) && (
+        <div className="mb-10 p-8 bg-slate-900/50 rounded-3xl border border-slate-800">
+          <h3 className="text-sm font-black uppercase tracking-[0.3em] text-emerald-500 mb-6">Connect with Artist</h3>
+          
+          {editMode ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <Instagram className="w-5 h-5 text-pink-500" />
+                <input 
+                  type="text"
+                  placeholder="Instagram URL"
+                  value={editedReview.socialLinks?.instagram || ''}
+                  onChange={e => setEditedReview({
+                    ...editedReview, 
+                    socialLinks: { ...(editedReview.socialLinks || {}), instagram: e.target.value }
+                  })}
+                  className="bg-transparent outline-none text-sm text-slate-300 w-full"
+                />
+              </div>
+              <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <Twitter className="w-5 h-5 text-sky-500" />
+                <input 
+                  type="text"
+                  placeholder="Twitter URL"
+                  value={editedReview.socialLinks?.twitter || ''}
+                  onChange={e => setEditedReview({
+                    ...editedReview, 
+                    socialLinks: { ...(editedReview.socialLinks || {}), twitter: e.target.value }
+                  })}
+                  className="bg-transparent outline-none text-sm text-slate-300 w-full"
+                />
+              </div>
+              <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <Music2 className="w-5 h-5 text-emerald-500" />
+                <input 
+                  type="text"
+                  placeholder="Spotify URL"
+                  value={editedReview.socialLinks?.spotify || ''}
+                  onChange={e => setEditedReview({
+                    ...editedReview, 
+                    socialLinks: { ...(editedReview.socialLinks || {}), spotify: e.target.value }
+                  })}
+                  className="bg-transparent outline-none text-sm text-slate-300 w-full"
+                />
+              </div>
+              <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <Youtube className="w-5 h-5 text-red-500" />
+                <input 
+                  type="text"
+                  placeholder="YouTube URL"
+                  value={editedReview.socialLinks?.youtube || ''}
+                  onChange={e => setEditedReview({
+                    ...editedReview, 
+                    socialLinks: { ...(editedReview.socialLinks || {}), youtube: e.target.value }
+                  })}
+                  className="bg-transparent outline-none text-sm text-slate-300 w-full"
+                />
+              </div>
+              <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800 md:col-span-2">
+                <Globe className="w-5 h-5 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Official Website URL"
+                  value={editedReview.socialLinks?.website || ''}
+                  onChange={e => setEditedReview({
+                    ...editedReview, 
+                    socialLinks: { ...(editedReview.socialLinks || {}), website: e.target.value }
+                  })}
+                  className="bg-transparent outline-none text-sm text-slate-300 w-full"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-4">
+              {review.socialLinks?.instagram && (
+                <a href={review.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-pink-500/50 transition-colors group">
+                  <Instagram className="w-6 h-6 text-slate-400 group-hover:text-pink-500 transition-colors" />
+                </a>
+              )}
+              {review.socialLinks?.twitter && (
+                <a href={review.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-sky-500/50 transition-colors group">
+                  <Twitter className="w-6 h-6 text-slate-400 group-hover:text-sky-500 transition-colors" />
+                </a>
+              )}
+              {review.socialLinks?.spotify && (
+                <a href={review.socialLinks.spotify} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-emerald-500/50 transition-colors group">
+                  <Music2 className="w-6 h-6 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                </a>
+              )}
+              {review.socialLinks?.youtube && (
+                <a href={review.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-red-500/50 transition-colors group">
+                  <Youtube className="w-6 h-6 text-slate-400 group-hover:text-red-500 transition-colors" />
+                </a>
+              )}
+              {review.socialLinks?.website && (
+                <a href={review.socialLinks.website} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-950 rounded-xl border border-slate-800 hover:border-slate-100/50 transition-colors group">
+                  <Globe className="w-6 h-6 text-slate-400 group-hover:text-slate-100 transition-colors" />
+                </a>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import Waveform from './Waveform';
 
 const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, onNavigate }) => {
@@ -17,6 +18,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   const [artistPhotoPreview, setArtistPhotoPreview] = useState(null);
   
   const [hasConsented, setHasConsented] = useState(false);
+  const [showConsentError, setShowConsentError] = useState(false);
   
   const fileInputRef = useRef(null);
   const photoInputRef = useRef(null);
@@ -72,6 +74,13 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    if (!hasConsented) {
+      setShowConsentError(true);
+      setTimeout(() => setShowConsentError(false), 4000);
+      return;
+    }
+
     // Validate required fields: track file, track name, artist name, cover art
     if (!selectedFile) {
       alert('Please upload a track file');
@@ -171,7 +180,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             <span className="gradient-text">Submit Your Track</span>
           </h1>
           <p className="text-lg sm:text-2xl text-slate-400 font-light max-w-3xl mx-auto leading-relaxed px-4">
-            Upload your track for an industry-standard review and technical audit.
+            Upload your track for a magazine-style review, podcast feature, and technical music audit.
           </p>
         </div>
 
@@ -334,7 +343,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
 
             <button
               type="submit"
-              disabled={isLoading || !selectedFile || !formData.trackName || !formData.artistName || !featuredPhoto || !hasConsented}
+              disabled={isLoading || !selectedFile || !formData.trackName || !formData.artistName || !featuredPhoto}
               className={`btn-primary !py-6 !text-xl !rounded-[24px] mt-6 transition-all duration-500 ${isLoading ? 'bg-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.4)]' : ''}`}
               data-testid="analyze-btn"
             >
@@ -350,6 +359,23 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                 <span>Run Analysis</span>
               )}
             </button>
+
+            <AnimatePresence>
+              {showConsentError && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                  className="mt-4 px-4 py-2 bg-red-500/10 border border-red-500/40 rounded-full flex items-center gap-2 shadow-lg shadow-red-500/5 w-fit mx-auto"
+                >
+                  <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="text-red-400 text-[10px] font-black uppercase tracking-widest">Check consent to proceed</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {isLoading && (
               <div className="mt-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-500">
@@ -451,7 +477,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
           <div className="order-1 lg:order-2">
             <h2 className="text-4xl md:text-6xl font-black text-white mb-10 tracking-tighter leading-none">YOUR MUSIC, <br/><span className="gradient-text">IMMORTALIZED.</span></h2>
             <p className="text-slate-400 text-xl md:text-2xl font-light leading-relaxed mb-12">
-              We don't just give you a score. We give you a legacy. Every analysis generates a professional-grade media package designed to impress labels and engage your fanbase.
+              Every analysis generates a professional-grade media package designed to impress labels and engage your fanbase.
             </p>
             <div className="space-y-8">
               {[
