@@ -124,6 +124,7 @@ export const login = async (email, password) => {
     }
     
     const userData = await safeJson(res);
+    console.log(`[Login] User data fetched successfully for ${user.uid}`);
     const sessionData = {
       ...userData,
       email: userData.email || user.email,

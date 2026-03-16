@@ -13,7 +13,21 @@ import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Global error handlers to prevent silent crashes in Cloud Run
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Process] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Uncaught Exception:', err);
+});
+
 const firebaseConfigJson = JSON.parse(fs.readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
+
+if (!firebaseConfigJson.projectId) {
+  console.error("[Firebase] CRITICAL: projectId is missing from firebase-applet-config.json");
+}
 
 const firebaseConfig = {
   ...firebaseConfigJson,
@@ -50,15 +64,15 @@ export const adminAuth = adminApp ? getAdminAuth(adminApp) : null;
 export const adminStorage = adminApp ? getAdminStorage(adminApp) : null;
 
 // Try to get Admin Firestore
-let adminDb: any = null;
-let isAdminDbHealthy = false;
+export let adminDb: any = null;
+export let isAdminDbHealthy = false;
 
 if (adminApp) {
   try {
     // Try with explicit database ID first
-    const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
-    adminDb = getAdminFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
-    console.log(`[Firebase] Admin Firestore initialized for database: ${dbId}`);
+    const dbId = firebaseConfig.firestoreDatabaseId || undefined;
+    adminDb = getAdminFirestore(adminApp, dbId);
+    console.log(`[Firebase] Admin Firestore initialized for database: ${dbId || '(default)'}`);
     
     // Test adminDb with a simple check
     adminDb.collection('health_check').doc('admin_test').set({ last_check: new Date().toISOString() })
@@ -67,10 +81,9 @@ if (adminApp) {
         isAdminDbHealthy = true;
       })
       .catch((err: any) => {
-        console.warn("[Firebase] Admin Firestore write test failed:", err.message);
+        console.warn("[Firebase] Admin Firestore write test failed:", err?.message || err);
         console.warn("[Firebase] Admin SDK might have insufficient IAM permissions. Will fallback to Client SDK for most operations.");
         isAdminDbHealthy = false;
-        // We don't nullify adminDb yet, we'll check isAdminDbHealthy in the wrapper
       });
       
   } catch (e: any) {
@@ -80,7 +93,7 @@ if (adminApp) {
       console.log("[Firebase] Admin Firestore initialized with default database.");
       isAdminDbHealthy = true;
     } catch (e2: any) {
-      console.error("[Firebase] Failed to initialize Admin Firestore entirely:", e2.message);
+      console.error("[Firebase] Failed to initialize Admin Firestore entirely:", e2?.message || e2);
       isAdminDbHealthy = false;
     }
   }
@@ -168,7 +181,8 @@ export const db: any = {
               docs: snapshot.docs.map((d: any) => ({ id: d.id, data: () => d.data() }))
             };
           } catch (e: any) {
-            if (e.message.includes('PERMISSION_DENIED')) {
+            const errMsg = e?.message || String(e);
+            if (errMsg.includes('PERMISSION_DENIED')) {
               console.warn(`[Firebase] Admin SDK Permission Denied for ${path} query, falling back to Client SDK...`);
               // Reconstruct query on client wrapper
               let clientQ: any = clientDbWrapper.collection(path);
@@ -193,7 +207,8 @@ export const db: any = {
                 const d = await adminDoc.get();
                 return { exists: d.exists, id: d.id, data: () => d.data() };
               } catch (e: any) {
-                if (e.message.includes('PERMISSION_DENIED')) {
+                const errMsg = e?.message || String(e);
+                if (errMsg.includes('PERMISSION_DENIED')) {
                   console.warn(`[Firebase] Admin SDK Permission Denied for ${path}/${id}, falling back to Client SDK...`);
                   return clientDbWrapper.collection(path).doc(id).get();
                 }
@@ -201,15 +216,18 @@ export const db: any = {
               }
             },
             set: (data: any) => adminDoc.set(data).catch((e: any) => {
-              if (e.message.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).set(data);
+              const errMsg = e?.message || String(e);
+              if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).set(data);
               throw e;
             }),
             update: (data: any) => adminDoc.update(data).catch((e: any) => {
-              if (e.message.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).update(data);
+              const errMsg = e?.message || String(e);
+              if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).update(data);
               throw e;
             }),
             delete: () => adminDoc.delete().catch((e: any) => {
-              if (e.message.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).delete();
+              const errMsg = e?.message || String(e);
+              if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).delete();
               throw e;
             })
           };
@@ -219,7 +237,8 @@ export const db: any = {
             const ref = await adminCol.add(data);
             return { id: ref.id };
           } catch (e: any) {
-            if (e.message.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).add(data);
+            const errMsg = e?.message || String(e);
+            if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).add(data);
             throw e;
           }
         },
@@ -232,7 +251,8 @@ export const db: any = {
               docs: snapshot.docs.map((d: any) => ({ id: d.id, data: () => d.data() }))
             };
           } catch (e: any) {
-            if (e.message.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).get();
+            const errMsg = e?.message || String(e);
+            if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).get();
             throw e;
           }
         },

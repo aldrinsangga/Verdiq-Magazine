@@ -4,6 +4,15 @@ import { ensureDbReady } from "./api/firebase.ts";
 import path from "path";
 import { fileURLToPath } from "url";
 
+// Global error handlers for the main process
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Main Process] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Main Process] Uncaught Exception:', err);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

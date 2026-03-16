@@ -4,10 +4,17 @@ import { initializeFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
-const app = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+} catch (e) {
+  console.error("Firebase initialization failed", e);
+  // Fallback or handle error
+}
 
 // Helper to get Firestore with fallback and long-polling enabled
 const getFirestoreWithFallback = () => {
+  if (!app) return null;
   const dbId = firebaseConfig.firestoreDatabaseId;
   const settings = {
     experimentalForceLongPolling: true,

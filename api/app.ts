@@ -19,6 +19,7 @@ const app = express();
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log(`[Headers] Host: ${req.headers.host}, Origin: ${req.headers.origin}, Referer: ${req.headers.referer}`);
   next();
 });
 
@@ -178,8 +179,22 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-app.get("/api/ping", (req, res) => {
-  res.json({ pong: true, time: new Date().toISOString() });
+app.get("/api/debug/env", async (req, res) => {
+  // Only allow for admin emails
+  const auth = await getUserFromAuth(req.headers.authorization);
+  if (!isAdminEmail(auth?.email)) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  res.json({
+    nodeEnv: process.env.NODE_ENV,
+    projectId: process.env.GOOGLE_CLOUD_PROJECT || firebaseConfig.projectId,
+    hasAdminAuth: !!adminAuth,
+    hasAdminDb: !!db,
+    headers: req.headers,
+    cwd: process.cwd(),
+    files: fs.readdirSync(process.cwd())
+  });
 });
 
 app.get("/api/config", (req, res) => {
@@ -595,15 +610,32 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
 app.get("/api/health", async (req, res) => {
   try {
     // Test Firestore connection
-    await db.collection('health').doc('check').get();
-    res.json({ status: "ok", firestore: "connected" });
+    const healthRef = db.collection('health').doc('check');
+    await healthRef.get();
+    
+    // Check internal firebase state
+    const { isAdminDbHealthy, adminDbInitialized } = await import('./firebase').then(m => ({
+      isAdminDbHealthy: m.isAdminDbHealthy,
+      adminDbInitialized: !!m.adminDb
+    })).catch(() => ({ isAdminDbHealthy: false, adminDbInitialized: false }));
+
+    res.json({ 
+      status: "ok", 
+      firestore: "connected",
+      isAdminDbHealthy,
+      adminDbInitialized,
+      env: process.env.NODE_ENV,
+      projectId: firebaseConfig.projectId,
+      timestamp: new Date().toISOString()
+    });
   } catch (error: any) {
     console.error("Health check failed:", error);
     res.status(500).json({ 
       status: "error", 
       message: error.message,
       code: error.code,
-      details: error.details
+      details: error.details,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -1166,26 +1198,34 @@ app.delete("/api/admin/support/:id", isAdmin, async (req, res, next) => {
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error("=== SERVER ERROR ===");
-  console.error("Message:", err.message);
-  console.error("Code:", err.code);
-  console.error("Stack:", err.stack);
-  if (err.details) console.error("Details:", err.details);
+  const timestamp = new Date().toISOString();
+  console.error(`[${timestamp}] === SERVER ERROR ===`);
+  console.error(`[${timestamp}] Path: ${req.path}`);
+  console.error(`[${timestamp}] Method: ${req.method}`);
+  console.error(`[${timestamp}] Headers: ${JSON.stringify(req.headers)}`);
+  console.error(`[${timestamp}] Message: ${err?.message || err}`);
+  console.error(`[${timestamp}] Code: ${err?.code}`);
+  if (err?.stack) console.error(`[${timestamp}] Stack: ${err.stack}`);
+  if (err?.details) console.error(`[${timestamp}] Details: ${JSON.stringify(err.details)}`);
 
-  if (err.code === 7 || err.message?.includes('PERMISSION_DENIED')) {
+  const statusCode = err?.status || 500;
+  const errorResponse = {
+    message: err?.message || "Internal server error",
+    detail: err?.message || String(err),
+    code: err?.code,
+    details: err?.details,
+    path: req.path,
+    timestamp
+  };
+
+  if (err?.code === 7 || (err?.message && String(err.message).includes('PERMISSION_DENIED'))) {
     return res.status(403).json({
-      message: "Firestore Permission Denied. Please ensure the Cloud Firestore API is enabled in your Google Cloud project and the database is initialized.",
-      detail: err.message,
-      code: err.code
+      ...errorResponse,
+      message: "Firestore Permission Denied. Please ensure the Cloud Firestore API is enabled and the database is initialized."
     });
   }
 
-  res.status(err.status || 500).json({ 
-    message: err.message || "Internal server error", 
-    detail: err.message,
-    code: err.code,
-    details: err.details
-  });
+  res.status(statusCode).json(errorResponse);
 });
 
 export default app;
