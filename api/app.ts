@@ -8,7 +8,12 @@ import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const firebaseConfig = JSON.parse(fs.readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
+let firebaseConfig: any = {};
+try {
+  firebaseConfig = JSON.parse(fs.readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
+} catch (e) {
+  console.error("Failed to read firebase-applet-config.json", e);
+}
 import { UserAccount, Review } from "../types";
 import { client as paypalClient, paypal } from "./paypal";
 
@@ -175,7 +180,16 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
   }
 };
 
-app.use(cors());
+// CORS configuration
+const corsOptions = {
+  origin: true, // Allow all origins for now to debug
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 

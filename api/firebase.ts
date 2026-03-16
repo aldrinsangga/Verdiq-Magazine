@@ -75,15 +75,32 @@ if (adminApp) {
     console.log(`[Firebase] Admin Firestore initialized for database: ${dbId || '(default)'}`);
     
     // Test adminDb with a simple check
-    adminDb.collection('health_check').doc('admin_test').set({ last_check: new Date().toISOString() })
+    console.log("[Firebase] Running Admin Firestore health check...");
+    adminDb.collection('health_check').doc('admin_test').set({ 
+      last_check: new Date().toISOString(),
+      env: process.env.NODE_ENV || 'unknown',
+      service: 'cloud-run'
+    })
       .then(() => {
         console.log("[Firebase] Admin Firestore write test successful");
         isAdminDbHealthy = true;
       })
       .catch((err: any) => {
         console.warn("[Firebase] Admin Firestore write test failed:", err?.message || err);
-        console.warn("[Firebase] Admin SDK might have insufficient IAM permissions. Will fallback to Client SDK for most operations.");
+        console.warn("[Firebase] This usually means the Cloud Run service account lacks 'Cloud Datastore User' permissions on the specific database.");
+        console.warn("[Firebase] Falling back to Client SDK for data operations.");
         isAdminDbHealthy = false;
+        
+        // Try a read test at least
+        adminDb.collection('health_check').limit(1).get()
+          .then(() => {
+            console.log("[Firebase] Admin Firestore read test successful. Will use Admin SDK for reads.");
+            // We'll keep isAdminDbHealthy as false to force fallback for writes, 
+            // but we could potentially use it for reads if we split the flag.
+          })
+          .catch((readErr: any) => {
+            console.error("[Firebase] Admin Firestore read test also failed:", readErr?.message || readErr);
+          });
       });
       
   } catch (e: any) {
@@ -159,10 +176,17 @@ const createClientDbWrapper = (dbInstance: any) => ({
 // Hybrid DB: Try Admin SDK first (bypasses rules), fallback to Client SDK wrapper
 const clientDbWrapper = createClientDbWrapper(clientDb);
 
+// Helper to check if an error is a permission denied error
+const isPermissionError = (e: any) => {
+  const msg = (e?.message || String(e)).toUpperCase();
+  return msg.includes('PERMISSION_DENIED') || msg.includes('MISSING OR INSUFFICIENT PERMISSIONS') || e?.code === 7 || e?.code === 'permission-denied';
+};
+
 export const db: any = {
   collection: (path: string) => {
-    // If we have a healthy Admin DB, return its collection. Otherwise use client wrapper.
-    if (adminDb && isAdminDbHealthy) {
+    // If we have an Admin DB, we try it first regardless of "healthy" flag, 
+    // because the flag only tracks the write test.
+    if (adminDb) {
       const adminCol = adminDb.collection(path);
       
       const adminBuilder = (q: any, queryParams: any[] = []) => ({
@@ -181,8 +205,7 @@ export const db: any = {
               docs: snapshot.docs.map((d: any) => ({ id: d.id, data: () => d.data() }))
             };
           } catch (e: any) {
-            const errMsg = e?.message || String(e);
-            if (errMsg.includes('PERMISSION_DENIED')) {
+            if (isPermissionError(e)) {
               console.warn(`[Firebase] Admin SDK Permission Denied for ${path} query, falling back to Client SDK...`);
               // Reconstruct query on client wrapper
               let clientQ: any = clientDbWrapper.collection(path);
@@ -207,8 +230,7 @@ export const db: any = {
                 const d = await adminDoc.get();
                 return { exists: d.exists, id: d.id, data: () => d.data() };
               } catch (e: any) {
-                const errMsg = e?.message || String(e);
-                if (errMsg.includes('PERMISSION_DENIED')) {
+                if (isPermissionError(e)) {
                   console.warn(`[Firebase] Admin SDK Permission Denied for ${path}/${id}, falling back to Client SDK...`);
                   return clientDbWrapper.collection(path).doc(id).get();
                 }
@@ -216,18 +238,15 @@ export const db: any = {
               }
             },
             set: (data: any) => adminDoc.set(data).catch((e: any) => {
-              const errMsg = e?.message || String(e);
-              if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).set(data);
+              if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).set(data);
               throw e;
             }),
             update: (data: any) => adminDoc.update(data).catch((e: any) => {
-              const errMsg = e?.message || String(e);
-              if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).update(data);
+              if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).update(data);
               throw e;
             }),
             delete: () => adminDoc.delete().catch((e: any) => {
-              const errMsg = e?.message || String(e);
-              if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).doc(id).delete();
+              if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).delete();
               throw e;
             })
           };
@@ -237,8 +256,7 @@ export const db: any = {
             const ref = await adminCol.add(data);
             return { id: ref.id };
           } catch (e: any) {
-            const errMsg = e?.message || String(e);
-            if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).add(data);
+            if (isPermissionError(e)) return clientDbWrapper.collection(path).add(data);
             throw e;
           }
         },
@@ -251,8 +269,7 @@ export const db: any = {
               docs: snapshot.docs.map((d: any) => ({ id: d.id, data: () => d.data() }))
             };
           } catch (e: any) {
-            const errMsg = e?.message || String(e);
-            if (errMsg.includes('PERMISSION_DENIED')) return clientDbWrapper.collection(path).get();
+            if (isPermissionError(e)) return clientDbWrapper.collection(path).get();
             throw e;
           }
         },

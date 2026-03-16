@@ -8,7 +8,7 @@ interface SEOProps {
 
 const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
   useEffect(() => {
-    let title = 'Verdiq | AI-Powered Music Analysis';
+    let title = 'Verdiq | Music Critic';
     let description = 'Verdiq is an AI-powered music review and analysis platform for independent artists and producers.';
     let ogTitle = title;
     let ogDescription = description;
@@ -59,7 +59,7 @@ const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
       title = 'Verdiq Pricing | Studio Plans for Artists';
       description = 'Choose the right plan for your music career. Get professional reviews, podcasts, and technical audits.';
     } else if (view === 'landing') {
-      title = 'Verdiq | Your Music, Immortalized by AI';
+      title = 'Verdiq | Music Critic';
       description = 'Professional music reviews, spectral audits, and industry podcasts for independent artists. Submit your track today.';
     }
 
