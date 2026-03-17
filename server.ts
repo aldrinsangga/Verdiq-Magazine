@@ -162,7 +162,7 @@ async function startServer() {
     });
 
     // Explicitly serve feature images to prevent any MIME type confusion
-    app.get(["/editorial-feature.svg", "/podcast-feature.svg"], (req, res) => {
+    app.get(["/editorial-feature.jpg", "/podcast-feature.jpg"], (req, res) => {
       const fileName = req.path.substring(1);
       const pPath = path.join(publicPath, fileName);
       const dPath = path.join(distPath, fileName);
@@ -170,15 +170,17 @@ async function startServer() {
       console.log(`[Image Request] ${fileName} - Searching in ${pPath} and ${dPath}`);
       
       if (fs.existsSync(pPath)) {
-        res.setHeader("Content-Type", "image/svg+xml");
+        res.setHeader("Content-Type", "image/jpeg");
         return res.sendFile(pPath);
       }
       if (fs.existsSync(dPath)) {
-        res.setHeader("Content-Type", "image/svg+xml");
+        res.setHeader("Content-Type", "image/jpeg");
         return res.sendFile(dPath);
       }
       res.status(404).send("Image not found");
     });
+
+    // Force deployment change: 2026-03-17 15:00
 
     app.get("/review/:id", handleDynamicSEO);
     app.get("/podcasts/:id", handleDynamicSEO);

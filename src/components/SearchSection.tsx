@@ -432,7 +432,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             {/* Magazine Screenshot Simulation */}
             <div className="relative z-10 rounded-[24px] overflow-hidden border border-white/10 shadow-2xl bg-slate-950 transform -rotate-2 hover:rotate-0 transition-transform duration-700 group/mag min-h-[400px] flex items-center justify-center">
               <img 
-                src="/editorial-feature.svg" 
+                src="/editorial-feature.jpg" 
                 alt="Editorial Feature" 
                 className="w-full h-auto block object-contain"
                 onError={(e) => {
@@ -446,7 +446,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                         </div>
                         <p class="text-emerald-500 font-black uppercase tracking-widest text-xs mb-2">Image Required</p>
                         <p class="text-slate-500 text-[10px] leading-relaxed max-w-[200px]">
-                          Please upload your photo to the <b>public</b> folder and rename it to <b>editorial-feature.svg</b>
+                          Please upload your photo to the <b>public</b> folder and rename it to <b>editorial-feature.jpg</b>
                         </p>
                       </div>
                     `;
@@ -459,7 +459,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             <div className="absolute -bottom-4 -right-2 md:-right-8 z-20 w-3/4 rounded-[32px] overflow-hidden border border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.2)] bg-slate-950 transform rotate-3 hover:rotate-0 transition-transform duration-700 group/pod">
               <div className="relative p-6 md:p-8 min-h-[220px] flex flex-col justify-end">
                 <img 
-                  src="/podcast-feature.svg" 
+                  src="/podcast-feature.jpg" 
                   alt="Podcast Feature" 
                   className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
                   onError={(e) => {
@@ -470,7 +470,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                         <div class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
                           <p class="text-emerald-500 font-black uppercase tracking-widest text-[8px] mb-1">Podcast Image Missing</p>
                           <p class="text-slate-500 text-[8px] leading-tight max-w-[120px]">
-                            Upload to <b>public</b> as <b>podcast-feature.svg</b>
+                            Upload to <b>public</b> as <b>podcast-feature.jpg</b>
                           </p>
                         </div>
                       `;
