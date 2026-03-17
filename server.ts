@@ -31,27 +31,6 @@ async function startServer() {
   
   console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
   
-  // Explicitly serve feature images at the very beginning to ensure they are available
-  app.get("/editorial-feature.jpg", (req, res) => {
-    const p = path.join(__dirname, "public", "editorial-feature.jpg");
-    if (fs.existsSync(p)) {
-      res.setHeader("Content-Type", "image/jpeg");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.sendFile(p);
-    }
-    res.status(404).send("Editorial image not found on server");
-  });
-
-  app.get("/podcast-feature.jpg", (req, res) => {
-    const p = path.join(__dirname, "public", "podcast-feature.jpg");
-    if (fs.existsSync(p)) {
-      res.setHeader("Content-Type", "image/jpeg");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.sendFile(p);
-    }
-    res.status(404).send("Podcast image not found on server");
-  });
-
   // Debug logging for image requests
   app.use((req, res, next) => {
     if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {

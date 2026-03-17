@@ -3,7 +3,6 @@ import { Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Waveform from './Waveform';
 import { storage, auth } from '../firebase';
-import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 
 const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, onNavigate }) => {
   const [formData, setFormData] = useState({
@@ -28,53 +27,9 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
 
   const [progress, setProgress] = useState(0);
 
-  // Storage Image URLs
-  const [editorialUrl, setEditorialUrl] = useState('/editorial-feature.jpg');
-  const [podcastUrl, setPodcastUrl] = useState('/podcast-feature.jpg');
-
-  useEffect(() => {
-    const loadStorageImages = async () => {
-      try {
-        // Try multiple possible paths in storage
-        const paths = ['assets/editorial-feature.jpg', 'editorial-feature.jpg'];
-        const podcastPaths = ['assets/podcast-feature.jpg', 'podcast-feature.jpg'];
-        
-        let eUrl = '/editorial-feature.jpg';
-        let pUrl = '/podcast-feature.jpg';
-
-        // Try to find editorial image
-        for (const path of paths) {
-          try {
-            const r = ref(storage, path);
-            eUrl = await getDownloadURL(r);
-            console.log(`[Storage] Found editorial at ${path}: ${eUrl}`);
-            break;
-          } catch (e) {
-            console.log(`[Storage] Not found at ${path}`);
-          }
-        }
-
-        // Try to find podcast image
-        for (const path of podcastPaths) {
-          try {
-            const r = ref(storage, path);
-            pUrl = await getDownloadURL(r);
-            console.log(`[Storage] Found podcast at ${path}: ${pUrl}`);
-            break;
-          } catch (e) {
-            console.log(`[Storage] Not found at ${path}`);
-          }
-        }
-        
-        setEditorialUrl(eUrl);
-        setPodcastUrl(pUrl);
-      } catch (error) {
-        console.error("Error loading storage images", error);
-      }
-    };
-    
-    loadStorageImages();
-  }, []);
+  // Generic Feature Images
+  const editorialUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1200"; // Professional music studio / review vibe
+  const podcastUrl = "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?auto=format&fit=crop&q=80&w=1200"; // Vintage microphone / broadcast vibe
 
   useEffect(() => {
     if (isLoading) {
@@ -484,38 +439,8 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
               <img 
                 src={editorialUrl} 
                 alt="Editorial Feature" 
-                className="w-full h-auto block object-contain"
+                className="w-full h-auto block object-contain grayscale opacity-80 group-hover/mag:grayscale-0 group-hover/mag:opacity-100 transition-all duration-700"
                 referrerPolicy="no-referrer"
-                crossOrigin="anonymous"
-                data-fallback-tried="false"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  if (target.getAttribute('data-fallback-tried') === 'false') {
-                    target.setAttribute('data-fallback-tried', 'true');
-                    const fallbackSrc = '/editorial-feature.jpg';
-                    console.log(`[Image Fallback] Retrying editorial image from local path: ${fallbackSrc}`);
-                    target.src = fallbackSrc;
-                    return;
-                  }
-                  
-                  // If already tried fallback and still failing, show error UI
-                  console.error(`[Image Error] Editorial image failed to load even after fallback. Current src: ${target.src}`);
-                  target.style.display = 'none';
-                  const container = target.parentElement;
-                  if (container) {
-                    container.innerHTML = `
-                      <div class="flex flex-col items-center justify-center p-12 text-center">
-                        <div class="w-16 h-16 mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                          <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        </div>
-                        <p class="text-emerald-500 font-black uppercase tracking-widest text-xs mb-2">Image Not Found</p>
-                        <p class="text-slate-500 text-[10px] leading-relaxed max-w-[200px]">
-                          The editorial feature image could not be loaded from Storage or the local public folder.
-                        </p>
-                      </div>
-                    `;
-                  }
-                }}
               />
             </div>
             
@@ -525,35 +450,8 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                 <img 
                   src={podcastUrl} 
                   alt="Podcast Feature" 
-                  className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
+                  className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity grayscale group-hover/pod:grayscale-0"
                   referrerPolicy="no-referrer"
-                  crossOrigin="anonymous"
-                  data-fallback-tried="false"
-                  onError={(e) => {
-                    const target = e.currentTarget;
-                    if (target.getAttribute('data-fallback-tried') === 'false') {
-                      target.setAttribute('data-fallback-tried', 'true');
-                      const fallbackSrc = '/podcast-feature.jpg';
-                      console.log(`[Image Fallback] Retrying podcast image from local path: ${fallbackSrc}`);
-                      target.src = fallbackSrc;
-                      return;
-                    }
-                    
-                    // If already tried fallback and still failing, show error UI
-                    console.error(`[Image Error] Podcast image failed to load even after fallback. Current src: ${target.src}`);
-                    target.style.display = 'none';
-                    const container = target.parentElement;
-                    if (container) {
-                      container.innerHTML = `
-                        <div class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-                          <p class="text-emerald-500 font-black uppercase tracking-widest text-[8px] mb-1">Podcast Image Missing</p>
-                          <p class="text-slate-500 text-[8px] leading-tight max-w-[120px]">
-                            Upload to <b>public</b> as <b>podcast-feature.jpg</b>
-                          </p>
-                        </div>
-                      `;
-                    }
-                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
                 
