@@ -152,8 +152,32 @@ async function startServer() {
         distFiles,
         publicFiles,
         cwd: process.cwd(),
-        dirname: __dirname
+        dirname: __dirname,
+        nodeEnv: process.env.NODE_ENV,
+        env: {
+          APP_URL: process.env.APP_URL,
+          SHARED_APP_URL: process.env.SHARED_APP_URL
+        }
       });
+    });
+
+    // Explicitly serve feature images to prevent any MIME type confusion
+    app.get(["/editorial-feature.jpg", "/podcast-feature.jpg"], (req, res) => {
+      const fileName = req.path.substring(1);
+      const pPath = path.join(publicPath, fileName);
+      const dPath = path.join(distPath, fileName);
+      
+      console.log(`[Image Request] ${fileName} - Searching in ${pPath} and ${dPath}`);
+      
+      if (fs.existsSync(pPath)) {
+        res.setHeader("Content-Type", "image/jpeg");
+        return res.sendFile(pPath);
+      }
+      if (fs.existsSync(dPath)) {
+        res.setHeader("Content-Type", "image/jpeg");
+        return res.sendFile(dPath);
+      }
+      res.status(404).send("Image not found");
     });
 
     app.get("/review/:id", handleDynamicSEO);
