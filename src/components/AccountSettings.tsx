@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import MFASetup from './MFASetup';
+import { useNotification } from './NotificationContext';
 
 import { isAdmin } from '../authClient';
 
 const AccountSettings = ({ user, session, onUpdate }) => {
+  const { showNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('profile');
   const [formData, setFormData] = useState({
     name: user.name,
@@ -13,21 +15,21 @@ const AccountSettings = ({ user, session, onUpdate }) => {
 
   const handleProfileUpdate = () => {
     onUpdate({ ...user, name: formData.name, email: formData.email });
-    alert('Profile updated successfully!');
+    showNotification('Profile updated successfully!', 'success');
   };
 
   const handlePasswordChange = () => {
     if (password.new !== password.confirm) {
-      alert('Passwords do not match!');
+      showNotification('Passwords do not match!', 'error');
       return;
     }
     if (password.current !== user.password) {
-      alert('Current password is incorrect!');
+      showNotification('Current password is incorrect!', 'error');
       return;
     }
     onUpdate({ ...user, password: password.new });
     setPassword({ current: '', new: '', confirm: '' });
-    alert('Password updated successfully!');
+    showNotification('Password updated successfully!', 'success');
   };
 
   return (

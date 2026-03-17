@@ -3,6 +3,7 @@ import { Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Waveform from './Waveform';
 import { storage, auth } from '../firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
 
 const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, onNavigate }) => {
   const [formData, setFormData] = useState({
@@ -20,6 +21,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   
   const [hasConsented, setHasConsented] = useState(false);
   const [showConsentError, setShowConsentError] = useState(false);
+  const [error, setError] = useState(null);
   
   const fileInputRef = useRef(null);
   const photoInputRef = useRef(null);
@@ -27,9 +29,39 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
 
   const [progress, setProgress] = useState(0);
 
-  // Generic Feature Images
-  const editorialUrl = "https://firebasestorage.googleapis.com/v0/b/gen-lang-client-0791674486.firebasestorage.app/o/assets%2Feditorial-feature.jpg?alt=media&token=a9071c50-82cf-4488-ad55-765671a18744"; // Professional music studio / review vibe
-  const podcastUrl = "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?auto=format&fit=crop&q=80&w=1200"; // Vintage microphone / broadcast vibe
+  // Storage Image URLs
+  const [editorialUrl, setEditorialUrl] = useState("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1200");
+  const [podcastUrl, setPodcastUrl] = useState("https://images.unsplash.com/photo-1478737270239-2f02b77fc618?auto=format&fit=crop&q=80&w=1200");
+
+  useEffect(() => {
+    const loadStorageImages = async () => {
+      try {
+        // Try to find editorial image in assets folder
+        try {
+          const eRef = ref(storage, 'assets/editorial-feature.jpg');
+          const eUrl = await getDownloadURL(eRef);
+          setEditorialUrl(eUrl);
+          console.log(`[Storage] Loaded public editorial: ${eUrl}`);
+        } catch (e) {
+          console.log("[Storage] Custom editorial not found in assets/, using generic.");
+        }
+
+        // Try to find podcast image in assets folder
+        try {
+          const pRef = ref(storage, 'assets/podcast-feature.jpg');
+          const pUrl = await getDownloadURL(pRef);
+          setPodcastUrl(pUrl);
+          console.log(`[Storage] Loaded public podcast: ${pUrl}`);
+        } catch (e) {
+          console.log("[Storage] Custom podcast not found in assets/, using generic.");
+        }
+      } catch (error) {
+        console.error("Error checking storage images", error);
+      }
+    };
+    
+    loadStorageImages();
+  }, []);
 
   useEffect(() => {
     if (isLoading) {
@@ -79,6 +111,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    setError(null);
     
     if (!hasConsented) {
       setShowConsentError(true);
@@ -88,23 +121,31 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
 
     // Validate required fields: track file, track name, artist name, cover art
     if (!selectedFile) {
-      alert('Please upload a track file');
+      setError('Please upload a track file to begin analysis.');
       return;
     }
+    
+    // Check file size (20MB limit)
+    const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+    if (selectedFile.size > MAX_SIZE) {
+      setError('The audio file is too large. Please upload a file smaller than 20MB for processing.');
+      return;
+    }
+
     if (!formData.trackName.trim()) {
-      alert('Please enter a track name');
+      setError('Please enter the name of the track.');
       return;
     }
     if (!formData.artistName.trim()) {
-      alert('Please enter an artist name');
+      setError('Please enter the artist name.');
       return;
     }
     if (!featuredPhoto) {
-      alert('Please upload cover art');
+      setError('Please upload cover art for your track.');
       return;
     }
     if (!artistPhoto) {
-      alert('Please upload an artist photo');
+      setError('Please upload an artist photo for the editorial feature.');
       return;
     }
     
@@ -366,6 +407,19 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             </button>
 
             <AnimatePresence>
+              {error && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                  className="mt-4 px-4 py-3 bg-red-500/10 border border-red-500/40 rounded-2xl flex items-center gap-3 shadow-lg shadow-red-500/5"
+                >
+                  <svg className="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="text-red-400 text-xs font-medium">{error}</p>
+                </motion.div>
+              )}
               {showConsentError && (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.9, y: 10 }}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, Reply } from 'lucide-react';
 import { getAuthHeaders } from '../authClient';
+import { useNotification } from './NotificationContext';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -29,6 +30,7 @@ const AdminDashboard = ({
   onDeleteStyleGuide, 
   onNavigate 
 }: AdminDashboardProps) => {
+  const { showNotification } = useNotification();
   const [activeTab, setActiveTab] = useState('users');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
@@ -122,7 +124,7 @@ const AdminDashboard = ({
       setEditingReview(null);
     } catch (error) {
       console.error('Error saving review:', error);
-      alert('Failed to save review: ' + (error.message || 'Unknown error'));
+      showNotification('Failed to save review: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setPublishingReview(null);
     }
@@ -137,7 +139,7 @@ const AdminDashboard = ({
       setEditingUser(null);
     } catch (error) {
       console.error('Error saving user:', error);
-      alert('Failed to save user: ' + (error.message || 'Unknown error'));
+      showNotification('Failed to save user: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setSavingUser(false);
     }
@@ -158,7 +160,7 @@ const AdminDashboard = ({
       setCreditsToAdd(10);
     } catch (error) {
       console.error('Error adding credits:', error);
-      alert('Failed to add credits: ' + (error.message || 'Unknown error'));
+      showNotification('Failed to add credits: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setAddingCredits(false);
     }
@@ -275,7 +277,7 @@ const AdminDashboard = ({
       await onUpdateUser(updatedUser);
     } catch (error) {
       console.error('Error toggling user status:', error);
-      alert('Failed to update user status: ' + (error.message || 'Unknown error'));
+      showNotification('Failed to update user status: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setTogglingStatus(null);
     }
@@ -291,7 +293,7 @@ const AdminDashboard = ({
       await onUpdateReview(updatedReview, userId);
     } catch (error) {
       console.error('Error toggling publish status:', error);
-      alert('Failed to update publish status: ' + (error.message || 'Unknown error'));
+      showNotification('Failed to update publish status: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setPublishingReview(null);
     }
@@ -306,7 +308,7 @@ const AdminDashboard = ({
       await onDeleteUser(userId);
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert('Failed to delete user: ' + (error.message || 'Unknown error'));
+      showNotification('Failed to delete user: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setDeletingUser(null);
     }
@@ -340,7 +342,7 @@ const AdminDashboard = ({
 
   const handleSaveStyleGuide = async () => {
     if (!styleGuideForm.title || !styleGuideForm.content) {
-      alert('Title and content are required');
+      showNotification('Title and content are required', 'warning');
       return;
     }
 
@@ -354,7 +356,7 @@ const AdminDashboard = ({
       setIsStyleModalOpen(false);
     } catch (error) {
       console.error('Error saving style guide:', error);
-      alert('Failed to save style guide');
+      showNotification('Failed to save style guide', 'error');
     } finally {
       setSavingStyle(false);
     }
@@ -367,7 +369,7 @@ const AdminDashboard = ({
       await onDeleteStyleGuide(id);
     } catch (error) {
       console.error('Error deleting style guide:', error);
-      alert('Failed to delete style guide');
+      showNotification('Failed to delete style guide', 'error');
     } finally {
       setDeletingStyle(null);
     }

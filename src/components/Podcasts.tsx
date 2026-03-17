@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Share2, TrendingUp, Clock, Headphones, SkipBack, SkipForward, Volume2, VolumeX, RotateCcw, RotateCw, Settings, ListMusic } from 'lucide-react';
+import { useNotification } from './NotificationContext';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
   : '';
 
 const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAudio }) => {
+  const { showNotification } = useNotification();
   // Filter reviews that have podcast and are published
   const podcastReviews = reviews.filter(r => (r.podcastAudio || r.hasPodcast || r.podcastAudioUrl) && r.isPublished && !r.isDeleted);
   const [activeId, setActiveId] = useState(initialPodcastId || podcastReviews[0]?.id || null);
@@ -254,7 +256,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
-    alert('Link copied to clipboard!');
+    showNotification('Link copied to clipboard!', 'success');
   };
 
   if (podcastReviews.length === 0) {

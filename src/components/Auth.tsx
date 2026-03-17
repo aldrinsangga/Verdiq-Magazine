@@ -50,8 +50,7 @@ const Auth = ({ onLogin, onClose }) => {
         }
       } else if (mode === 'forgot') {
         await requestPasswordReset(email);
-        setError('');
-        alert('If an account exists with this email, you will receive a reset link.');
+        setError('If an account exists with this email, you will receive a reset link shortly.');
         setMode('login');
       }
     } catch (err) {
@@ -117,7 +116,7 @@ const Auth = ({ onLogin, onClose }) => {
             onClick={async () => {
               try {
                 await sendVerificationEmail();
-                alert('Verification email resent!');
+                setError('Verification email resent! Please check your inbox.');
               } catch (err) {
                 setError(err.message);
               }

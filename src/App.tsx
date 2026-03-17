@@ -5,6 +5,9 @@ import MainContent from './components/MainContent';
 import SupportWidget from './components/SupportWidget';
 import SEO from './components/SEO';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
+import ErrorBoundary from './components/ErrorBoundary';
+import Notification, { NotificationType } from './components/Notification';
+import { NotificationProvider, useNotification } from './components/NotificationContext';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { analyzeTrack, generatePodcast } from './services/geminiService';
@@ -56,7 +59,8 @@ const getAuthHeadersLocal = async () => {
   return await getAuthHeaders();
 };
 
-function App() {
+function AppContent() {
+  const { showNotification } = useNotification();
   // Map views to URL paths
   const viewToPath = {
     'landing': '/',
@@ -611,8 +615,10 @@ function App() {
           reader.onloadend = () => resolve(reader.result);
           reader.readAsDataURL(data.featuredPhoto);
         });
-        imageBase64 = (imgData as string).split(',')[1];
-        imageMimeType = data.featuredPhoto.type;
+        const rawBase64 = (imgData as string);
+        // Compress cover art
+        imageBase64 = (await compressImage(rawBase64, 1200, 1200) as string).split(',')[1];
+        imageMimeType = 'image/jpeg';
       }
 
       // Convert artist photo if provided
@@ -624,8 +630,10 @@ function App() {
           reader.onloadend = () => resolve(reader.result);
           reader.readAsDataURL(data.artistPhoto);
         });
-        artistPhotoBase64 = (artistImgData as string).split(',')[1];
-        artistPhotoMimeType = data.artistPhoto.type;
+        const rawArtistBase64 = (artistImgData as string);
+        // Compress artist photo
+        artistPhotoBase64 = (await compressImage(rawArtistBase64, 1000, 1000) as string).split(',')[1];
+        artistPhotoMimeType = 'image/jpeg';
       }
 
       setStatus("Writing editorial draft...");
@@ -745,7 +753,14 @@ function App() {
       navigate('review', reviewForStorage.id);
     } catch (error) {
       console.error(error);
-      alert(`Studio Error: ${error.message || 'Verify your file and try again.'}`);
+      const errorMessage = error.message || '';
+      if (errorMessage.includes('413')) {
+        showNotification("The file or data is too large for the studio to process. Try using a smaller audio file or lower resolution images.", "error");
+      } else if (errorMessage.includes('quota')) {
+        showNotification("We've hit our daily processing limit. Please try again tomorrow.", "warning");
+      } else {
+        showNotification(`Studio Error: ${error.message || 'Verify your file and try again.'}`, "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -777,7 +792,7 @@ function App() {
 
       if (!review) {
         console.error('Review not found in history:', reviewId);
-        alert('Could not find this review in your history. Please try refreshing the page.');
+        showNotification('Could not find this review in your history. Please try refreshing the page.', 'error');
         return;
       }
 
@@ -826,11 +841,11 @@ function App() {
         navigate('magazine');
       } else {
         const errorData = await res.json().catch(() => ({}));
-        alert(`Failed to publish: ${errorData.message || 'Server error'}`);
+        showNotification(`Failed to publish: ${errorData.message || 'Server error'}`, 'error');
       }
     } catch (error) {
       console.error('handlePublish error:', error);
-      alert('An unexpected error occurred while publishing. Please try again.');
+      showNotification('An unexpected error occurred while publishing. Please try again.', 'error');
     }
   };
 
@@ -882,11 +897,11 @@ function App() {
         }
       } else {
         const errorData = await res.json().catch(() => ({}));
-        alert(`Failed to save changes: ${errorData.message || 'Server error'}`);
+        showNotification(`Failed to save changes: ${errorData.message || 'Server error'}`, 'error');
       }
     } catch (error) {
       console.error('handleUpdateReview error:', error);
-      alert('An unexpected error occurred while saving changes. Please try again.');
+      showNotification('An unexpected error occurred while saving changes. Please try again.', 'error');
     }
   };
 
@@ -901,7 +916,7 @@ function App() {
       });
 
       if (res.status === 428) {
-        alert('Re-authentication required for this action. Please try again.');
+        showNotification('Re-authentication required for this action. Please try again.', 'warning');
         throw new Error('Re-authentication required');
       }
 
@@ -930,7 +945,7 @@ function App() {
 
   const handleDeleteUser = async (userId) => {
     if (userId === currentUser?.id) {
-      alert("Cannot terminate active session.");
+      showNotification("Cannot terminate active session.", "warning");
       return;
     }
     if (window.confirm("Permanently terminate this artist account? All studio history will be lost.")) {
@@ -984,84 +999,94 @@ function App() {
 
   return (
     <PayPalScriptProvider options={{ 
-      clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "test",
-      currency: "USD",
-      intent: "capture"
-    }}>
-      <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
-      <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
-      <Navigation 
-        view={view}
-        currentUser={currentUser}
-        creditStatus={creditStatus}
-        mobileMenuOpen={mobileMenuOpen}
-        setMobileMenuOpen={setMobileMenuOpen}
-        navigate={navigate}
-        handleLogout={handleLogout}
-      />
+        clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "test",
+        currency: "USD",
+        intent: "capture"
+      }}>
+        <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
+        <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
+        <Navigation 
+          view={view}
+          currentUser={currentUser}
+          creditStatus={creditStatus}
+          mobileMenuOpen={mobileMenuOpen}
+          setMobileMenuOpen={setMobileMenuOpen}
+          navigate={navigate}
+          handleLogout={handleLogout}
+        />
 
-      {isInitializing ? (
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Initializing Studio</p>
+        {isInitializing ? (
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Initializing Studio</p>
+            </div>
           </div>
+        ) : (
+          <div className="flex-grow">
+            <MainContent 
+              view={view}
+              loading={loading}
+              status={status}
+              currentUser={currentUser}
+              currentReview={currentReview}
+              currentAudioFile={currentAudioFile}
+              allReviews={allReviews}
+              users={users}
+              styleGuides={styleGuides}
+              creditStatus={creditStatus}
+              targetPodcastId={targetPodcastId}
+              setUsers={setUsers}
+              setAllReviews={setAllReviews}
+              setTargetPodcastId={setTargetPodcastId}
+              handleAnalyze={handleAnalyze}
+              handleLogin={handleLogin}
+              handleUpdateReview={handleUpdateReview}
+              handlePublish={handlePublish}
+              handleUpdateProfile={handleUpdateProfile}
+              handleDeleteUser={handleDeleteUser}
+              handleAdminUpdateReview={handleAdminUpdateReview}
+              handleAddStyleGuide={handleAddStyleGuide}
+              handleUpdateStyleGuide={handleUpdateStyleGuide}
+              handleDeleteStyleGuide={handleDeleteStyleGuide}
+              handleLogout={handleLogout}
+              fetchReviewWithAudio={fetchReviewWithAudio}
+              navigateToReview={navigateToReview}
+              navigate={navigate}
+            />
+          </div>
+        )}
+
+        <Footer navigate={navigate} />
+
+        {/* Support Widget */}
+        {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing') && (
+          <SupportWidget currentUser={currentUser} />
+        )}
+
+        {/* Insufficient Credits Modal */}
+        <InsufficientCreditsModal
+          isOpen={showCreditModal}
+          onClose={() => setShowCreditModal(false)}
+          onBuyCredits={() => { setShowCreditModal(false); navigate('pricing'); }}
+          onUpgrade={() => { setShowCreditModal(false); navigate('pricing'); }}
+          currentCredits={creditStatus?.credits || 0}
+          requiredCredits={creditModalConfig.required}
+          action={creditModalConfig.action}
+          isFreeUser={creditModalConfig.isFreeUser}
+        />
         </div>
-      ) : (
-        <div className="flex-grow">
-          <MainContent 
-            view={view}
-            loading={loading}
-            status={status}
-            currentUser={currentUser}
-            currentReview={currentReview}
-            currentAudioFile={currentAudioFile}
-            allReviews={allReviews}
-            users={users}
-            styleGuides={styleGuides}
-            creditStatus={creditStatus}
-            targetPodcastId={targetPodcastId}
-            setUsers={setUsers}
-            setAllReviews={setAllReviews}
-            setTargetPodcastId={setTargetPodcastId}
-            handleAnalyze={handleAnalyze}
-            handleLogin={handleLogin}
-            handleUpdateReview={handleUpdateReview}
-            handlePublish={handlePublish}
-            handleUpdateProfile={handleUpdateProfile}
-            handleDeleteUser={handleDeleteUser}
-            handleAdminUpdateReview={handleAdminUpdateReview}
-            handleAddStyleGuide={handleAddStyleGuide}
-            handleUpdateStyleGuide={handleUpdateStyleGuide}
-            handleDeleteStyleGuide={handleDeleteStyleGuide}
-            handleLogout={handleLogout}
-            fetchReviewWithAudio={fetchReviewWithAudio}
-            navigateToReview={navigateToReview}
-            navigate={navigate}
-          />
-        </div>
-      )}
+      </PayPalScriptProvider>
+  );
+}
 
-      <Footer navigate={navigate} />
-
-      {/* Support Widget */}
-      {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing') && (
-        <SupportWidget currentUser={currentUser} />
-      )}
-
-      {/* Insufficient Credits Modal */}
-      <InsufficientCreditsModal
-        isOpen={showCreditModal}
-        onClose={() => setShowCreditModal(false)}
-        onBuyCredits={() => { setShowCreditModal(false); navigate('pricing'); }}
-        onUpgrade={() => { setShowCreditModal(false); navigate('pricing'); }}
-        currentCredits={creditStatus?.credits || 0}
-        requiredCredits={creditModalConfig.required}
-        action={creditModalConfig.action}
-        isFreeUser={creditModalConfig.isFreeUser}
-      />
-      </div>
-    </PayPalScriptProvider>
+function App() {
+  return (
+    <ErrorBoundary>
+      <NotificationProvider>
+        <AppContent />
+      </NotificationProvider>
+    </ErrorBoundary>
   );
 }
 

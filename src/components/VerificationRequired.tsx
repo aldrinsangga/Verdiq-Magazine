@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, RefreshCw, LogOut } from 'lucide-react';
 import { sendVerificationEmail, logout } from '../authClient';
+import { useNotification } from './NotificationContext';
 
 interface VerificationRequiredProps {
   email: string;
@@ -8,6 +9,7 @@ interface VerificationRequiredProps {
 }
 
 const VerificationRequired: React.FC<VerificationRequiredProps> = ({ email, onLogout }) => {
+  const { showNotification } = useNotification();
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -18,7 +20,7 @@ const VerificationRequired: React.FC<VerificationRequiredProps> = ({ email, onLo
       setSent(true);
       setTimeout(() => setSent(false), 5000);
     } catch (err) {
-      alert(err.message);
+      showNotification(err.message, 'error');
     } finally {
       setLoading(false);
     }
