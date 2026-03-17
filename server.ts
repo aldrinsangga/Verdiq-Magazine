@@ -162,7 +162,7 @@ async function startServer() {
     });
 
     // Explicitly serve feature images to prevent any MIME type confusion
-    app.get(["/editorial-feature.jpg", "/podcast-feature.jpg"], (req, res) => {
+    app.get(["/editorial-feature-v3.jpg", "/podcast-feature-v3.jpg"], (req, res) => {
       const fileName = req.path.substring(1);
       const pPath = path.join(publicPath, fileName);
       const dPath = path.join(distPath, fileName);
