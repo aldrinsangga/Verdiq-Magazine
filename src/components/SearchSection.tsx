@@ -28,7 +28,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   const [progress, setProgress] = useState(0);
 
   // Generic Feature Images
-  const editorialUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1200"; // Professional music studio / review vibe
+  const editorialUrl = "https://firebasestorage.googleapis.com/v0/b/gen-lang-client-0791674486.firebasestorage.app/o/assets%2Feditorial-feature.jpg?alt=media&token=a9071c50-82cf-4488-ad55-765671a18744"; // Professional music studio / review vibe
   const podcastUrl = "https://images.unsplash.com/photo-1478737270239-2f02b77fc618?auto=format&fit=crop&q=80&w=1200"; // Vintage microphone / broadcast vibe
 
   useEffect(() => {
