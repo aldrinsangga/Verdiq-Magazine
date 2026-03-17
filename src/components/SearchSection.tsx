@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Waveform from './Waveform';
+import { storage, auth } from '../firebase';
+import { ref, getDownloadURL, uploadBytes } from 'firebase/storage';
 
 const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, onNavigate }) => {
   const [formData, setFormData] = useState({
@@ -25,6 +27,81 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   const artistPhotoInputRef = useRef(null);
 
   const [progress, setProgress] = useState(0);
+
+  // Storage Image URLs
+  const [editorialUrl, setEditorialUrl] = useState('/editorial-feature.jpg');
+  const [podcastUrl, setPodcastUrl] = useState('/podcast-feature.jpg');
+  const [isFixing, setIsFixing] = useState(false);
+  const [fixStatus, setFixStatus] = useState(null); // 'success', 'error'
+
+  const isAdmin = auth.currentUser?.email === 'verdiqmag@gmail.com';
+
+  useEffect(() => {
+    const loadStorageImages = async () => {
+      try {
+        const editorialRef = ref(storage, 'assets/editorial-feature.jpg');
+        const podcastRef = ref(storage, 'assets/podcast-feature.jpg');
+        
+        const [eUrl, pUrl] = await Promise.all([
+          getDownloadURL(editorialRef).catch(() => '/editorial-feature.jpg'),
+          getDownloadURL(podcastRef).catch(() => '/podcast-feature.jpg')
+        ]);
+        
+        setEditorialUrl(eUrl);
+        setPodcastUrl(pUrl);
+      } catch (error) {
+        console.error("Error loading storage images", error);
+      }
+    };
+    
+    loadStorageImages();
+  }, []);
+
+  const fixImagesInStorage = async () => {
+    if (!isAdmin) return;
+    setIsFixing(true);
+    setFixStatus(null);
+    
+    try {
+      // Fetch the local images as blobs
+      const [eRes, pRes] = await Promise.all([
+        fetch('/editorial-feature.jpg'),
+        fetch('/podcast-feature.jpg')
+      ]);
+      
+      if (!eRes.ok || !pRes.ok) throw new Error("Local images not found");
+      
+      const [eBlob, pBlob] = await Promise.all([
+        eRes.blob(),
+        pRes.blob()
+      ]);
+      
+      // Upload to Storage
+      const editorialRef = ref(storage, 'assets/editorial-feature.jpg');
+      const podcastRef = ref(storage, 'assets/podcast-feature.jpg');
+      
+      await Promise.all([
+        uploadBytes(editorialRef, eBlob),
+        uploadBytes(podcastRef, pBlob)
+      ]);
+      
+      // Refresh URLs
+      const [eUrl, pUrl] = await Promise.all([
+        getDownloadURL(editorialRef),
+        getDownloadURL(podcastRef)
+      ]);
+      
+      setEditorialUrl(eUrl);
+      setPodcastUrl(pUrl);
+      setFixStatus('success');
+    } catch (error) {
+      console.error("Error fixing images", error);
+      setFixStatus('error');
+    } finally {
+      setIsFixing(false);
+      setTimeout(() => setFixStatus(null), 5000);
+    }
+  };
 
   useEffect(() => {
     if (isLoading) {
@@ -432,12 +509,20 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             {/* Magazine Screenshot Simulation */}
             <div className="relative z-10 rounded-[24px] overflow-hidden border border-white/10 shadow-2xl bg-slate-950 transform -rotate-2 hover:rotate-0 transition-transform duration-700 group/mag min-h-[400px] flex items-center justify-center">
               <img 
-                src="/editorial-feature.jpg" 
+                src={editorialUrl} 
                 alt="Editorial Feature" 
                 className="w-full h-auto block object-contain"
                 onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const container = e.currentTarget.parentElement;
+                  const target = e.currentTarget;
+                  const localPath = '/editorial-feature.jpg';
+                  // If it's not already the local path, try falling back to it
+                  if (!target.src.endsWith(localPath)) {
+                    target.src = localPath;
+                    return;
+                  }
+                  // If local path also fails, hide and show error message
+                  target.style.display = 'none';
+                  const container = target.parentElement;
                   if (container) {
                     container.innerHTML = `
                       <div class="flex flex-col items-center justify-center p-12 text-center">
@@ -459,12 +544,20 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             <div className="absolute -bottom-4 -right-2 md:-right-8 z-20 w-3/4 rounded-[32px] overflow-hidden border border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.2)] bg-slate-950 transform rotate-3 hover:rotate-0 transition-transform duration-700 group/pod">
               <div className="relative p-6 md:p-8 min-h-[220px] flex flex-col justify-end">
                 <img 
-                  src="/podcast-feature.jpg" 
+                  src={podcastUrl} 
                   alt="Podcast Feature" 
                   className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
                   onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    const container = e.currentTarget.parentElement;
+                    const target = e.currentTarget;
+                    const localPath = '/podcast-feature.jpg';
+                    // If it's not already the local path, try falling back to it
+                    if (!target.src.endsWith(localPath)) {
+                      target.src = localPath;
+                      return;
+                    }
+                    // If local path also fails, hide and show error message
+                    target.style.display = 'none';
+                    const container = target.parentElement;
                     if (container) {
                       container.innerHTML = `
                         <div class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
@@ -712,6 +805,34 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-emerald-500/30 rounded-full blur-[160px]" />
         <div className="absolute top-3/4 left-1/2 w-[800px] h-[800px] bg-emerald-900/10 rounded-full blur-[200px]" />
       </div>
+
+      {/* Admin Fix Button */}
+      {isAdmin && (
+        <div className="fixed bottom-6 right-6 z-[100]">
+          <button
+            onClick={fixImagesInStorage}
+            disabled={isFixing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-medium backdrop-blur-md transition-all shadow-2xl ${
+              fixStatus === 'success' 
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500' 
+                : fixStatus === 'error'
+                ? 'bg-red-500/20 border-red-500/50 text-red-500'
+                : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            {isFixing ? (
+              <RefreshCw className="w-3 h-3 animate-spin" />
+            ) : fixStatus === 'success' ? (
+              <CheckCircle2 className="w-3 h-3" />
+            ) : fixStatus === 'error' ? (
+              <AlertCircle className="w-3 h-3" />
+            ) : (
+              <RefreshCw className="w-3 h-3" />
+            )}
+            {isFixing ? 'Syncing to Storage...' : fixStatus === 'success' ? 'Synced Successfully' : fixStatus === 'error' ? 'Sync Failed' : 'Sync Images to Storage'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
