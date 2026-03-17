@@ -41,7 +41,9 @@ async function startServer() {
   } else {
     const express = (await import('express')).default;
     const distPath = path.join(__dirname, "dist");
+    const publicPath = path.join(__dirname, "public");
     app.use(express.static(distPath));
+    app.use(express.static(publicPath));
 
     // Dynamic SEO for Social Media Sharing
     const handleDynamicSEO = async (req: any, res: any) => {

@@ -432,7 +432,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             {/* Magazine Screenshot Simulation */}
             <div className="relative z-10 rounded-[24px] overflow-hidden border border-white/10 shadow-2xl bg-slate-950 transform -rotate-2 hover:rotate-0 transition-transform duration-700 group/mag min-h-[400px] flex items-center justify-center">
               <img 
-                src="/340204DC-CC5C-40D5-BC3D-E7339174DA90.jpeg" 
+                src="/editorial-feature.png" 
                 alt="Editorial Feature" 
                 className="w-full h-auto block object-contain"
                 onError={(e) => {
@@ -459,11 +459,22 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
             <div className="absolute -bottom-4 -right-2 md:-right-8 z-20 w-3/4 rounded-[32px] overflow-hidden border border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.2)] bg-slate-950 transform rotate-3 hover:rotate-0 transition-transform duration-700 group/pod">
               <div className="relative p-6 md:p-8 min-h-[220px] flex flex-col justify-end">
                 <img 
-                  src="/66328F82-1091-48E5-87DF-750E5AA79D1A.jpeg" 
+                  src="/podcast-feature.png" 
                   alt="Podcast Feature" 
                   className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
+                    const container = e.currentTarget.parentElement;
+                    if (container) {
+                      container.innerHTML = `
+                        <div class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                          <p class="text-emerald-500 font-black uppercase tracking-widest text-[8px] mb-1">Podcast Image Missing</p>
+                          <p class="text-slate-500 text-[8px] leading-tight max-w-[120px]">
+                            Upload to <b>public</b> as <b>podcast-feature.png</b>
+                          </p>
+                        </div>
+                      `;
+                    }
                   }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
