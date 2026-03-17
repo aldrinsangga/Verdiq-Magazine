@@ -34,7 +34,11 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
     if (activeId) {
       const newPath = `/podcasts/${activeId}`;
       if (window.location.pathname !== newPath) {
-        window.history.pushState({ podcastId: activeId }, '', newPath);
+        try {
+          window.history.pushState({ podcastId: activeId }, '', newPath);
+        } catch (e) {
+          console.error('pushState failed:', e);
+        }
       }
     }
   }, [activeId]);

@@ -42,11 +42,19 @@ class ErrorBoundary extends Component<Props, State> {
 
   private handleReset = () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
-    window.location.href = '/';
+    try {
+      window.location.href = '/';
+    } catch (e) {
+      console.error('Reset failed:', e);
+    }
   };
 
   private handleReload = () => {
-    window.location.reload();
+    try {
+      window.location.reload();
+    } catch (e) {
+      console.error('Reload failed:', e);
+    }
   };
 
   public render() {

@@ -273,7 +273,11 @@ function AppContent() {
     
     // Only update if path actually changed
     if (window.location.pathname !== newPath) {
-      window.history.pushState({ view: newView }, '', newPath);
+      try {
+        window.history.pushState({ view: newView }, '', newPath);
+      } catch (e) {
+        console.error('pushState failed:', e);
+      }
     }
   };
 

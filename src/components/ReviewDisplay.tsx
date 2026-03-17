@@ -175,7 +175,12 @@ const ReviewDisplay = ({
     } catch (error) {
       console.error('PDF Download Error:', error);
       if (confirm('PDF generation failed. Use browser print instead?')) {
-        window.print();
+        try {
+          window.print();
+        } catch (e) {
+          console.error('Print failed:', e);
+          alert('Browser print is not available in this environment.');
+        }
       }
     } finally {
       setIsDownloadingPDF(false);
