@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Waveform from './Waveform';
 import { storage, auth } from '../firebase';
@@ -29,12 +29,8 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   const [progress, setProgress] = useState(0);
 
   // Storage Image URLs
-  const [editorialUrl, setEditorialUrl] = useState('/editorial-feature.jpg');
-  const [podcastUrl, setPodcastUrl] = useState('/podcast-feature.jpg');
-  const [isFixing, setIsFixing] = useState(false);
-  const [fixStatus, setFixStatus] = useState(null); // 'success', 'error'
-
-  const isAdmin = auth.currentUser?.email === 'verdiqmag@gmail.com';
+  const [editorialUrl, setEditorialUrl] = useState(`/editorial-feature.jpg?v=${Date.now()}`);
+  const [podcastUrl, setPodcastUrl] = useState(`/podcast-feature.jpg?v=${Date.now()}`);
 
   useEffect(() => {
     const loadStorageImages = async () => {
@@ -56,52 +52,6 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
     
     loadStorageImages();
   }, []);
-
-  const fixImagesInStorage = async () => {
-    if (!isAdmin) return;
-    setIsFixing(true);
-    setFixStatus(null);
-    
-    try {
-      // Fetch the local images as blobs
-      const [eRes, pRes] = await Promise.all([
-        fetch('/editorial-feature.jpg'),
-        fetch('/podcast-feature.jpg')
-      ]);
-      
-      if (!eRes.ok || !pRes.ok) throw new Error("Local images not found");
-      
-      const [eBlob, pBlob] = await Promise.all([
-        eRes.blob(),
-        pRes.blob()
-      ]);
-      
-      // Upload to Storage
-      const editorialRef = ref(storage, 'assets/editorial-feature.jpg');
-      const podcastRef = ref(storage, 'assets/podcast-feature.jpg');
-      
-      await Promise.all([
-        uploadBytes(editorialRef, eBlob),
-        uploadBytes(podcastRef, pBlob)
-      ]);
-      
-      // Refresh URLs
-      const [eUrl, pUrl] = await Promise.all([
-        getDownloadURL(editorialRef),
-        getDownloadURL(podcastRef)
-      ]);
-      
-      setEditorialUrl(eUrl);
-      setPodcastUrl(pUrl);
-      setFixStatus('success');
-    } catch (error) {
-      console.error("Error fixing images", error);
-      setFixStatus('error');
-    } finally {
-      setIsFixing(false);
-      setTimeout(() => setFixStatus(null), 5000);
-    }
-  };
 
   useEffect(() => {
     if (isLoading) {
@@ -514,9 +464,9 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                 className="w-full h-auto block object-contain"
                 onError={(e) => {
                   const target = e.currentTarget;
-                  const localPath = '/editorial-feature.jpg';
+                  const localPath = `/editorial-feature.jpg?v=${Date.now()}`;
                   // If it's not already the local path, try falling back to it
-                  if (!target.src.endsWith(localPath)) {
+                  if (!target.src.includes('/editorial-feature.jpg')) {
                     target.src = localPath;
                     return;
                   }
@@ -549,9 +499,9 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                   className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    const localPath = '/podcast-feature.jpg';
+                    const localPath = `/podcast-feature.jpg?v=${Date.now()}`;
                     // If it's not already the local path, try falling back to it
-                    if (!target.src.endsWith(localPath)) {
+                    if (!target.src.includes('/podcast-feature.jpg')) {
                       target.src = localPath;
                       return;
                     }
@@ -805,34 +755,6 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
         <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-emerald-500/30 rounded-full blur-[160px]" />
         <div className="absolute top-3/4 left-1/2 w-[800px] h-[800px] bg-emerald-900/10 rounded-full blur-[200px]" />
       </div>
-
-      {/* Admin Fix Button */}
-      {isAdmin && (
-        <div className="fixed bottom-6 right-6 z-[100]">
-          <button
-            onClick={fixImagesInStorage}
-            disabled={isFixing}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-medium backdrop-blur-md transition-all shadow-2xl ${
-              fixStatus === 'success' 
-                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-500' 
-                : fixStatus === 'error'
-                ? 'bg-red-500/20 border-red-500/50 text-red-500'
-                : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            {isFixing ? (
-              <RefreshCw className="w-3 h-3 animate-spin" />
-            ) : fixStatus === 'success' ? (
-              <CheckCircle2 className="w-3 h-3" />
-            ) : fixStatus === 'error' ? (
-              <AlertCircle className="w-3 h-3" />
-            ) : (
-              <RefreshCw className="w-3 h-3" />
-            )}
-            {isFixing ? 'Syncing to Storage...' : fixStatus === 'success' ? 'Synced Successfully' : fixStatus === 'error' ? 'Sync Failed' : 'Sync Images to Storage'}
-          </button>
-        </div>
-      )}
     </div>
   );
 };

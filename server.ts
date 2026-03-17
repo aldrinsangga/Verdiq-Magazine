@@ -58,6 +58,31 @@ async function startServer() {
       console.warn(`[Static] Dist folder NOT found at ${distPath}`);
     }
 
+    // Explicitly serve feature images to prevent any MIME type confusion
+    // Moved to the top of the production block to ensure it takes precedence
+    app.get(["/editorial-feature.jpg", "/podcast-feature.jpg"], (req, res) => {
+      const fileName = req.path.substring(1);
+      const pPath = path.join(publicPath, fileName);
+      const dPath = path.join(distPath, fileName);
+      
+      console.log(`[Image Request] ${fileName} - Searching in ${pPath} and ${dPath}`);
+      
+      if (fs.existsSync(pPath)) {
+        console.log(`[Image Request] Found in public: ${pPath}`);
+        res.setHeader("Content-Type", "image/jpeg");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.sendFile(pPath);
+      }
+      if (fs.existsSync(dPath)) {
+        console.log(`[Image Request] Found in dist: ${dPath}`);
+        res.setHeader("Content-Type", "image/jpeg");
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        return res.sendFile(dPath);
+      }
+      console.warn(`[Image Request] NOT FOUND: ${fileName}`);
+      res.status(404).send("Image not found");
+    });
+
     // Serve public folder first to ensure IDE uploads are available
     app.use((req, res, next) => {
       if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
@@ -161,26 +186,7 @@ async function startServer() {
       });
     });
 
-    // Explicitly serve feature images to prevent any MIME type confusion
-    app.get(["/editorial-feature.jpg", "/podcast-feature.jpg"], (req, res) => {
-      const fileName = req.path.substring(1);
-      const pPath = path.join(publicPath, fileName);
-      const dPath = path.join(distPath, fileName);
-      
-      console.log(`[Image Request] ${fileName} - Searching in ${pPath} and ${dPath}`);
-      
-      if (fs.existsSync(pPath)) {
-        res.setHeader("Content-Type", "image/jpeg");
-        return res.sendFile(pPath);
-      }
-      if (fs.existsSync(dPath)) {
-        res.setHeader("Content-Type", "image/jpeg");
-        return res.sendFile(dPath);
-      }
-      res.status(404).send("Image not found");
-    });
-
-    // Force deployment change: 2026-03-17 15:00
+    // Force deployment change: 2026-03-17 15:48
 
     app.get("/review/:id", handleDynamicSEO);
     app.get("/podcasts/:id", handleDynamicSEO);
