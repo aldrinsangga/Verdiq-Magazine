@@ -28,7 +28,8 @@ service cloud.firestore {
         (
           request.auth.token.email == "server-internal@verdiq.ai" || 
           request.auth.token.email == "server-internal-v2@verdiq.ai" ||
-          request.auth.token.email == "admin@verdiq.ai"
+          request.auth.token.email == "admin@verdiq.ai" ||
+          request.auth.token.email == "verdiqmag@gmail.com"
         );
     }
 
@@ -84,7 +85,7 @@ service cloud.firestore {
     
     // Health Check
     match /health_check/{docId} {
-      allow read, write: if isServer();
+      allow read, write: if isAuthenticated();
     }
   }
 }

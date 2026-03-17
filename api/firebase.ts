@@ -75,33 +75,51 @@ if (adminApp) {
     console.log(`[Firebase] Admin Firestore initialized for database: ${dbId || '(default)'}`);
     
     // Test adminDb with a simple check
-    console.log("[Firebase] Running Admin Firestore health check...");
-    adminDb.collection('health_check').doc('admin_test').set({ 
-      last_check: new Date().toISOString(),
-      env: process.env.NODE_ENV || 'unknown',
-      service: 'cloud-run'
-    })
-      .then(() => {
-        console.log("[Firebase] Admin Firestore write test successful");
-        isAdminDbHealthy = true;
-      })
-      .catch((err: any) => {
-        console.warn("[Firebase] Admin Firestore write test failed:", err?.message || err);
-        console.warn("[Firebase] This usually means the Cloud Run service account lacks 'Cloud Datastore User' permissions on the specific database.");
-        console.warn("[Firebase] Falling back to Client SDK for data operations.");
-        isAdminDbHealthy = false;
-        
-        // Try a read test at least
-        adminDb.collection('health_check').limit(1).get()
-          .then(() => {
-            console.log("[Firebase] Admin Firestore read test successful. Will use Admin SDK for reads.");
-            // We'll keep isAdminDbHealthy as false to force fallback for writes, 
-            // but we could potentially use it for reads if we split the flag.
-          })
-          .catch((readErr: any) => {
-            console.error("[Firebase] Admin Firestore read test also failed:", readErr?.message || readErr);
-          });
-      });
+    const runHealthCheck = async (dbInstance: any, label: string) => {
+      try {
+        await dbInstance.collection('health_check').doc('admin_test').set({ 
+          last_check: new Date().toISOString(),
+          env: process.env.NODE_ENV || 'unknown',
+          service: 'cloud-run',
+          label
+        });
+        console.log(`[Firebase] Admin Firestore write test successful for ${label}`);
+        return true;
+      } catch (err: any) {
+        console.warn(`[Firebase] Admin Firestore write test failed for ${label}:`, err?.message || err);
+        return false;
+      }
+    };
+
+    (async () => {
+      isAdminDbHealthy = await runHealthCheck(adminDb, dbId || '(default)');
+      
+      if (!isAdminDbHealthy && dbId) {
+        console.log("[Firebase] Attempting fallback to default database for Admin SDK...");
+        try {
+          const defaultDb = getAdminFirestore(adminApp);
+          const defaultHealthy = await runHealthCheck(defaultDb, '(default)');
+          if (defaultHealthy) {
+            adminDb = defaultDb;
+            isAdminDbHealthy = true;
+            console.log("[Firebase] Switched to default database for Admin SDK.");
+          }
+        } catch (e: any) {
+          console.error("[Firebase] Fallback to default database failed:", e?.message || e);
+        }
+      }
+      
+      if (!isAdminDbHealthy) {
+        console.warn("[Firebase] Admin Firestore is not fully healthy. Falling back to Client SDK for some operations.");
+        // Try a read test at least on the current adminDb
+        try {
+          await adminDb.collection('health_check').limit(1).get();
+          console.log("[Firebase] Admin Firestore read test successful.");
+        } catch (readErr: any) {
+          console.error("[Firebase] Admin Firestore read test also failed:", readErr?.message || readErr);
+        }
+      }
+    })();
       
   } catch (e: any) {
     console.warn(`[Firebase] Failed to initialize Admin Firestore with databaseId ${firebaseConfig.firestoreDatabaseId}, trying default...`);

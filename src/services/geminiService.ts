@@ -248,6 +248,12 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     REVIEW WRITING INSTRUCTIONS:
     Write a fully human-sounding music review that feels natural, emotionally sharp, and specific.
     The 'reviewBody' MUST be exactly 5 paragraphs long. Use actual double newlines to separate paragraphs.
+    
+    STRUCTURAL VARIETY & PACING:
+    - Vary your sentence structures. Use a mix of short, punchy statements and longer, complex observations.
+    - Paragraphs should NOT be of equal length. Some should be dense and analytical, others brief and impactful.
+    - Avoid "The [Subject] is [Adjective]" sentence patterns.
+    
     CRITICAL: If lyrics are provided, you MUST ensure any quotes used in the review are 100% accurate and verbatim from the provided text. Do not hallucinate or misquote lyrics.
     
     HYPERLINK INSTRUCTIONS:
@@ -261,18 +267,23 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     - Ensure the links feel integrated into the narrative of the review.
     
     CRITICAL STYLE CONSTRAINTS:
-    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally".
-    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape".
-    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core".
+    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally", "The track", "This song".
+    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape", "presents", "showcases".
+    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core", "With its...", "From the opening...".
     - AVOID being overly positive or flowery. Be a critical, professional journalist. If something is weak, say it.
-    - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary and sentence structure.
+    - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary, sentence rhythm, and critical "bite".
     - Be specific about the production. Mention specific instruments, mixing choices, or textures you hear.
     
-    REVIEW STRUCTURE VARIATIONS (Choose one randomly for each review):
-    1. THE DEEP DIVE: Start with a cultural observation, then move to technical breakdown, then emotional impact.
-    2. THE COMPARATIVE: Frame the review by comparing the artist's current work to their previous work or to industry peers.
-    3. THE PRODUCTION-FIRST: Focus heavily on the technical choices and how they serve (or fail) the song's intent.
-    4. THE NARRATIVE: Tell the story of the song's vibe and how it fits into the current musical zeitgeist.
+    REVIEW STRUCTURE VARIATIONS (Choose one randomly for each review and STICK TO IT):
+    1. THE CULTURAL CRITIC: Start with the broader musical landscape or a specific trend this track responds to. Focus on "Why this matters now."
+    2. THE TECHNICAL AUTOPSY: Lead with a striking production detail (a specific synth tone, a vocal quirk). Build the review around the "How it was made."
+    3. THE EMOTIONAL ARC: Focus on the visceral reaction. Start with the feeling of the first 10 seconds and track how that feeling evolves or dissolves.
+    4. THE COMPARATIVE ESSAY: Position the artist against a contemporary rival or a historical influence. Use the comparison to highlight what makes this track unique or derivative.
+    5. THE LYRICAL DISSECTION: If lyrics are present, lead with a specific line. Analyze the songwriting as poetry/prose first, then bring in the music as the "delivery vehicle."
+    6. THE REBEL REVIEW: Start with a contrarian take. If the song is "chill," talk about its hidden tension. If it's "loud," talk about its emptiness.
+    
+    SELF-CORRECTION BEFORE OUTPUT:
+    Does this sound like a generic AI? If yes, rewrite it. Use more specific nouns and fewer generic adjectives. Make it sound like it was written by someone who has a physical physical copy of the record in their hands.
     
     SCORING INSTRUCTIONS:
     - 'rating' MUST be on a scale of 0.0 to 10.0 (e.g., 8.4).

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PayPalButtons } from "@paypal/react-paypal-js";
+import { getAuthHeaders } from '../authClient';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -16,7 +17,7 @@ const Pricing = ({ onUpgrade, currentUser }) => {
     }
   }, [checkoutItem]);
 
-  // Handle PayPal return
+  // Handle PayPal return (Legacy redirect flow)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentId = params.get('paymentId');
@@ -28,18 +29,17 @@ const Pricing = ({ onUpgrade, currentUser }) => {
     }
   }, []);
 
-  const getAuthToken = () => localStorage.getItem('verdiq_token');
-
   const executeTopUp = async (paymentId, payerId) => {
     setLoading('executing');
     setError(null);
     
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/credits/topup/execute`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`
+          ...authHeaders
         },
         body: JSON.stringify({ paymentId, payerId })
       });
@@ -50,7 +50,7 @@ const Pricing = ({ onUpgrade, currentUser }) => {
         onUpgrade({ ...data, type: 'topup' });
       } else {
         const err = await res.json();
-        setError(err.detail || 'Top-up failed');
+        setError(err.detail || err.message || 'Top-up failed');
       }
     } catch (e) {
       setError('Top-up processing failed');
@@ -67,11 +67,12 @@ const Pricing = ({ onUpgrade, currentUser }) => {
   const createOrder = async (data, actions, packageId) => {
     setIsProcessing(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/paypal/create-order`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`
+          ...authHeaders
         },
         body: JSON.stringify({ packageId })
       });
@@ -94,11 +95,12 @@ const Pricing = ({ onUpgrade, currentUser }) => {
     setLoading('executing');
     setIsProcessing(true);
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/paypal/capture-order`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getAuthToken()}`
+          ...authHeaders
         },
         body: JSON.stringify({ orderId: data.orderID, packageId })
       });
@@ -131,15 +133,6 @@ const Pricing = ({ onUpgrade, currentUser }) => {
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-20" data-testid="pricing-section">
-      <div className="text-center mb-20">
-        <h1 className="text-7xl md:text-8xl font-extrabold mb-8 tracking-tighter leading-none">
-          <span className="gradient-text">VERDIQ</span>
-        </h1>
-        <p className="text-slate-400 max-w-3xl mx-auto text-2xl font-light leading-relaxed italic">
-          Professional-grade feedback. Real technical insights. Sharpen your sound and dominate the charts.
-        </p>
-      </div>
-
       {error && (
         <div className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
           <p className="text-red-400">{error}</p>

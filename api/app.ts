@@ -604,7 +604,10 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
       await db.collection('purchases').doc(purchaseId).set(purchase);
       
       const newCredits = (user.credits || 0) + pkg.credits;
-      await userRef.update({ credits: newCredits });
+      await userRef.update({ 
+        credits: newCredits,
+        isSubscribed: true 
+      });
 
       res.json({ success: true, credits: newCredits, purchase });
     } else {

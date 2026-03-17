@@ -430,42 +430,66 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
           <div className="order-2 lg:order-1 relative py-10">
             {/* Magazine Screenshot Simulation */}
-            <div className="relative z-10 rounded-[24px] overflow-hidden border border-white/10 shadow-2xl bg-slate-900 transform -rotate-2 hover:rotate-0 transition-transform duration-700 group/mag min-h-[300px]">
+            <div className="relative z-10 rounded-[24px] overflow-hidden border border-white/10 shadow-2xl bg-slate-950 transform -rotate-2 hover:rotate-0 transition-transform duration-700 group/mag min-h-[400px] flex items-center justify-center">
               <img 
-                src="https://images.unsplash.com/photo-1586339949916-3e9457bef6d3?auto=format&fit=crop&q=80&w=800" 
-                alt="Magazine Preview" 
-                className="w-full h-auto opacity-80 group-hover/mag:opacity-100 transition-opacity duration-700"
+                src="/340204DC-CC5C-40D5-BC3D-E7339174DA90.jpeg" 
+                alt="Editorial Feature" 
+                className="w-full h-auto block object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const container = e.currentTarget.parentElement;
+                  if (container) {
+                    container.innerHTML = `
+                      <div class="flex flex-col items-center justify-center p-12 text-center">
+                        <div class="w-16 h-16 mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                          <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        </div>
+                        <p class="text-emerald-500 font-black uppercase tracking-widest text-xs mb-2">Image Required</p>
+                        <p class="text-slate-500 text-[10px] leading-relaxed max-w-[200px]">
+                          Please upload your photo to the <b>public</b> folder and rename it to <b>editorial-feature.png</b>
+                        </p>
+                      </div>
+                    `;
+                  }
+                }}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
-              <div className="absolute bottom-6 left-6 right-6 p-6 glass rounded-2xl border border-white/5">
-                 <p className="text-emerald-500 font-black text-[10px] uppercase tracking-[0.3em] mb-2">Editorial Feature</p>
-                 <p className="text-white text-lg font-bold italic">"A masterclass in spectral balance and lyrical depth..."</p>
-              </div>
             </div>
             
             {/* Podcast Screenshot Simulation */}
             <div className="absolute -bottom-4 -right-2 md:-right-8 z-20 w-3/4 rounded-[32px] overflow-hidden border border-emerald-500/30 shadow-[0_20px_50px_rgba(16,185,129,0.2)] bg-slate-950 transform rotate-3 hover:rotate-0 transition-transform duration-700 group/pod">
-              <div className="p-6 md:p-8 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                    <svg className="w-6 h-6 text-slate-950 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+              <div className="relative p-6 md:p-8 min-h-[220px] flex flex-col justify-end">
+                <img 
+                  src="/66328F82-1091-48E5-87DF-750E5AA79D1A.jpeg" 
+                  alt="Podcast Feature" 
+                  className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+                
+                <div className="relative z-10">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                      <svg className="w-6 h-6 text-slate-950 animate-pulse" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">The Verdiq Session</p>
+                      <p className="text-white font-bold text-sm">Wolf & Sloane Debate</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">The Verdiq Session</p>
-                    <p className="text-white font-bold text-sm">Wolf & Sloane Debate</p>
+                  <div className="space-y-3">
+                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 animate-progress" />
+                    </div>
+                    <div className="flex justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                      <span>01:24</span>
+                      <span>03:45</span>
+                    </div>
+                    <p className="text-xs text-slate-400 italic leading-relaxed">
+                      "Sloane: The way the vocal sits in that 2kHz pocket is exactly what labels are looking for right now..."
+                    </p>
                   </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 animate-progress" />
-                  </div>
-                  <div className="flex justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                    <span>01:24</span>
-                    <span>03:45</span>
-                  </div>
-                  <p className="text-xs text-slate-400 italic leading-relaxed">
-                    "Sloane: The way the vocal sits in that 2kHz pocket is exactly what labels are looking for right now..."
-                  </p>
                 </div>
               </div>
             </div>

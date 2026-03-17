@@ -9,6 +9,7 @@ import ReviewMoreFromMagazine from './ReviewMoreFromMagazine';
 
 const ReviewDisplay = ({ 
   review, 
+  currentUser,
   onUpgrade, 
   onSave, 
   onPublish, 
@@ -33,6 +34,8 @@ const ReviewDisplay = ({
   const printRef = useRef(null);
 
   const isViewOnly = viewOnly || review.viewOnly;
+  const isAuthor = currentUser && review && (review.userId === currentUser.id);
+  const canEdit = !isViewOnly || isAuthor;
   const canPublishToMagazine = true; 
 
   const handleSave = async () => {
@@ -236,7 +239,7 @@ const ReviewDisplay = ({
 
       <ReviewHeader 
         onBack={() => onBack ? onBack() : window.history.back()}
-        isViewOnly={isViewOnly}
+        isViewOnly={!canEdit}
         review={review}
         isPublishing={isPublishing}
         isSaving={isSaving}

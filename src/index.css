@@ -70,6 +70,14 @@
     background-image: linear-gradient(to bottom right, #ffffff, #ffffff, rgba(16, 185, 129, 0.5));
   }
 
+  .review-title-split {
+    color: #10b981; /* emerald-500 */
+  }
+
+  .review-title-split::first-line {
+    color: #ffffff;
+  }
+
   .btn-primary {
     background-color: #10b981;
     color: #020617;

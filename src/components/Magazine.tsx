@@ -1,11 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Search, X } from 'lucide-react';
 
 const Magazine = ({ reviews, onSelect, onNavigate }) => {
-  const publishedReviews = reviews.filter(r => r.isPublished && !r.isDeleted);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const allPublished = reviews.filter(r => r.isPublished && !r.isDeleted);
+  
+  const publishedReviews = allPublished.filter(r => 
+    r.songTitle?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    r.artistName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.headline?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.hook?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
   const featured = publishedReviews[0];
   const others = publishedReviews.slice(1);
 
-  if (publishedReviews.length === 0) {
+  if (allPublished.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-32 text-center" data-testid="empty-magazine">
         <h2 className="text-5xl font-black mb-6">The Newsroom is Empty</h2>
@@ -24,9 +35,40 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
           <h1 className="text-6xl sm:text-8xl md:text-[7.8125rem] font-black tracking-tighter leading-[0.8] mb-4">VERDIQ</h1>
           <p className="text-emerald-500 font-bold uppercase tracking-[0.5em] text-xs">THE FUTURE OF MUSIC CRITIC</p>
         </div>
-        <div className="text-left md:text-right">
-          <p className="text-slate-500 font-black uppercase text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-          <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">Issue No. 001 — Vol. 1</p>
+        <div className="text-left md:text-right flex flex-col items-start md:items-end gap-4">
+          {/* Search Bar */}
+          <div className="relative w-full max-w-[220px] group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
+            <input 
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900/50 border border-slate-800 rounded-full py-1.5 pl-8 pr-8 text-[10px] text-white focus:outline-none focus:border-emerald-500/50 focus:bg-slate-900 transition-all placeholder:text-slate-600"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+
+            {/* No Results Dropdown */}
+            {searchQuery && publishedReviews.length === 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-red-500/30 rounded-xl p-3 shadow-2xl z-50 animate-in fade-in slide-in-from-top-2">
+                <p className="text-[10px] font-black text-red-400 uppercase tracking-widest text-center">
+                  No Results Found
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="text-slate-500 font-black uppercase text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">Issue No. 001 — Vol. 1</p>
+          </div>
         </div>
       </div>
 
@@ -53,7 +95,7 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                 <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Cover Story</span>
                 <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">{new Date(featured.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
               </div>
-              <h2 className="text-4xl sm:text-6xl md:text-7xl font-black text-white tracking-tighter leading-[0.8] transition-all">
+              <h2 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tighter leading-[0.8] transition-all review-title-split">
                 {(featured.headline || 'Featured Story').toUpperCase()}
               </h2>
               <p className="text-slate-200 text-xl md:text-3xl font-light leading-relaxed line-clamp-3 italic max-w-3xl">
@@ -97,7 +139,7 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                   <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3">
                     {r.artistName} • {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </p>
-                  <h4 className="text-2xl md:text-3xl font-black group-hover:gradient-text transition-all leading-none mb-3 tracking-tighter">{(r.headline || 'Latest Report').toUpperCase()}</h4>
+                  <h4 className="text-2xl md:text-3xl font-black transition-all leading-none mb-3 tracking-tighter review-title-split">{(r.headline || 'Latest Report').toUpperCase()}</h4>
                   <p className="text-slate-400 text-base font-light leading-relaxed line-clamp-2 italic">"{r.hook}"</p>
                 </div>
               </div>

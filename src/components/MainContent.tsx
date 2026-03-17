@@ -98,6 +98,7 @@ const MainContent: React.FC<MainContentProps> = ({
       {!isUnverified && view === 'review' && currentReview && (
         <ReviewDisplay 
           review={currentReview} 
+          currentUser={currentUser}
           viewOnly={currentReview.viewOnly}
           onUpgrade={() => navigate('pricing')} 
           onSave={handleUpdateReview} 

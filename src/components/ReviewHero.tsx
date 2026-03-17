@@ -49,7 +49,7 @@ const ReviewHero: React.FC<ReviewHeroProps> = ({
               data-testid="edit-headline-input"
             />
           ) : (
-            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-black text-white leading-tight tracking-tight mb-6 gradient-text uppercase">
+            <h1 className="text-3xl sm:text-4xl lg:text-6xl font-black leading-tight tracking-tight mb-6 review-title-split uppercase">
               {(review.headline || '').toUpperCase()}
             </h1>
           )}

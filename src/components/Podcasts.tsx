@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Share2, TrendingUp, Clock, Headphones } from 'lucide-react';
+import { Play, Pause, Share2, TrendingUp, Clock, Headphones, SkipBack, SkipForward, Volume2, VolumeX, RotateCcw, RotateCw, Settings, ListMusic } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || '';
 
@@ -12,6 +12,10 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
   const [duration, setDuration] = useState(0);
   const [audioUrls, setAudioUrls] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [playCounts, setPlayCounts] = useState(() => {
     const initialCounts = {};
     reviews.forEach(r => {
@@ -187,6 +191,38 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
     }
   };
 
+  const skip = (seconds) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.max(0, Math.min(audioRef.current.duration, audioRef.current.currentTime + seconds));
+    }
+  };
+
+  const toggleMute = () => {
+    if (audioRef.current) {
+      const newMuted = !isMuted;
+      audioRef.current.muted = newMuted;
+      setIsMuted(newMuted);
+    }
+  };
+
+  const handleVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+      setVolume(newVolume);
+      setIsMuted(newVolume === 0);
+      audioRef.current.muted = newVolume === 0;
+    }
+  };
+
+  const handlePlaybackRateChange = (rate) => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rate;
+      setPlaybackRate(rate);
+      setShowSpeedMenu(false);
+    }
+  };
+
   const formatTime = (time) => {
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
@@ -299,56 +335,142 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                 <p className="text-slate-400 text-lg sm:text-2xl font-light mb-6 italic">by {activeReview?.artistName}</p>
                 
                 {/* Player Controls */}
-                <div className="space-y-6">
-                  <div className="flex items-center gap-6">
-                    <button
-                      onClick={() => handlePlay(activeReview?.id)}
-                      disabled={isLoading}
-                      className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-500 rounded-full flex items-center justify-center hover:bg-emerald-400 transition-all hover:scale-110 shadow-[0_0_20px_rgba(16,185,129,0.3)] disabled:opacity-50"
-                      data-testid="play-btn"
-                    >
-                      {isLoading ? (
-                        <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                      ) : isPlaying && activeId === activeReview?.id ? (
-                        <Pause className="w-6 h-6 sm:w-8 sm:h-8 text-slate-950 fill-current" />
-                      ) : (
-                        <Play className="w-6 h-6 sm:w-8 sm:h-8 text-slate-950 fill-current ml-1" />
-                      )}
-                    </button>
-                    
-                    <div className="flex-1">
-                      <div 
-                        className="h-1.5 bg-slate-800 rounded-full cursor-pointer overflow-hidden relative"
-                        onClick={(e) => {
-                          if (audioRef.current && duration) {
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const percent = (e.clientX - rect.left) / rect.width;
-                            audioRef.current.currentTime = percent * duration;
-                          }
-                        }}
-                      >
+                <div className="space-y-8">
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex-1">
                         <div 
-                          className="h-full bg-emerald-500 rounded-full transition-all shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                          style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
-                        />
+                          className="h-2 bg-slate-800 rounded-full cursor-pointer overflow-hidden relative group/progress"
+                          onClick={(e) => {
+                            if (audioRef.current && duration) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const percent = (e.clientX - rect.left) / rect.width;
+                              audioRef.current.currentTime = percent * duration;
+                            }
+                          }}
+                        >
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full transition-all shadow-[0_0_15px_rgba(16,185,129,0.5)] relative"
+                            style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
+                          >
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-xl scale-0 group-hover/progress:scale-100 transition-transform" />
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-3 font-black uppercase tracking-widest">
+                          <span>{formatTime(currentTime)}</span>
+                          <span>{formatTime(duration)}</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between text-[10px] text-slate-500 mt-3 font-black uppercase tracking-widest">
-                        <span>{formatTime(currentTime)}</span>
-                        <span>{formatTime(duration)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 sm:gap-8">
+                        {/* Skip Back 15s */}
+                        <button 
+                          onClick={() => skip(-15)}
+                          className="text-slate-400 hover:text-white transition-colors p-2"
+                          title="Skip back 15s"
+                        >
+                          <RotateCcw className="w-6 h-6" />
+                        </button>
+
+                        {/* Play/Pause */}
+                        <button
+                          onClick={() => handlePlay(activeReview?.id)}
+                          disabled={isLoading}
+                          className="w-16 h-16 sm:w-20 sm:h-20 bg-emerald-500 rounded-full flex items-center justify-center hover:bg-emerald-400 transition-all hover:scale-105 shadow-[0_0_30px_rgba(16,185,129,0.3)] disabled:opacity-50"
+                          data-testid="play-btn"
+                        >
+                          {isLoading ? (
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                          ) : isPlaying && activeId === activeReview?.id ? (
+                            <Pause className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950 fill-current" />
+                          ) : (
+                            <Play className="w-8 h-8 sm:w-10 sm:h-10 text-slate-950 fill-current ml-1" />
+                          )}
+                        </button>
+
+                        {/* Skip Forward 15s */}
+                        <button 
+                          onClick={() => skip(15)}
+                          className="text-slate-400 hover:text-white transition-colors p-2"
+                          title="Skip forward 15s"
+                        >
+                          <RotateCw className="w-6 h-6" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-6">
+                        {/* Speed Control */}
+                        <div className="relative">
+                          <button 
+                            onClick={() => setShowSpeedMenu(!showSpeedMenu)}
+                            className="px-3 py-1.5 rounded-lg bg-slate-800/50 border border-white/5 text-[10px] font-black text-slate-300 hover:text-white hover:bg-slate-800 transition-all uppercase tracking-widest"
+                          >
+                            {playbackRate}x
+                          </button>
+                          {showSpeedMenu && (
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50 min-w-[80px]">
+                              {[0.5, 0.75, 1, 1.25, 1.5, 2].map(rate => (
+                                <button
+                                  key={rate}
+                                  onClick={() => handlePlaybackRateChange(rate)}
+                                  className={`w-full px-4 py-2 text-xs font-bold hover:bg-emerald-500 hover:text-slate-950 transition-colors text-center ${playbackRate === rate ? 'bg-emerald-500/20 text-emerald-500' : 'text-slate-400'}`}
+                                >
+                                  {rate}x
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Volume Control */}
+                        <div className="hidden sm:flex items-center gap-3 group/volume">
+                          <button 
+                            onClick={toggleMute}
+                            className="text-slate-400 hover:text-white transition-colors"
+                          >
+                            {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                          </button>
+                          <input 
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.01"
+                            value={isMuted ? 0 : volume}
+                            onChange={handleVolumeChange}
+                            className="w-20 h-1 bg-slate-800 rounded-full appearance-none cursor-pointer accent-emerald-500 group-hover/volume:w-24 transition-all"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
                   
                   {/* Actions */}
-                  <div className="flex items-center gap-6">
-                    <button 
-                      onClick={() => handleShare(activeReview)}
-                      className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors"
-                      data-testid="share-podcast-btn"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      Share Episode
-                    </button>
+                  <div className="flex items-center justify-between border-t border-white/5 pt-6">
+                    <div className="flex items-center gap-6">
+                      <button 
+                        onClick={() => handleShare(activeReview)}
+                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors group/share"
+                        data-testid="share-podcast-btn"
+                      >
+                        <Share2 className="w-4 h-4 group-hover/share:scale-110 transition-transform" />
+                        Share Episode
+                      </button>
+                      <button 
+                        className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors group/list"
+                      >
+                        <ListMusic className="w-4 h-4 group-hover/list:scale-110 transition-transform" />
+                        Add to Queue
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        <Headphones className="w-3 h-3" />
+                        <span className="text-[10px] font-black tracking-widest">{playCounts[activeReview?.id] || 0}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
