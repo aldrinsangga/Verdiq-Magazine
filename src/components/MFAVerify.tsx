@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Shield, Loader2, AlertTriangle } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 const MFAVerify = ({ email, password, onSuccess, onCancel }) => {
   const [code, setCode] = useState('');

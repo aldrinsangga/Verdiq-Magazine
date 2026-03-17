@@ -2,7 +2,9 @@ import React from 'react';
 import AdminDashboard from './AdminDashboard';
 import { getAuthHeaders } from '../authClient';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 interface AdminDashboardWrapperProps {
   currentUser: any;

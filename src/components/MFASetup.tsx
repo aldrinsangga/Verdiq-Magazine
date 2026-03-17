@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Shield, QrCode, Key, Check, AlertTriangle, X, Loader2 } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
   const [step, setStep] = useState('initial'); // initial, setup, verify, success

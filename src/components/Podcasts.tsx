@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Share2, TrendingUp, Clock, Headphones, SkipBack, SkipForward, Volume2, VolumeX, RotateCcw, RotateCw, Settings, ListMusic } from 'lucide-react';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAudio }) => {
   // Filter reviews that have podcast and are published

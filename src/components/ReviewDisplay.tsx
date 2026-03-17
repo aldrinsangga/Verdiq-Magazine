@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import html2pdf from 'html2pdf.js';
 import ReviewHeader from './ReviewHeader';
 import ReviewHero from './ReviewHero';
@@ -6,6 +6,7 @@ import ReviewEditorial from './ReviewEditorial';
 import ReviewSidebar from './ReviewSidebar';
 import ReviewModals from './ReviewModals';
 import ReviewMoreFromMagazine from './ReviewMoreFromMagazine';
+import { getAuthHeaders } from '../authClient';
 
 const ReviewDisplay = ({ 
   review, 
@@ -219,12 +220,14 @@ const ReviewDisplay = ({
   const podcastSource = getPodcastSource();
   const hasPodcastData = !!podcastSource;
   const shouldShowPodcastSection = hasPodcastData || review.hasPodcast;
-  const paragraphs = review.reviewBody 
-    ? review.reviewBody.replace(/\\n/g, '\n').split(/\n\n+/).filter(p => p.trim()) 
-    : [];
+  const paragraphs = useMemo(() => {
+    return review.reviewBody 
+      ? review.reviewBody.replace(/\\n/g, '\n').split(/\n\n+/).filter((p: string) => p.trim()) 
+      : [];
+  }, [review.reviewBody]);
 
   return (
-    <div className="relative" data-testid="review-display">
+    <div className="relative w-full overflow-x-hidden" data-testid="review-display">
       <ReviewModals 
         showSubscribeModal={showSubscribeModal}
         setShowSubscribeModal={setShowSubscribeModal}

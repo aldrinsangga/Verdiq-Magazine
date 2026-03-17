@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { login, signup, requestPasswordReset, saveSession, sendVerificationEmail } from '../authClient';
 import MFAVerify from './MFAVerify';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 const Auth = ({ onLogin, onClose }) => {
   const [mode, setMode] = useState('login');

@@ -11,7 +11,9 @@ import { analyzeTrack, generatePodcast } from './services/geminiService';
 import { UserAccount } from '../types';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 // Utility to compress base64 images
 const compressImage = (base64Str, maxWidth = 800, maxHeight = 400) => {
@@ -77,35 +79,7 @@ function App() {
     Object.entries(viewToPath).map(([view, path]) => [path, view])
   );
   
-  // Function to load a review from URL
-  async function loadReviewFromUrl(reviewId) {
-    try {
-      const res = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
-      if (res.ok) {
-        const review = await res.json();
-        setCurrentReview(review);
-        navigate('review');
-      }
-    } catch (e) {
-      console.error('Failed to load review from URL:', e);
-    }
-  }
-
-  // Get initial view from URL
-  function getViewFromPath() {
-    const path = window.location.pathname;
-    // Check for review with ID: /review/{id}
-    if (path.startsWith('/review/')) {
-      const reviewId = path.split('/review/')[1];
-      if (reviewId) {
-        loadReviewFromUrl(reviewId);
-      }
-      return 'review';
-    }
-    return pathToView[path] || 'landing';
-  }
-
-  const [view, setView] = useState(getViewFromPath());
+  const [view, setView] = useState('landing');
   const [isInitializing, setIsInitializing] = useState(true);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Analyzing...");
@@ -130,6 +104,104 @@ function App() {
     message?: string;
     isFreeUser?: boolean;
   }>({ action: null, required: 0 });
+
+  const navigate = (v, reviewId = null) => {
+    // Close mobile menu if open
+    setMobileMenuOpen(false);
+    
+    if ((v === 'dashboard' || v === 'account') && !currentUser) {
+      setView('auth');
+      updateUrlForView('auth');
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (v === 'admin' && !isAdmin(currentUser)) {
+      setView('landing');
+      updateUrlForView('landing');
+      window.scrollTo(0, 0);
+      return;
+    }
+    
+    setView(v);
+    updateUrlForView(v, reviewId);
+    
+    if (v !== 'review') {
+      setCurrentReview(null);
+    }
+    if (v !== 'podcasts') {
+      setTargetPodcastId(null);
+    }
+    
+    // Use a small timeout to ensure DOM has updated before scrolling
+    setTimeout(() => window.scrollTo(0, 0), 0);
+  };
+
+  // Function to navigate to a review and update URL
+  const navigateToReview = (review, viewOnly = false) => {
+    if (!review) {
+      console.error('navigateToReview: Review is null');
+      navigate('magazine');
+      return;
+    }
+    
+    console.log('Navigating to review:', review.id, 'viewOnly:', viewOnly);
+    setCurrentReview({ ...review, viewOnly });
+    
+    // Extract audio file if present
+    if (review.podcastAudioUrl) {
+      setCurrentAudioFile({
+        url: review.podcastAudioUrl,
+        name: `${review.songTitle} - Review Podcast`
+      });
+    } else {
+      setCurrentAudioFile(null);
+    }
+    
+    navigate('review', review.id);
+  };
+
+  // Load a review from URL ID
+  const loadReviewFromUrl = async (reviewId) => {
+    try {
+      console.log('Loading review from URL:', reviewId);
+      const res = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+      if (res.ok) {
+        const review = await res.json();
+        console.log('Successfully loaded review from URL');
+        navigateToReview(review, true);
+      } else {
+        console.error('Failed to load review from URL:', res.status);
+        navigate('magazine');
+      }
+    } catch (e) {
+      console.error('Failed to load review from URL:', e);
+      navigate('magazine');
+    }
+  }
+
+  // Get initial view from URL
+  function getViewFromPath() {
+    const path = window.location.pathname;
+    // Check for review with ID: /review/{id}
+    if (path.startsWith('/review/')) {
+      return 'review';
+    }
+    return pathToView[path] || 'landing';
+  }
+
+  // Initial load effect
+  useEffect(() => {
+    const initialView = getViewFromPath();
+    setView(initialView);
+    
+    const path = window.location.pathname;
+    if (path.startsWith('/review/')) {
+      const reviewId = path.split('/review/')[1];
+      if (reviewId) {
+        loadReviewFromUrl(reviewId);
+      }
+    }
+  }, []);
   
   // Sync URL with view changes
   useEffect(() => {
@@ -146,26 +218,33 @@ function App() {
               const reviewData = await reviewRes.json();
               setCurrentReview({ ...reviewData, viewOnly: true });
               setView('review');
+              updateUrlForView('review', reviewId);
             } else {
               setView('magazine');
+              updateUrlForView('magazine');
             }
           } catch (e) {
             setView('magazine');
+            updateUrlForView('magazine');
           }
         } else {
           setView('magazine');
+          updateUrlForView('magazine');
         }
       } else if (path.startsWith('/podcasts/')) {
         const podcastId = path.split('/podcasts/')[1];
         if (podcastId) {
           setTargetPodcastId(podcastId);
           setView('podcasts');
+          updateUrlForView('podcasts', podcastId);
         } else {
           setView('podcasts');
+          updateUrlForView('podcasts');
         }
       } else {
         const newView = pathToView[path] || 'landing';
         setView(newView);
+        updateUrlForView(newView);
         if (newView !== 'review') {
           setCurrentReview(null);
         }
@@ -184,6 +263,8 @@ function App() {
     // Special case for review with ID
     if (newView === 'review' && reviewId) {
       newPath = `/review/${reviewId}`;
+    } else if (newView === 'podcasts' && reviewId) {
+      newPath = `/podcasts/${reviewId}`;
     }
     
     // Only update if path actually changed
@@ -661,7 +742,7 @@ function App() {
         }
       }
 
-      navigate('review');
+      navigate('review', reviewForStorage.id);
     } catch (error) {
       console.error(error);
       alert(`Studio Error: ${error.message || 'Verify your file and try again.'}`);
@@ -901,55 +982,13 @@ function App() {
     }
   };
 
-  const navigate = (v, reviewId = null) => {
-    // Close mobile menu if open
-    setMobileMenuOpen(false);
-    
-    if ((v === 'dashboard' || v === 'account') && !currentUser) {
-      setView('auth');
-      updateUrlForView('auth');
-      window.scrollTo(0, 0);
-      return;
-    }
-    if (v === 'admin' && !isAdmin(currentUser)) {
-      setView('landing');
-      updateUrlForView('landing');
-      window.scrollTo(0, 0);
-      return;
-    }
-    
-    setView(v);
-    updateUrlForView(v, reviewId);
-    
-    if (v !== 'review') {
-      setCurrentReview(null);
-    }
-    if (v !== 'podcasts') {
-      setTargetPodcastId(null);
-    }
-    
-    // Use a small timeout to ensure DOM has updated before scrolling
-    setTimeout(() => window.scrollTo(0, 0), 0);
-  };
-
-  // Function to navigate to a review and update URL
-  const navigateToReview = (review, viewOnly = false) => {
-    if (!review) {
-      console.error('navigateToReview: Review is null');
-      navigate('magazine');
-      return;
-    }
-    setCurrentReview({ ...review, viewOnly });
-    navigate('review', review.isPublished ? review.id : null);
-  };
-
   return (
     <PayPalScriptProvider options={{ 
       clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "test",
       currency: "USD",
       intent: "capture"
     }}>
-      <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
+      <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
       <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
       <Navigation 
         view={view}
@@ -969,36 +1008,38 @@ function App() {
           </div>
         </div>
       ) : (
-        <MainContent 
-          view={view}
-          loading={loading}
-          status={status}
-          currentUser={currentUser}
-          currentReview={currentReview}
-          currentAudioFile={currentAudioFile}
-          allReviews={allReviews}
-          users={users}
-          styleGuides={styleGuides}
-          creditStatus={creditStatus}
-          targetPodcastId={targetPodcastId}
-          setUsers={setUsers}
-          setAllReviews={setAllReviews}
-          setTargetPodcastId={setTargetPodcastId}
-          handleAnalyze={handleAnalyze}
-          handleLogin={handleLogin}
-          handleUpdateReview={handleUpdateReview}
-          handlePublish={handlePublish}
-          handleUpdateProfile={handleUpdateProfile}
-          handleDeleteUser={handleDeleteUser}
-          handleAdminUpdateReview={handleAdminUpdateReview}
-          handleAddStyleGuide={handleAddStyleGuide}
-          handleUpdateStyleGuide={handleUpdateStyleGuide}
-          handleDeleteStyleGuide={handleDeleteStyleGuide}
-          handleLogout={handleLogout}
-          fetchReviewWithAudio={fetchReviewWithAudio}
-          navigateToReview={navigateToReview}
-          navigate={navigate}
-        />
+        <div className="flex-grow">
+          <MainContent 
+            view={view}
+            loading={loading}
+            status={status}
+            currentUser={currentUser}
+            currentReview={currentReview}
+            currentAudioFile={currentAudioFile}
+            allReviews={allReviews}
+            users={users}
+            styleGuides={styleGuides}
+            creditStatus={creditStatus}
+            targetPodcastId={targetPodcastId}
+            setUsers={setUsers}
+            setAllReviews={setAllReviews}
+            setTargetPodcastId={setTargetPodcastId}
+            handleAnalyze={handleAnalyze}
+            handleLogin={handleLogin}
+            handleUpdateReview={handleUpdateReview}
+            handlePublish={handlePublish}
+            handleUpdateProfile={handleUpdateProfile}
+            handleDeleteUser={handleDeleteUser}
+            handleAdminUpdateReview={handleAdminUpdateReview}
+            handleAddStyleGuide={handleAddStyleGuide}
+            handleUpdateStyleGuide={handleUpdateStyleGuide}
+            handleDeleteStyleGuide={handleDeleteStyleGuide}
+            handleLogout={handleLogout}
+            fetchReviewWithAudio={fetchReviewWithAudio}
+            navigateToReview={navigateToReview}
+            navigate={navigate}
+          />
+        </div>
       )}
 
       <Footer navigate={navigate} />

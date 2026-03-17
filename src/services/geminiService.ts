@@ -1,6 +1,8 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 // Initialize Gemini API
 // Note: process.env.GEMINI_API_KEY is injected by the platform

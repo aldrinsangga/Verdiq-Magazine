@@ -80,7 +80,7 @@ const MainContent: React.FC<MainContentProps> = ({
   const isUnverified = currentUser && auth.currentUser && !auth.currentUser.emailVerified;
 
   return (
-    <main className="pt-20 pb-16">
+    <main className="pt-24 pb-16">
       {isUnverified && view !== 'magazine' && view !== 'podcasts' && view !== 'privacy' && view !== 'terms' && view !== 'faq' && view !== 'contact' && (
         <VerificationRequired email={auth.currentUser?.email || ''} onLogout={handleLogout} />
       )}

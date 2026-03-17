@@ -28,8 +28,8 @@ const ReviewHeader: React.FC<ReviewHeaderProps> = ({
   setEditMode
 }) => {
   return (
-    <div className="sticky top-24 z-40 glass border-b border-slate-800 pdf-exclude">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-4 flex items-center justify-between gap-4">
+    <div className="w-full glass border-b border-slate-800/50 pdf-exclude">
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button 
             onClick={onBack} 

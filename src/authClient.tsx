@@ -13,7 +13,9 @@ import {
 } from 'firebase/auth';
 import { auth } from './firebase';
 
-const API_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+  ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+  : '';
 
 // Session storage key
 const SESSION_KEY = 'verdiq_session';

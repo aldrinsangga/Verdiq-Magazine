@@ -46,9 +46,10 @@
 
   html, body {
     @apply bg-slate-950 text-slate-100 antialiased font-sans;
-    overflow-x: hidden !important;
+    overflow-x: hidden;
     width: 100%;
     position: relative;
+    scroll-behavior: smooth;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -59,7 +60,7 @@
 @layer components {
   .glass {
     background-color: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
@@ -128,7 +129,7 @@
 
   .card-premium {
     background-color: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(20px);
+    backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 40px;
     padding: 2rem;
