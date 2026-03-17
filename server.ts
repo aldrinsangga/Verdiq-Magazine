@@ -42,14 +42,42 @@ async function startServer() {
     const express = (await import('express')).default;
     const distPath = path.join(__dirname, "dist");
     const publicPath = path.join(__dirname, "public");
-    app.use(express.static(distPath));
+    
+    console.log(`[Static] Serving from dist: ${distPath}`);
+    console.log(`[Static] Serving from public: ${publicPath}`);
+    
+    if (fs.existsSync(publicPath)) {
+      console.log(`[Static] Public folder contents: ${fs.readdirSync(publicPath).join(', ')}`);
+    } else {
+      console.warn(`[Static] Public folder NOT found at ${publicPath}`);
+    }
+
+    if (fs.existsSync(distPath)) {
+      console.log(`[Static] Dist folder contents: ${fs.readdirSync(distPath).join(', ')}`);
+    } else {
+      console.warn(`[Static] Dist folder NOT found at ${distPath}`);
+    }
+
+    // Serve public folder first to ensure IDE uploads are available
+    app.use((req, res, next) => {
+      if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
+        const pPath = path.join(publicPath, req.path);
+        const dPath = path.join(distPath, req.path);
+        const pExists = fs.existsSync(pPath);
+        const dExists = fs.existsSync(dPath);
+        console.log(`[Static Request] ${req.path} - Public: ${pExists}, Dist: ${dExists}`);
+      }
+      next();
+    });
+    
     app.use(express.static(publicPath));
+    app.use(express.static(distPath));
 
     // Dynamic SEO for Social Media Sharing
     const handleDynamicSEO = async (req: any, res: any) => {
       const indexHtmlPath = path.join(distPath, "index.html");
       if (!fs.existsSync(indexHtmlPath)) {
-        return res.sendFile(indexHtmlPath);
+        return res.status(404).send("index.html not found");
       }
 
       let indexHtml = fs.readFileSync(indexHtmlPath, "utf-8");
@@ -115,10 +143,28 @@ async function startServer() {
       res.send(indexHtml);
     };
 
+    app.get("/api/debug/static", (req, res) => {
+      const distFiles = fs.existsSync(distPath) ? fs.readdirSync(distPath) : [];
+      const publicFiles = fs.existsSync(publicPath) ? fs.readdirSync(publicPath) : [];
+      res.json({
+        distPath,
+        publicPath,
+        distFiles,
+        publicFiles,
+        cwd: process.cwd(),
+        dirname: __dirname
+      });
+    });
+
     app.get("/review/:id", handleDynamicSEO);
     app.get("/podcasts/:id", handleDynamicSEO);
 
     app.get("*", (req, res) => {
+      // Don't serve index.html for missing images or assets
+      if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff2?|ttf|otf)$/)) {
+        console.warn(`[Static] Asset not found: ${req.path}`);
+        return res.status(404).send("Not found");
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
