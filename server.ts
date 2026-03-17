@@ -162,7 +162,7 @@ async function startServer() {
     });
 
     // Explicitly serve feature images to prevent any MIME type confusion
-    app.get(["/editorial-feature-v3.jpg", "/podcast-feature-v3.jpg"], (req, res) => {
+    app.get(["/editorial-feature.svg", "/podcast-feature.svg"], (req, res) => {
       const fileName = req.path.substring(1);
       const pPath = path.join(publicPath, fileName);
       const dPath = path.join(distPath, fileName);
@@ -170,11 +170,11 @@ async function startServer() {
       console.log(`[Image Request] ${fileName} - Searching in ${pPath} and ${dPath}`);
       
       if (fs.existsSync(pPath)) {
-        res.setHeader("Content-Type", "image/jpeg");
+        res.setHeader("Content-Type", "image/svg+xml");
         return res.sendFile(pPath);
       }
       if (fs.existsSync(dPath)) {
-        res.setHeader("Content-Type", "image/jpeg");
+        res.setHeader("Content-Type", "image/svg+xml");
         return res.sendFile(dPath);
       }
       res.status(404).send("Image not found");
