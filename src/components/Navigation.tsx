@@ -24,19 +24,67 @@ const Navigation: React.FC<NavigationProps> = ({
   return (
     <nav className="fixed top-0 w-full z-50 glass border-b border-slate-800/50" data-testid="main-nav">
       <div className="max-w-[1440px] mx-auto px-8 h-24 flex items-center justify-between">
-        <div onClick={() => navigate('landing')} className="text-2xl font-black cursor-pointer tracking-tighter flex items-center gap-3 group border-none bg-transparent" data-testid="logo">
+        <a 
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            navigate('landing');
+          }} 
+          className="text-2xl font-black cursor-pointer tracking-tighter flex items-center gap-3 group border-none bg-transparent" 
+          data-testid="logo"
+        >
           <div className="w-10 h-10 bg-emerald-500 rounded-xl group-hover:rotate-[360deg] transition-transform duration-700 flex items-center justify-center shadow-lg shadow-emerald-500/20">
             <div className="w-5 h-5 bg-slate-950 rounded-sm" />
           </div>
           <span className="gradient-text">Verdiq</span>
-        </div>
+        </a>
         
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center gap-12">
-          <button onClick={() => navigate('landing')} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'landing' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} data-testid="nav-submit">Submit</button>
-          <button onClick={() => navigate('magazine')} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'magazine' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} data-testid="nav-magazine">Magazine</button>
-          <button onClick={() => navigate('podcasts')} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'podcasts' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} data-testid="nav-podcasts">Podcasts</button>
-          <button onClick={() => navigate('dashboard')} className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'dashboard' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} data-testid="nav-dashboard">Studio History</button>
+          <a 
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('landing');
+            }} 
+            className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'landing' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
+            data-testid="nav-submit"
+          >
+            Submit
+          </a>
+          <a 
+            href="/magazine"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('magazine');
+            }} 
+            className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'magazine' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
+            data-testid="nav-magazine"
+          >
+            Magazine
+          </a>
+          <a 
+            href="/podcasts"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('podcasts');
+            }} 
+            className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'podcasts' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
+            data-testid="nav-podcasts"
+          >
+            Podcasts
+          </a>
+          <a 
+            href="/studio"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate('dashboard');
+            }} 
+            className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'dashboard' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
+            data-testid="nav-dashboard"
+          >
+            Studio History
+          </a>
         </div>
 
         <div className="flex items-center gap-4">
@@ -77,8 +125,28 @@ const Navigation: React.FC<NavigationProps> = ({
             </div>
           ) : (
             <div className="flex items-center gap-6">
-              <button onClick={() => navigate('auth')} className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white transition-colors border-none bg-transparent" data-testid="login-btn">Login</button>
-              <button onClick={() => navigate('pricing')} className="btn-primary !px-6 !py-2.5 !text-xs" data-testid="go-pro-btn">Go Pro</button>
+              <a 
+                href="/login"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('auth');
+                }} 
+                className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white transition-colors border-none bg-transparent" 
+                data-testid="login-btn"
+              >
+                Login
+              </a>
+              <a 
+                href="/pricing"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate('pricing');
+                }} 
+                className="btn-primary !px-6 !py-2.5 !text-xs" 
+                data-testid="go-pro-btn"
+              >
+                Go Pro
+              </a>
             </div>
           )}
         </div>
@@ -88,34 +156,38 @@ const Navigation: React.FC<NavigationProps> = ({
       {mobileMenuOpen && (
         <div className="md:hidden bg-slate-900/95 backdrop-blur-xl border-t border-slate-800" data-testid="mobile-menu">
           <div className="px-6 py-4 flex flex-col gap-2">
-            <button 
-              onClick={() => { navigate('landing'); setMobileMenuOpen(false); }} 
-              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'landing' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent`}
+            <a 
+              href="/"
+              onClick={(e) => { e.preventDefault(); navigate('landing'); setMobileMenuOpen(false); }} 
+              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'landing' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent block`}
               data-testid="mobile-nav-submit"
             >
               Submit Track
-            </button>
-            <button 
-              onClick={() => { navigate('magazine'); setMobileMenuOpen(false); }} 
-              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'magazine' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent`}
+            </a>
+            <a 
+              href="/magazine"
+              onClick={(e) => { e.preventDefault(); navigate('magazine'); setMobileMenuOpen(false); }} 
+              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'magazine' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent block`}
               data-testid="mobile-nav-magazine"
             >
               Magazine
-            </button>
-            <button 
-              onClick={() => { navigate('podcasts'); setMobileMenuOpen(false); }} 
-              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'podcasts' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent`}
+            </a>
+            <a 
+              href="/podcasts"
+              onClick={(e) => { e.preventDefault(); navigate('podcasts'); setMobileMenuOpen(false); }} 
+              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'podcasts' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent block`}
               data-testid="mobile-nav-podcasts"
             >
               Podcasts
-            </button>
-            <button 
-              onClick={() => { navigate('dashboard'); setMobileMenuOpen(false); }} 
-              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'dashboard' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent`}
+            </a>
+            <a 
+              href="/studio"
+              onClick={(e) => { e.preventDefault(); navigate('dashboard'); setMobileMenuOpen(false); }} 
+              className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'dashboard' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent block`}
               data-testid="mobile-nav-dashboard"
             >
               Studio History
-            </button>
+            </a>
           </div>
         </div>
       )}

@@ -503,8 +503,12 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
             </div>
             
             {/* Read Full Review Button */}
-            <button
-              onClick={() => onSelectReview(activeReview)}
+            <a
+              href={`/review/${activeReview?.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                onSelectReview(activeReview);
+              }}
               className="mt-6 w-full bg-emerald-500 text-slate-950 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-400 transition-colors flex items-center justify-center gap-3"
               data-testid="read-full-review-btn"
             >
@@ -512,7 +516,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               Read Full Review
-            </button>
+            </a>
           </div>
 
           {/* Latest Episode Section */}
@@ -522,9 +526,13 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                 <Clock className="w-5 h-5 text-emerald-500" />
                 Latest Episode
               </h3>
-              <div 
-                onClick={() => handlePlay(latestEpisode.id)}
-                className="glass rounded-2xl p-4 cursor-pointer hover:bg-slate-800/50 transition-colors"
+              <a 
+                href={`/podcasts/${latestEpisode.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handlePlay(latestEpisode.id);
+                }}
+                className="glass rounded-2xl p-4 cursor-pointer hover:bg-slate-800/50 transition-colors block"
                 data-testid="latest-episode"
               >
                 <div className="flex items-center gap-4">
@@ -547,7 +555,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                     <Play className="w-4 h-4 text-emerald-500 ml-0.5" />
                   </button>
                 </div>
-              </div>
+              </a>
             </div>
           )}
 
@@ -559,10 +567,14 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
             </h3>
             <div className="space-y-3">
               {mostPlayed.map((review, index) => (
-                <div 
+                <a 
                   key={review.id}
-                  onClick={() => handlePlay(review.id)}
-                  className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-colors ${activeId === review.id ? 'bg-emerald-500/10' : 'hover:bg-slate-800/50'}`}
+                  href={`/podcasts/${review.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePlay(review.id);
+                  }}
+                  className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-colors block ${activeId === review.id ? 'bg-emerald-500/10' : 'hover:bg-slate-800/50'}`}
                   data-testid={`chart-item-${index}`}
                 >
                   <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg ${index < 3 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-700 text-slate-400'}`}>
@@ -583,7 +595,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                     <p className="font-bold text-white text-sm">{playCounts[review.id] || 0}</p>
                     <p className="text-xs text-slate-500">plays</p>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           </div>
@@ -595,10 +607,14 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
             <h3 className="text-lg font-black text-white mb-4">All Episodes</h3>
             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent" data-testid="episodes-sidebar">
               {podcastReviews.map((review, index) => (
-                <div 
+                <a 
                   key={review.id}
-                  onClick={() => handlePlay(review.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${activeId === review.id ? 'bg-emerald-500/10 border border-emerald-500/30' : 'glass hover:bg-slate-800/50'}`}
+                  href={`/podcasts/${review.id}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePlay(review.id);
+                  }}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all block ${activeId === review.id ? 'bg-emerald-500/10 border border-emerald-500/30' : 'glass hover:bg-slate-800/50'}`}
                   data-testid={`episode-${index}`}
                 >
                   <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0">
@@ -623,7 +639,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
                     </p>
                     <p className="text-xs text-slate-400 truncate">{review.artistName}</p>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
             

@@ -93,14 +93,21 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
             {/* Menu Items */}
             <div className="p-2">
               {menuItems.map((item, idx) => (
-                <button
+                <a
                   key={idx}
-                  onClick={item.onClick}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all text-sm font-bold border-none bg-transparent"
+                  href={item.label === 'Admin Dashboard' ? '/admin' : 
+                        item.label === 'Edit Profile' ? '/account' :
+                        item.label === 'Billing Details' ? '/pricing' :
+                        item.label === 'Help Center' ? '/faq' : '#'}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    item.onClick();
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all text-sm font-bold border-none bg-transparent block"
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
-                </button>
+                </a>
               ))}
             </div>
 

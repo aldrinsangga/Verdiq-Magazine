@@ -14,16 +14,58 @@ const Footer: React.FC<FooterProps> = ({ navigate }) => {
             <span className="text-xs uppercase tracking-widest">© 2024 Future of Sound and Critic</span>
           </div>
           <div className="flex flex-wrap justify-center gap-8">
-             <button onClick={() => navigate('guide')} className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent">Submission Guide</button>
-             <button onClick={() => navigate('podcasts')} className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent">Podcasts</button>
-             <button onClick={() => navigate('pricing')} className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent">Pricing</button>
-             <button onClick={() => navigate('faq')} className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent">FAQ</button>
-             <button onClick={() => navigate('contact')} className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent">Contact Us</button>
+             <a 
+               href="/guide"
+               onClick={(e) => { e.preventDefault(); navigate('guide'); }} 
+               className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"
+             >
+               Submission Guide
+             </a>
+             <a 
+               href="/podcasts"
+               onClick={(e) => { e.preventDefault(); navigate('podcasts'); }} 
+               className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"
+             >
+               Podcasts
+             </a>
+             <a 
+               href="/pricing"
+               onClick={(e) => { e.preventDefault(); navigate('pricing'); }} 
+               className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"
+             >
+               Pricing
+             </a>
+             <a 
+               href="/faq"
+               onClick={(e) => { e.preventDefault(); navigate('faq'); }} 
+               className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"
+             >
+               FAQ
+             </a>
+             <a 
+               href="/contact"
+               onClick={(e) => { e.preventDefault(); navigate('contact'); }} 
+               className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"
+             >
+               Contact Us
+             </a>
           </div>
         </div>
         <div className="flex justify-center gap-8 pt-8 border-t border-slate-900/50">
-          <button onClick={() => navigate('privacy')} className="text-[10px] font-bold uppercase text-slate-600 hover:text-slate-400 transition-colors border-none bg-transparent">Privacy Policy</button>
-          <button onClick={() => navigate('terms')} className="text-[10px] font-bold uppercase text-slate-600 hover:text-slate-400 transition-colors border-none bg-transparent">Terms & Conditions</button>
+          <a 
+            href="/privacy"
+            onClick={(e) => { e.preventDefault(); navigate('privacy'); }} 
+            className="text-[10px] font-bold uppercase text-slate-600 hover:text-slate-400 transition-colors border-none bg-transparent"
+          >
+            Privacy Policy
+          </a>
+          <a 
+            href="/terms"
+            onClick={(e) => { e.preventDefault(); navigate('terms'); }} 
+            className="text-[10px] font-bold uppercase text-slate-600 hover:text-slate-400 transition-colors border-none bg-transparent"
+          >
+            Terms & Conditions
+          </a>
         </div>
       </div>
     </footer>

@@ -155,6 +155,14 @@ function App() {
         } else {
           setView('magazine');
         }
+      } else if (path.startsWith('/podcasts/')) {
+        const podcastId = path.split('/podcasts/')[1];
+        if (podcastId) {
+          setTargetPodcastId(podcastId);
+          setView('podcasts');
+        } else {
+          setView('podcasts');
+        }
       } else {
         const newView = pathToView[path] || 'landing';
         setView(newView);
