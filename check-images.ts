@@ -1,23 +1,22 @@
+import sizeOf from 'image-size';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const files = fs.readdirSync(path.join(process.cwd(), 'public'))
-  .filter(f => f.endsWith('.jpg'))
-  .map(f => path.join('public', f));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const files = [
+  path.join(__dirname, 'public', 'editorial-feature.jpg'),
+  path.join(__dirname, 'public', 'podcast-feature.jpg')
+];
 
 files.forEach(file => {
-  if (fs.existsSync(file)) {
+  try {
     const buffer = fs.readFileSync(file);
-    console.log(`File: ${file}`);
-    console.log(`Size: ${buffer.length} bytes`);
-    console.log(`First 10 bytes: ${buffer.slice(0, 10).toString('hex')}`);
-    // JPEG magic number: FF D8 FF
-    if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
-      console.log('Valid JPEG header found.');
-    } else {
-      console.log('INVALID JPEG header!');
-    }
-  } else {
-    console.log(`File not found: ${file}`);
+    const dimensions = sizeOf(buffer);
+    console.log(`[Image Check] ${file}: ${dimensions.width}x${dimensions.height} (${dimensions.type})`);
+  } catch (err) {
+    console.error(`[Image Check] ${file} is NOT a valid image: ${err.message}`);
   }
 });

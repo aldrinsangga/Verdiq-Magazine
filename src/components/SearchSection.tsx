@@ -29,8 +29,8 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   const [progress, setProgress] = useState(0);
 
   // Storage Image URLs
-  const [editorialUrl, setEditorialUrl] = useState(`/editorial-feature.jpg?v=${Date.now()}`);
-  const [podcastUrl, setPodcastUrl] = useState(`/podcast-feature.jpg?v=${Date.now()}`);
+  const [editorialUrl, setEditorialUrl] = useState('/editorial-feature.jpg');
+  const [podcastUrl, setPodcastUrl] = useState('/podcast-feature.jpg');
 
   useEffect(() => {
     const loadStorageImages = async () => {
@@ -47,7 +47,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
           try {
             const r = ref(storage, path);
             eUrl = await getDownloadURL(r);
-            console.log(`[Storage] Found editorial at ${path}`);
+            console.log(`[Storage] Found editorial at ${path}: ${eUrl}`);
             break;
           } catch (e) {
             console.log(`[Storage] Not found at ${path}`);
@@ -59,7 +59,7 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
           try {
             const r = ref(storage, path);
             pUrl = await getDownloadURL(r);
-            console.log(`[Storage] Found podcast at ${path}`);
+            console.log(`[Storage] Found podcast at ${path}: ${pUrl}`);
             break;
           } catch (e) {
             console.log(`[Storage] Not found at ${path}`);
@@ -485,18 +485,21 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                 src={editorialUrl} 
                 alt="Editorial Feature" 
                 className="w-full h-auto block object-contain"
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
                 data-fallback-tried="false"
                 onError={(e) => {
                   const target = e.currentTarget;
                   if (target.getAttribute('data-fallback-tried') === 'false') {
                     target.setAttribute('data-fallback-tried', 'true');
-                    target.src = `/editorial-feature.jpg?v=${Date.now()}`;
-                    console.log("[Image Fallback] Retrying editorial image from local path");
+                    const fallbackSrc = '/editorial-feature.jpg';
+                    console.log(`[Image Fallback] Retrying editorial image from local path: ${fallbackSrc}`);
+                    target.src = fallbackSrc;
                     return;
                   }
                   
                   // If already tried fallback and still failing, show error UI
-                  console.error("[Image Error] Editorial image failed to load even after fallback");
+                  console.error(`[Image Error] Editorial image failed to load even after fallback. Current src: ${target.src}`);
                   target.style.display = 'none';
                   const container = target.parentElement;
                   if (container) {
@@ -523,18 +526,21 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                   src={podcastUrl} 
                   alt="Podcast Feature" 
                   className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
+                  referrerPolicy="no-referrer"
+                  crossOrigin="anonymous"
                   data-fallback-tried="false"
                   onError={(e) => {
                     const target = e.currentTarget;
                     if (target.getAttribute('data-fallback-tried') === 'false') {
                       target.setAttribute('data-fallback-tried', 'true');
-                      target.src = `/podcast-feature.jpg?v=${Date.now()}`;
-                      console.log("[Image Fallback] Retrying podcast image from local path");
+                      const fallbackSrc = '/podcast-feature.jpg';
+                      console.log(`[Image Fallback] Retrying podcast image from local path: ${fallbackSrc}`);
+                      target.src = fallbackSrc;
                       return;
                     }
                     
                     // If already tried fallback and still failing, show error UI
-                    console.error("[Image Error] Podcast image failed to load even after fallback");
+                    console.error(`[Image Error] Podcast image failed to load even after fallback. Current src: ${target.src}`);
                     target.style.display = 'none';
                     const container = target.parentElement;
                     if (container) {

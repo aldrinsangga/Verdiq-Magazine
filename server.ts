@@ -30,32 +30,38 @@ async function startServer() {
   }
   
   console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode...`);
+  
+  // Explicitly serve feature images at the very beginning to ensure they are available
+  app.get("/editorial-feature.jpg", (req, res) => {
+    const p = path.join(__dirname, "public", "editorial-feature.jpg");
+    if (fs.existsSync(p)) {
+      res.setHeader("Content-Type", "image/jpeg");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.sendFile(p);
+    }
+    res.status(404).send("Editorial image not found on server");
+  });
 
-  // Explicitly serve feature images to prevent any MIME type confusion
-  // Moved to the top to ensure it takes precedence in both dev and prod
-  app.get(["/editorial-feature.jpg", "/podcast-feature.jpg"], (req, res) => {
-    const fileName = req.path.substring(1);
-    const publicPath = path.join(__dirname, "public");
-    const distPath = path.join(__dirname, "dist");
-    const pPath = path.join(publicPath, fileName);
-    const dPath = path.join(distPath, fileName);
-    
-    console.log(`[Image Request] ${fileName} - Searching in ${pPath} and ${dPath}`);
-    
-    if (fs.existsSync(pPath)) {
-      console.log(`[Image Request] Found in public: ${pPath}`);
+  app.get("/podcast-feature.jpg", (req, res) => {
+    const p = path.join(__dirname, "public", "podcast-feature.jpg");
+    if (fs.existsSync(p)) {
       res.setHeader("Content-Type", "image/jpeg");
       res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.sendFile(pPath);
+      return res.sendFile(p);
     }
-    if (fs.existsSync(dPath)) {
-      console.log(`[Image Request] Found in dist: ${dPath}`);
-      res.setHeader("Content-Type", "image/jpeg");
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.sendFile(dPath);
+    res.status(404).send("Podcast image not found on server");
+  });
+
+  // Debug logging for image requests
+  app.use((req, res, next) => {
+    if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
+      const publicPath = path.join(__dirname, "public");
+      const distPath = path.join(__dirname, "dist");
+      const pPath = path.join(publicPath, req.path);
+      const dPath = path.join(distPath, req.path);
+      console.log(`[Image Request] ${req.path} - Public: ${fs.existsSync(pPath)}, Dist: ${fs.existsSync(dPath)}`);
     }
-    console.warn(`[Image Request] NOT FOUND: ${fileName}`);
-    res.status(404).send("Image not found");
+    next();
   });
 
   // Vite middleware for development
