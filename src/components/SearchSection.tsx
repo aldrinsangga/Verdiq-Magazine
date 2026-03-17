@@ -35,13 +35,36 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
   useEffect(() => {
     const loadStorageImages = async () => {
       try {
-        const editorialRef = ref(storage, 'assets/editorial-feature.jpg');
-        const podcastRef = ref(storage, 'assets/podcast-feature.jpg');
+        // Try multiple possible paths in storage
+        const paths = ['assets/editorial-feature.jpg', 'editorial-feature.jpg'];
+        const podcastPaths = ['assets/podcast-feature.jpg', 'podcast-feature.jpg'];
         
-        const [eUrl, pUrl] = await Promise.all([
-          getDownloadURL(editorialRef).catch(() => '/editorial-feature.jpg'),
-          getDownloadURL(podcastRef).catch(() => '/podcast-feature.jpg')
-        ]);
+        let eUrl = '/editorial-feature.jpg';
+        let pUrl = '/podcast-feature.jpg';
+
+        // Try to find editorial image
+        for (const path of paths) {
+          try {
+            const r = ref(storage, path);
+            eUrl = await getDownloadURL(r);
+            console.log(`[Storage] Found editorial at ${path}`);
+            break;
+          } catch (e) {
+            console.log(`[Storage] Not found at ${path}`);
+          }
+        }
+
+        // Try to find podcast image
+        for (const path of podcastPaths) {
+          try {
+            const r = ref(storage, path);
+            pUrl = await getDownloadURL(r);
+            console.log(`[Storage] Found podcast at ${path}`);
+            break;
+          } catch (e) {
+            console.log(`[Storage] Not found at ${path}`);
+          }
+        }
         
         setEditorialUrl(eUrl);
         setPodcastUrl(pUrl);
@@ -462,15 +485,18 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                 src={editorialUrl} 
                 alt="Editorial Feature" 
                 className="w-full h-auto block object-contain"
+                data-fallback-tried="false"
                 onError={(e) => {
                   const target = e.currentTarget;
-                  const localPath = `/editorial-feature.jpg?v=${Date.now()}`;
-                  // If it's not already the local path, try falling back to it
-                  if (!target.src.includes('/editorial-feature.jpg')) {
-                    target.src = localPath;
+                  if (target.getAttribute('data-fallback-tried') === 'false') {
+                    target.setAttribute('data-fallback-tried', 'true');
+                    target.src = `/editorial-feature.jpg?v=${Date.now()}`;
+                    console.log("[Image Fallback] Retrying editorial image from local path");
                     return;
                   }
-                  // If local path also fails, hide and show error message
+                  
+                  // If already tried fallback and still failing, show error UI
+                  console.error("[Image Error] Editorial image failed to load even after fallback");
                   target.style.display = 'none';
                   const container = target.parentElement;
                   if (container) {
@@ -479,9 +505,9 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                         <div class="w-16 h-16 mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
                           <svg class="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                         </div>
-                        <p class="text-emerald-500 font-black uppercase tracking-widest text-xs mb-2">Image Required</p>
+                        <p class="text-emerald-500 font-black uppercase tracking-widest text-xs mb-2">Image Not Found</p>
                         <p class="text-slate-500 text-[10px] leading-relaxed max-w-[200px]">
-                          Please upload your photo to the <b>public</b> folder and rename it to <b>editorial-feature.jpg</b>
+                          The editorial feature image could not be loaded from Storage or the local public folder.
                         </p>
                       </div>
                     `;
@@ -497,15 +523,18 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                   src={podcastUrl} 
                   alt="Podcast Feature" 
                   className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity"
+                  data-fallback-tried="false"
                   onError={(e) => {
                     const target = e.currentTarget;
-                    const localPath = `/podcast-feature.jpg?v=${Date.now()}`;
-                    // If it's not already the local path, try falling back to it
-                    if (!target.src.includes('/podcast-feature.jpg')) {
-                      target.src = localPath;
+                    if (target.getAttribute('data-fallback-tried') === 'false') {
+                      target.setAttribute('data-fallback-tried', 'true');
+                      target.src = `/podcast-feature.jpg?v=${Date.now()}`;
+                      console.log("[Image Fallback] Retrying podcast image from local path");
                       return;
                     }
-                    // If local path also fails, hide and show error message
+                    
+                    // If already tried fallback and still failing, show error UI
+                    console.error("[Image Error] Podcast image failed to load even after fallback");
                     target.style.display = 'none';
                     const container = target.parentElement;
                     if (container) {
