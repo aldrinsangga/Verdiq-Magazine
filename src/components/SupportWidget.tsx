@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, ChevronLeft, Shield, AlertCircle, CheckCircle2, Clock, Trash2, Reply } from 'lucide-react';
+import { MessageCircle, Send, X, ChevronLeft, Shield, CircleAlert, CircleCheck, Clock, Trash2, Reply } from 'lucide-react';
 import { SupportTicket, SupportMessage } from '../../types';
 import { getAuthHeaders } from '../authClient';
 
@@ -311,7 +311,7 @@ const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
                 </div>
                 {error && (
                   <div className="flex items-center gap-2 text-rose-500 text-xs font-bold px-1">
-                    <AlertCircle className="w-4 h-4" />
+                    <CircleAlert className="w-4 h-4" />
                     <span>{error}</span>
                   </div>
                 )}

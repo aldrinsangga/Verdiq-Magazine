@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, CheckCircle, X, Info, AlertTriangle } from 'lucide-react';
+import { CircleAlert, CircleCheck, X, Info, TriangleAlert } from 'lucide-react';
 
 export type NotificationType = 'success' | 'error' | 'info' | 'warning';
 
@@ -22,10 +22,10 @@ const Notification: React.FC<NotificationProps> = ({ message, type, onClose, dur
   }, [duration, onClose]);
 
   const icons = {
-    success: <CheckCircle className="text-emerald-500" size={20} />,
-    error: <AlertCircle className="text-red-500" size={20} />,
+    success: <CircleCheck className="text-emerald-500" size={20} />,
+    error: <CircleAlert className="text-red-500" size={20} />,
     info: <Info className="text-blue-500" size={20} />,
-    warning: <AlertTriangle className="text-amber-500" size={20} />
+    warning: <TriangleAlert className="text-amber-500" size={20} />
   };
 
   const bgColors = {

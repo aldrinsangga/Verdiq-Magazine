@@ -45,6 +45,7 @@ interface MainContentProps {
   fetchReviewWithAudio: (id: string) => Promise<any>;
   navigateToReview: (review: any, viewOnly: boolean) => void;
   navigate: (view: string) => void;
+  paypalClientId: string;
 }
 
 const MainContent: React.FC<MainContentProps> = ({
@@ -59,6 +60,7 @@ const MainContent: React.FC<MainContentProps> = ({
   styleGuides,
   creditStatus,
   targetPodcastId,
+  paypalClientId,
   setUsers,
   setAllReviews,
   setTargetPodcastId,
@@ -160,6 +162,7 @@ const MainContent: React.FC<MainContentProps> = ({
       {view === 'pricing' && (
         <Pricing 
           currentUser={currentUser}
+          paypalClientId={paypalClientId}
           onUpgrade={(data) => { 
             if (!currentUser) { navigate('auth'); return; }
             // Update user state with subscription data

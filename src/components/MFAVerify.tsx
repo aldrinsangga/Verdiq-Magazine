@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, Loader2, AlertTriangle } from 'lucide-react';
+import { Shield, Loader2, TriangleAlert } from 'lucide-react';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -73,7 +73,7 @@ const MFAVerify = ({ email, password, onSuccess, onCancel }) => {
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 mb-6 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <TriangleAlert className="w-5 h-5 text-red-400 flex-shrink-0" />
           <span className="text-red-400 text-sm">{error}</span>
         </div>
       )}

@@ -1,14 +1,12 @@
 import paypal from "@paypal/checkout-server-sdk";
 
-// Use sandbox for development, live for production
+// Force live production environment as requested
 const environment = () => {
-  const clientId = process.env.PAYPAL_CLIENT_ID || 'sb';
-  const clientSecret = process.env.PAYPAL_CLIENT_SECRET || 'sb';
+  const clientId = process.env.PAYPAL_CLIENT_ID || '';
+  const clientSecret = process.env.PAYPAL_CLIENT_SECRET || '';
 
-  if (process.env.NODE_ENV === 'production') {
-    return new paypal.core.LiveEnvironment(clientId, clientSecret);
-  }
-  return new paypal.core.SandboxEnvironment(clientId, clientSecret);
+  // Always use LiveEnvironment
+  return new paypal.core.LiveEnvironment(clientId, clientSecret);
 };
 
 const client = () => {

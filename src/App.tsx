@@ -5,7 +5,7 @@ import MainContent from './components/MainContent';
 import SupportWidget from './components/SupportWidget';
 import SEO from './components/SEO';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
-import ErrorBoundary from './components/ErrorBoundary';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
 import Notification, { NotificationType } from './components/Notification';
 import { NotificationProvider, useNotification } from './components/NotificationContext';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
@@ -95,6 +95,7 @@ function AppContent() {
   const [allReviews, setAllReviews] = useState([]);
   const [styleGuides, setStyleGuides] = useState([]);
   const [targetPodcastId, setTargetPodcastId] = useState(null);
+  const [paypalClientId, setPaypalClientId] = useState(import.meta.env.VITE_PAYPAL_CLIENT_ID || "test");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
@@ -388,6 +389,21 @@ function AppContent() {
 
     const init = async () => {
       try {
+        // Fetch config
+        try {
+          const configRes = await fetch(`${API_URL}/api/config`);
+          if (configRes.ok) {
+            const config = await configRes.json();
+            if (config.paypalClientId) {
+              setPaypalClientId(config.paypalClientId);
+            } else {
+              setPaypalClientId("test");
+            }
+          }
+        } catch (e) {
+          console.error("Failed to fetch config", e);
+        }
+
         // Handle URL routing for shareable review links
         const path = window.location.pathname;
         const reviewMatch = path.match(/^\/review\/([a-zA-Z0-9-]+)$/);
@@ -1003,7 +1019,7 @@ function AppContent() {
 
   return (
     <PayPalScriptProvider options={{ 
-        clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "test",
+        clientId: paypalClientId,
         currency: "USD",
         intent: "capture"
       }}>
@@ -1043,6 +1059,7 @@ function AppContent() {
               setUsers={setUsers}
               setAllReviews={setAllReviews}
               setTargetPodcastId={setTargetPodcastId}
+              paypalClientId={paypalClientId}
               handleAnalyze={handleAnalyze}
               handleLogin={handleLogin}
               handleUpdateReview={handleUpdateReview}

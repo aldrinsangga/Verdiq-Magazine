@@ -227,7 +227,8 @@ app.get("/api/config", (req, res) => {
   const key = process.env.GEMINI_API_KEY || process.env.API_KEY;
   console.log(`[Config] Key found: ${!!key}${key ? ` (length: ${key.length})` : ''}`);
   res.json({
-    geminiApiKey: key || ""
+    geminiApiKey: key || "",
+    paypalClientId: process.env.PAYPAL_CLIENT_ID || import.meta.env?.VITE_PAYPAL_CLIENT_ID || ""
   });
 });
 
@@ -524,7 +525,10 @@ app.post("/api/credits/topup/execute", async (req, res, next) => {
     await db.collection('purchases').doc(purchaseId).set(purchase);
     
     const newCredits = (user.credits || 0) + pkg.credits;
-    await userRef.update({ credits: newCredits });
+    await userRef.update({ 
+      credits: newCredits,
+      isSubscribed: true
+    });
 
     res.json({ success: true, credits: newCredits, purchase });
   } catch (error) {
