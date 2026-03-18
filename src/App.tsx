@@ -95,7 +95,7 @@ function AppContent() {
   const [allReviews, setAllReviews] = useState([]);
   const [styleGuides, setStyleGuides] = useState([]);
   const [targetPodcastId, setTargetPodcastId] = useState(null);
-  const [paypalClientId, setPaypalClientId] = useState(import.meta.env.VITE_PAYPAL_CLIENT_ID || "test");
+  const [paypalClientId, setPaypalClientId] = useState("");
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
@@ -396,8 +396,6 @@ function AppContent() {
             const config = await configRes.json();
             if (config.paypalClientId) {
               setPaypalClientId(config.paypalClientId);
-            } else {
-              setPaypalClientId("test");
             }
           }
         } catch (e) {
@@ -1018,31 +1016,33 @@ function AppContent() {
   };
 
   return (
-    <PayPalScriptProvider options={{ 
-        clientId: paypalClientId,
-        currency: "USD",
-        intent: "capture"
-      }}>
-        <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
-        <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
-        <Navigation 
-          view={view}
-          currentUser={currentUser}
-          creditStatus={creditStatus}
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-          navigate={navigate}
-          handleLogout={handleLogout}
-        />
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
+      <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
+      <Navigation 
+        view={view}
+        currentUser={currentUser}
+        creditStatus={creditStatus}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+        navigate={navigate}
+        handleLogout={handleLogout}
+      />
 
-        {isInitializing ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Initializing Studio</p>
-            </div>
+      {isInitializing ? (
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Initializing Studio</p>
           </div>
-        ) : (
+        </div>
+      ) : (
+        <PayPalScriptProvider 
+          key={paypalClientId}
+          options={{ 
+            clientId: paypalClientId,
+            currency: "USD",
+            intent: "capture"
+          }}>
           <div className="flex-grow">
             <MainContent 
               view={view}
@@ -1076,28 +1076,28 @@ function AppContent() {
               navigate={navigate}
             />
           </div>
-        )}
+        </PayPalScriptProvider>
+      )}
 
-        <Footer navigate={navigate} />
+      <Footer navigate={navigate} />
 
-        {/* Support Widget */}
-        {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing') && (
-          <SupportWidget currentUser={currentUser} />
-        )}
+      {/* Support Widget */}
+      {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing') && (
+        <SupportWidget currentUser={currentUser} />
+      )}
 
-        {/* Insufficient Credits Modal */}
-        <InsufficientCreditsModal
-          isOpen={showCreditModal}
-          onClose={() => setShowCreditModal(false)}
-          onBuyCredits={() => { setShowCreditModal(false); navigate('pricing'); }}
-          onUpgrade={() => { setShowCreditModal(false); navigate('pricing'); }}
-          currentCredits={creditStatus?.credits || 0}
-          requiredCredits={creditModalConfig.required}
-          action={creditModalConfig.action}
-          isFreeUser={creditModalConfig.isFreeUser}
-        />
-        </div>
-      </PayPalScriptProvider>
+      {/* Insufficient Credits Modal */}
+      <InsufficientCreditsModal
+        isOpen={showCreditModal}
+        onClose={() => setShowCreditModal(false)}
+        onBuyCredits={() => { setShowCreditModal(false); navigate('pricing'); }}
+        onUpgrade={() => { setShowCreditModal(false); navigate('pricing'); }}
+        currentCredits={creditStatus?.credits || 0}
+        requiredCredits={creditModalConfig.required}
+        action={creditModalConfig.action}
+        isFreeUser={creditModalConfig.isFreeUser}
+      />
+    </div>
   );
 }
 

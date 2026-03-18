@@ -19,48 +19,6 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
     }
   }, [checkoutItem]);
 
-  // Handle PayPal return (Legacy redirect flow)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const paymentId = params.get('paymentId');
-    const payerId = params.get('PayerID');
-    const type = params.get('type');
-    
-    if (paymentId && payerId && type === 'topup') {
-      executeTopUp(paymentId, payerId);
-    }
-  }, []);
-
-  const executeTopUp = async (paymentId, payerId) => {
-    setLoading('executing');
-    setError(null);
-    
-    try {
-      const authHeaders = await getAuthHeaders();
-      const res = await fetch(`${API_URL}/api/credits/topup/execute`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...authHeaders
-        },
-        body: JSON.stringify({ paymentId, payerId })
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        window.history.replaceState({}, document.title, window.location.pathname);
-        onUpgrade({ ...data, type: 'topup' });
-      } else {
-        const err = await res.json();
-        setError(err.detail || err.message || 'Top-up failed');
-      }
-    } catch (e) {
-      setError('Top-up processing failed');
-    } finally {
-      setLoading(null);
-    }
-  };
-
   const handleTopUp = (packageId) => {
     const pkg = topUpPackages.find(p => p.id === packageId);
     setCheckoutItem({ id: packageId, name: `${pkg.credits} Credits`, price: pkg.price });
@@ -258,65 +216,25 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
                 </div>
               )}
               
-              {paypalClientId && paypalClientId !== 'test' ? (
-                <PayPalButtons 
-                  style={{ 
-                    layout: "vertical", 
-                    color: "blue", 
-                    shape: "pill", 
-                    label: "pay",
-                    height: 45
-                  }}
-                  createOrder={(data, actions) => createOrder(data, actions, checkoutItem.id)}
-                  onApprove={(data, actions) => onApprove(data, actions, checkoutItem.id)}
-                  onCancel={() => {
-                    setTimeout(() => setCheckoutItem(null), 500);
-                  }}
-                  onError={(err) => {
-                    console.error("PayPal Error:", err);
-                    setError("PayPal checkout failed. Please try again.");
-                    setTimeout(() => setCheckoutItem(null), 500);
-                  }}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full gap-4">
-                  <div className="bg-amber-100 text-amber-800 text-xs px-3 py-2 rounded-lg text-center font-medium">
-                    PayPal is not configured. Using mock checkout for testing.
-                  </div>
-                  <button
-                    onClick={async () => {
-                      setIsProcessing(true);
-                      try {
-                        const authHeaders = await getAuthHeaders();
-                        const res = await fetch(`${API_URL}/api/credits/topup/execute`, {
-                          method: 'POST',
-                          headers: { 
-                            'Content-Type': 'application/json',
-                            ...authHeaders
-                          },
-                          body: JSON.stringify({ packageId: checkoutItem.id })
-                        });
-                        
-                        if (res.ok) {
-                          const result = await res.json();
-                          onUpgrade({ ...result, type: 'topup' });
-                          setTimeout(() => setCheckoutItem(null), 500);
-                        } else {
-                          const err = await res.json();
-                          setError(err.message || 'Mock checkout failed');
-                        }
-                      } catch (e) {
-                        setError('Mock checkout processing failed');
-                      } finally {
-                        setIsProcessing(false);
-                      }
-                    }}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-full transition-colors"
-                  >
-                    Mock Checkout
-                  </button>
-                </div>
-              )}
+              <PayPalButtons 
+                style={{ 
+                  layout: "vertical", 
+                  color: "blue", 
+                  shape: "pill", 
+                  label: "pay",
+                  height: 45
+                }}
+                createOrder={(data, actions) => createOrder(data, actions, checkoutItem.id)}
+                onApprove={(data, actions) => onApprove(data, actions, checkoutItem.id)}
+                onCancel={() => {
+                  setTimeout(() => setCheckoutItem(null), 500);
+                }}
+                onError={(err) => {
+                  console.error("PayPal Error:", err);
+                  setError("PayPal checkout failed. Please try again.");
+                  setTimeout(() => setCheckoutItem(null), 500);
+                }}
+              />
             </div>
 
             <p className="text-[10px] text-slate-400 text-center mt-8 font-bold uppercase tracking-widest">

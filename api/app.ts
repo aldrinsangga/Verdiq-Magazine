@@ -225,10 +225,9 @@ app.get("/api/debug/env", async (req, res) => {
 
 app.get("/api/config", (req, res) => {
   const key = process.env.GEMINI_API_KEY || process.env.API_KEY;
-  console.log(`[Config] Key found: ${!!key}${key ? ` (length: ${key.length})` : ''}`);
   res.json({
     geminiApiKey: key || "",
-    paypalClientId: process.env.PAYPAL_CLIENT_ID || import.meta.env?.VITE_PAYPAL_CLIENT_ID || ""
+    paypalClientId: process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || ""
   });
 });
 
@@ -478,59 +477,6 @@ app.get("/api/admin/earnings", isAdmin, async (req, res, next) => {
     const purchases = snapshot.docs.map(doc => doc.data());
     const totalEarnings = purchases.reduce((sum, p) => sum + (p.amount || 0), 0);
     res.json({ purchases, totalEarnings });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Mock purchase recording (for top-up simulation)
-app.post("/api/credits/topup/execute", async (req, res, next) => {
-  try {
-    const userId = await getUserIdFromAuth(req.headers.authorization);
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
-
-    const { paymentId, payerId, packageId } = req.body;
-    
-    // This is now a legacy endpoint, but we'll keep it as a fallback for mock testing
-    // In a real app, you'd verify with PayPal here.
-    
-    const packages: Record<string, { credits: number, price: number }> = {
-      'topup_15': { credits: 15, price: 15 },
-      'topup_35': { credits: 35, price: 25 },
-      'topup_80': { credits: 80, price: 50 },
-      'topup_140': { credits: 140, price: 85 }
-    };
-
-    const pkg = packages[packageId] || { credits: 10, price: 10 };
-    
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    const user = userDoc.data();
-
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    const purchaseId = `pur_${Math.random().toString(36).substring(2, 11)}`;
-    const purchase = {
-      id: purchaseId,
-      userId,
-      userName: user.name,
-      userEmail: user.email,
-      amount: pkg.price,
-      credits: pkg.credits,
-      status: 'completed',
-      createdAt: new Date().toISOString(),
-      paymentMethod: 'PayPal'
-    };
-
-    await db.collection('purchases').doc(purchaseId).set(purchase);
-    
-    const newCredits = (user.credits || 0) + pkg.credits;
-    await userRef.update({ 
-      credits: newCredits,
-      isSubscribed: true
-    });
-
-    res.json({ success: true, credits: newCredits, purchase });
   } catch (error) {
     next(error);
   }
