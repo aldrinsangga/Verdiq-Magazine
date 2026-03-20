@@ -156,7 +156,7 @@ export const login = async (email, password) => {
 /**
  * Signup user
  */
-export const signup = async (email, password, name) => {
+export const signup = async (email, password, name, website = "") => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
   await updateProfile(user, { displayName: name });
@@ -171,7 +171,8 @@ export const signup = async (email, password, name) => {
       email, 
       password, 
       name: name || email.split('@')[0],
-      id: user.uid // Use Firebase UID
+      id: user.uid, // Use Firebase UID
+      website // Honeypot field
     })
   });
   

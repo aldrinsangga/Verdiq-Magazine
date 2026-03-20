@@ -11,6 +11,7 @@ const Auth = ({ onLogin, onClose }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [website, setWebsite] = useState(''); // Honeypot field
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showMFA, setShowMFA] = useState(false);
@@ -24,7 +25,7 @@ const Auth = ({ onLogin, onClose }) => {
 
     try {
       if (mode === 'signup') {
-        const userData = await signup(email, password, name);
+        const userData = await signup(email, password, name, website);
         setVerificationSent(true);
         // We don't call onLogin yet because they need to verify email
       } else if (mode === 'login') {
@@ -147,18 +148,31 @@ const Auth = ({ onLogin, onClose }) => {
 
       <form onSubmit={handleAuth} className="space-y-4">
         {mode === 'signup' && (
-          <div>
-            <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2 ml-1">Full Name</label>
-            <input 
-              required
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              placeholder="John Doe"
-              data-testid="name-input"
-            />
-          </div>
+          <>
+            <div>
+              <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2 ml-1">Full Name</label>
+              <input 
+                required
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                placeholder="John Doe"
+                data-testid="name-input"
+              />
+            </div>
+            {/* Honeypot field - hidden from users */}
+            <div className="hidden" aria-hidden="true">
+              <input 
+                type="text" 
+                name="website" 
+                tabIndex={-1} 
+                autoComplete="off" 
+                value={website}
+                onChange={e => setWebsite(e.target.value)}
+              />
+            </div>
+          </>
         )}
         
         <div>

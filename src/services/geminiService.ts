@@ -17,7 +17,7 @@ const getAI = async () => {
   // 2. If missing, try to fetch from server (runtime environment)
   if (!apiKey) {
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch(`${API_URL}/api/config`);
       if (res.ok) {
         const data = await res.json();
         apiKey = data.geminiApiKey;
@@ -34,6 +34,47 @@ const getAI = async () => {
   }
   
   return new GoogleGenAI({ apiKey: apiKey || "" });
+};
+
+// Basic prompt injection protection
+const sanitizeInput = (text: string | null | undefined): string => {
+  if (!text) return "";
+  // Remove potential prompt injection keywords and excessive whitespace
+  return text
+    .replace(/ignore previous instructions/gi, "[REDACTED]")
+    .replace(/system instruction/gi, "[REDACTED]")
+    .replace(/you are a/gi, "[REDACTED]")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const checkQuota = async () => {
+  const token = localStorage.getItem('access_token');
+  if (!token) return { success: true }; // Fallback if no token (might be handled by auth)
+
+  try {
+    const res = await fetch(`${API_URL}/api/ai/preflight`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (res.status === 429) {
+      const data = await res.json();
+      throw new Error(data.message + (data.instruction ? " " + data.instruction : ""));
+    }
+    
+    if (!res.ok) {
+      // If it's not a 429, we might just log it and continue (fail open)
+      console.warn("Quota check failed but continuing:", res.status);
+    }
+    
+    return { success: true };
+  } catch (e: any) {
+    throw e;
+  }
 };
 
 // Review schema for structured output
@@ -219,7 +260,16 @@ const REVIEW_SCHEMA = {
 };
 
 export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMimeType, lyrics, bio, imageBase64, imageMimeType, artistPhotoBase64, artistPhotoMimeType, preset }: any) => {
+  // 1. Check Quota
+  await checkQuota();
+  
   const ai = await getAI();
+  
+  // 2. Sanitize Inputs
+  const safeTrackName = sanitizeInput(trackName);
+  const safeArtistName = sanitizeInput(artistName);
+  const safeLyrics = sanitizeInput(lyrics);
+  const safeBio = sanitizeInput(bio);
   
   // Fetch style guides for training
   let styleGuidesContext = "";
@@ -241,15 +291,25 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
 
   const prompt = `
     TRACK METADATA:
-    - Track: ${trackName}
-    - Artist: ${artistName}
-    - Bio: ${bio || "Independent artist."}
-    - Lyrics: ${lyrics || "No lyrics provided - focus on mood, delivery, and theme implied by the music."}
+    - Track: ${safeTrackName}
+    - Artist: ${safeArtistName}
+    - Bio: ${safeBio || "Independent artist."}
+    - Lyrics: ${safeLyrics || "No lyrics provided - focus on mood, delivery, and theme implied by the music."}
     ${styleGuidesContext}
     
-    REVIEW WRITING INSTRUCTIONS:
+    REVIEW WRITING INSTRUCTIONS (STOP-SLOP PROTOCOL):
     Write a fully human-sounding music review that feels natural, emotionally sharp, and specific.
     The 'reviewBody' MUST be exactly 5 paragraphs long. Use actual double newlines to separate paragraphs.
+    
+    CORE WRITING RULES:
+    1. CUT FILLER: Remove throat-clearing openers, emphasis crutches, and ALL adverbs (no -ly words).
+    2. BREAK FORMULAS: Avoid binary contrasts ("Not X, but Y"), negative listings, and rhetorical setups.
+    3. ACTIVE VOICE: Every sentence needs a human subject doing something. No passive constructions. No inanimate objects performing human actions (e.g., do NOT say "the beat creates a mood", say "the producer builds a mood with the beat").
+    4. BE SPECIFIC: No vague declaratives ("The implications are significant"). Name the specific thing. No lazy extremes ("every," "always," "never").
+    5. TRUST THE READER: State facts directly. Skip softening, justification, or hand-holding.
+    6. VARY RHYTHM: Mix sentence lengths. Two items beat three. End paragraphs differently. 
+    7. NO EM DASHES: Do not use em dashes (—) anywhere in the text.
+    8. NO WH- STARTERS: Avoid starting sentences with "What," "Why," "Who," "How," etc., unless it's a direct question.
     
     STRUCTURAL VARIETY & PACING:
     - Vary your sentence structures. Use a mix of short, punchy statements and longer, complex observations.
@@ -268,10 +328,10 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     - Example: "[Radiohead](https://en.wikipedia.org/wiki/Radiohead)" or "[Hyperpop](https://en.wikipedia.org/wiki/Hyperpop)".
     - Ensure the links feel integrated into the narrative of the review.
     
-    CRITICAL STYLE CONSTRAINTS:
-    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally", "The track", "This song".
-    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape", "presents", "showcases".
-    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core", "With its...", "From the opening...".
+    CRITICAL STYLE CONSTRAINTS (BANNED AI TELLS):
+    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally", "The track", "This song", "Here's", "It turns out", "The truth is".
+    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape", "presents", "showcases", "navigate", "unpack", "lean into", "game-changer", "really", "just", "literally", "genuinely", "honestly", "simply", "actually", "deeply", "truly", "fundamentally", "inherently", "inevitably", "interestingly", "importantly", "crucially".
+    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core", "With its...", "From the opening...", "Let that sink in", "Make no mistake", "Here's why that matters", "Full stop", "It's worth noting", "At the end of the day", "When it comes to", "In a world where", "The reality is", "feature, not a bug", "I promise".
     - AVOID being overly positive or flowery. Be a critical, professional journalist. If something is weak, say it.
     - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary, sentence rhythm, and critical "bite".
     - Be specific about the production. Mention specific instruments, mixing choices, or textures you hear.
@@ -357,6 +417,9 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
 };
 
 export const generatePodcast = async (review: any) => {
+  // Check Quota
+  await checkQuota();
+  
   const ai = await getAI();
   
   const scriptPrompt = `

@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
+import { body, validationResult } from "express-validator";
 import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase";
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -21,10 +24,80 @@ dotenv.config({ override: true });
 
 const app = express();
 
+// Trust the first proxy (e.g., Nginx or Cloud Run load balancer)
+// This is required for express-rate-limit to correctly identify user IPs
+app.set('trust proxy', 1);
+
+// 1. SECURITY HEADERS (Helmet)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://cdn.jsdelivr.net"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https://picsum.photos", "https://www.paypalobjects.com", "https://firebasestorage.googleapis.com", "https://images.unsplash.com", "https://*.unsplash.com"],
+      connectSrc: ["'self'", "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      frameSrc: ["'self'", "https://www.paypal.com", "https://www.sandbox.paypal.com"],
+      frameAncestors: ["'self'", "https://ai.studio", "https://aistudio.google.com", "https://*.google.com", "https://*.run.app"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Required for some third-party scripts
+  xFrameOptions: false, // Allow framing in AI Studio
+}));
+
+// 2. CORS LOCKDOWN
+const allowedOrigins = [
+  "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app",
+  "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app",
+  "http://localhost:3000" // For local development
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// 3. STRICT RATE LIMITING
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  message: { message: "Too many requests from this IP, please try again later." }
+});
+
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // Limit AI generation to 10 per hour per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  message: { message: "AI generation limit reached for this hour. Please try again later." }
+});
+
+app.use("/api/", globalLimiter);
+app.use("/api/analyze", aiLimiter);
+app.use("/api/podcasts/generate", aiLimiter);
+
+app.use(express.json({ limit: '10mb' })); // Limit payload size
+
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  console.log(`[Headers] Host: ${req.headers.host}, Origin: ${req.headers.origin}, Referer: ${req.headers.referer}`);
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${ip}`);
   next();
 });
 
@@ -52,39 +125,94 @@ const getUserFromAuth = async (authHeader: string | undefined): Promise<{ uid: s
   }
   
   try {
-    // If it's a mock token from our login, return the ID
-    if (idToken.startsWith('mock-jwt-token-')) {
-      const uid = idToken.replace('mock-jwt-token-', '');
-      return { uid };
-    }
-    
-    try {
-      if (adminAuth) {
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
-        return { uid: decodedToken.uid, email: decodedToken.email };
-      } else {
-        throw new Error("adminAuth is null");
-      }
-    } catch (verifyError) {
-      console.warn("Token verification failed, attempting decode fallback", verifyError);
-      // Fallback: Decode JWT without verification (use with caution in dev environments)
-      const parts = idToken.split('.');
-      if (parts.length === 3) {
-        try {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-          // Verify audience matches our project
-          if (payload.aud === firebaseConfig.projectId || payload.aud?.includes(firebaseConfig.projectId)) {
-            return { uid: payload.sub || payload.user_id, email: payload.email };
-          }
-        } catch (e) {
-          console.error("Failed to decode token payload", e);
-        }
-      }
+    if (adminAuth) {
+      // Strictly verify the token with Firebase Admin SDK
+      const decodedToken = await adminAuth.verifyIdToken(idToken);
+      return { uid: decodedToken.uid, email: decodedToken.email };
+    } else {
+      console.error("[Auth] adminAuth is not initialized");
       return null;
     }
-  } catch (error) {
-    console.error("Auth error:", error);
+  } catch (error: any) {
+    // Log specific auth errors for debugging but don't leak details to client
+    console.error(`[Auth] Token verification failed: ${error.message}`);
     return null;
+  }
+};
+
+// 4. AUTH MIDDLEWARE
+const requireAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const auth = await getUserFromAuth(req.headers.authorization);
+  if (!auth) {
+    console.warn(`[Auth] Unauthorized access attempt to ${req.url}`);
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  (req as any).user = auth;
+  next();
+};
+
+// 5. AI COST PROTECTION (Usage Quotas)
+const checkUsageQuota = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const userId = (req as any).user?.uid;
+  if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const thisMonth = now.toISOString().slice(0, 7); // YYYY-MM
+    
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
+
+    if (!userData) {
+      console.warn(`[Quota] User ${userId} not found in database during quota check`);
+      return next();
+    }
+
+    // Admins have no limit
+    if (isAdminEmail(userData.email) || userData.role === 'admin' || userData.isUnlimited) {
+      return next();
+    }
+
+    const usage = userData.usage || {};
+    const dailyCount = usage[today] || 0;
+    const monthlyCount = userData.monthlyUsage?.[thisMonth] || 0;
+    
+    const DAILY_LIMIT = 10; 
+    const MONTHLY_LIMIT = 100;
+
+    if (dailyCount >= DAILY_LIMIT) {
+      console.warn(`[Quota] User ${userId} reached daily limit of ${DAILY_LIMIT}`);
+      return res.status(429).json({ 
+        message: "Daily AI generation limit reached.",
+        instruction: "Please upgrade to a Pro plan for unlimited generations or wait until tomorrow.",
+        limit: DAILY_LIMIT,
+        current: dailyCount
+      });
+    }
+
+    if (monthlyCount >= MONTHLY_LIMIT) {
+      console.warn(`[Quota] User ${userId} reached monthly limit of ${MONTHLY_LIMIT}`);
+      return res.status(429).json({ 
+        message: "Monthly AI generation limit reached.",
+        instruction: "Please upgrade to a Pro plan for unlimited generations.",
+        limit: MONTHLY_LIMIT,
+        current: monthlyCount
+      });
+    }
+
+    // Increment usage
+    await userRef.update({
+      [`usage.${today}`]: dailyCount + 1,
+      [`monthlyUsage.${thisMonth}`]: monthlyCount + 1,
+      lastUsed: new Date().toISOString()
+    });
+
+    next();
+  } catch (error) {
+    console.error("[Quota] Error checking usage:", error);
+    next(); 
   }
 };
 
@@ -181,11 +309,6 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
 };
 
 // CORS configuration
-const allowedOrigins = [
-  'https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app',
-  'https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app'
-];
-
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     if (!origin || origin === 'null' || allowedOrigins.includes(origin)) {
@@ -285,11 +408,29 @@ app.post("/api/auth/login", async (req, res, next) => {
   }
 });
 
-app.post("/api/auth/signup", async (req, res, next) => {
-  console.log("[signup] Request body:", JSON.stringify(req.body));
-  try {
-    const { email, password, name, id } = req.body;
-    console.log("[signup] Checking if user exists:", email);
+app.post("/api/auth/signup", 
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('password').isLength({ min: 8 }),
+    body('name').isString().trim().isLength({ min: 1, max: 100 }).escape(),
+  ],
+  async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    const { email, password, name, id, website } = req.body;
+    
+    // Bot protection: website is a honeypot field
+    if (website) {
+      console.warn(`[Bot] Honeypot field filled by ${email || 'unknown'}`);
+      return res.status(400).json({ message: "Bot detected" });
+    }
+    
+    console.log("[signup] Request body:", JSON.stringify(req.body));
+    try {
+      console.log("[signup] Checking if user exists:", email);
     const usersRef = db.collection('users');
     const snapshot = await usersRef.where('email', '==', email).limit(1).get();
     
@@ -671,6 +812,11 @@ app.post("/api/credits/deduct", async (req, res, next) => {
   }
 });
 
+// AI Pre-flight check
+app.post("/api/ai/preflight", requireAuth, checkUsageQuota, (req, res) => {
+  res.json({ success: true, message: "Quota check passed" });
+});
+
 // MFA Endpoints (Mock)
 app.get("/api/auth/mfa/status", async (req, res, next) => {
   try {
@@ -735,15 +881,28 @@ app.post("/api/auth/mfa/verify", async (req, res, next) => {
   }
 });
 
-// Reviews
-app.post("/api/reviews", async (req, res, next) => {
-  try {
-    const { userId, review } = req.body;
-    const authUserId = await getUserIdFromAuth(req.headers.authorization);
-    
-    if (!authUserId || authUserId !== userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+app.post("/api/reviews", 
+  requireAuth,
+  [
+    body('userId').isString().trim().escape(),
+    body('review').isObject(),
+    body('review.songTitle').isString().trim().isLength({ min: 1, max: 200 }).escape(),
+    body('review.artistName').isString().trim().isLength({ min: 1, max: 200 }).escape(),
+  ],
+  async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
+
+    try {
+      const { userId, review } = req.body;
+      const authUserId = (req as any).user.uid;
+      
+      if (authUserId !== userId) {
+        console.warn(`[Auth] User ${authUserId} attempted to post review for user ${userId}`);
+        return res.status(403).json({ message: "Forbidden" });
+      }
 
     const userRef = db.collection('users').doc(userId);
     const userDoc = await userRef.get();
