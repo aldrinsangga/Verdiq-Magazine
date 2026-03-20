@@ -24,9 +24,12 @@ dotenv.config({ override: true });
 
 const app = express();
 
-// Trust the first proxy (e.g., Nginx or Cloud Run load balancer)
+// Trust the proxy (e.g., Nginx or Cloud Run load balancer)
 // This is required for express-rate-limit to correctly identify user IPs
-app.set('trust proxy', 1);
+app.set('trust proxy', true);
+
+const distPath = join(__dirname, '../dist');
+const publicPath = join(__dirname, '../public');
 
 // 1. SECURITY HEADERS (Helmet)
 app.use(helmet({
@@ -36,10 +39,10 @@ app.use(helmet({
       scriptSrc: ["'self'", "'unsafe-inline'", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https://picsum.photos", "https://www.paypalobjects.com", "https://firebasestorage.googleapis.com", "https://images.unsplash.com", "https://*.unsplash.com"],
-      connectSrc: ["'self'", "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com"],
+      connectSrc: ["'self'", "https://verdiqmag.com", "https://www.verdiqmag.com", "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       frameSrc: ["'self'", "https://www.paypal.com", "https://www.sandbox.paypal.com"],
-      frameAncestors: ["'self'", "https://ai.studio", "https://aistudio.google.com", "https://*.google.com", "https://*.run.app"],
+      frameAncestors: ["'self'", "https://verdiqmag.com", "https://www.verdiqmag.com", "https://ai.studio", "https://aistudio.google.com", "https://*.google.com", "https://*.run.app"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: [],
     },
@@ -48,26 +51,48 @@ app.use(helmet({
   xFrameOptions: false, // Allow framing in AI Studio
 }));
 
-// 2. CORS LOCKDOWN
+// Serve static files in production BEFORE CORS and other middleware
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(publicPath, {
+    maxAge: '1d',
+    etag: true
+  }));
+  app.use(express.static(distPath, {
+    maxAge: '1y', // Vite assets have hashes
+    immutable: true,
+    index: false // Don't serve index.html here, handle it at the end
+  }));
+}
+
+// 2. CORS & BODY PARSING
 const allowedOrigins = [
+  "https://verdiqmag.com",
+  "https://www.verdiqmag.com",
   "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app",
   "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app",
   "http://localhost:3000" // For local development
 ];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || origin === 'null' || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.warn(`[CORS] Blocked request from origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
+      // Instead of throwing an error which causes 500s, just disallow CORS
+      callback(null, false);
     }
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 // 3. STRICT RATE LIMITING
 const globalLimiter = rateLimit({
@@ -75,7 +100,7 @@ const globalLimiter = rateLimit({
   max: 100, // Limit each IP to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  validate: { trustProxy: false }, // Disable trust proxy validation warning
   message: { message: "Too many requests from this IP, please try again later." }
 });
 
@@ -84,7 +109,7 @@ const aiLimiter = rateLimit({
   max: 10, // Limit AI generation to 10 per hour per IP
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false, forwardedHeader: false },
+  validate: { trustProxy: false },
   message: { message: "AI generation limit reached for this hour. Please try again later." }
 });
 
@@ -92,11 +117,9 @@ app.use("/api/", globalLimiter);
 app.use("/api/analyze", aiLimiter);
 app.use("/api/podcasts/generate", aiLimiter);
 
-app.use(express.json({ limit: '10mb' })); // Limit payload size
-
 // Request logging middleware
 app.use((req, res, next) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${ip}`);
   next();
 });
@@ -307,26 +330,6 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
     next(error);
   }
 };
-
-// CORS configuration
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || origin === 'null' || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      // Instead of throwing an error which causes 500s, just disallow CORS
-      callback(null, false);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 app.get("/api/debug/env", async (req, res) => {
   // Only allow for admin emails

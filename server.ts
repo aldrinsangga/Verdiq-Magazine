@@ -70,21 +70,6 @@ async function startServer() {
       console.warn(`[Static] Dist folder NOT found at ${distPath}`);
     }
 
-    // Serve public folder first to ensure IDE uploads are available
-    app.use((req, res, next) => {
-      if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico)$/)) {
-        const pPath = path.join(publicPath, req.path);
-        const dPath = path.join(distPath, req.path);
-        const pExists = fs.existsSync(pPath);
-        const dExists = fs.existsSync(dPath);
-        console.log(`[Static Request] ${req.path} - Public: ${pExists}, Dist: ${dExists}`);
-      }
-      next();
-    });
-    
-    app.use(express.static(publicPath));
-    app.use(express.static(distPath));
-
     // Dynamic SEO for Social Media Sharing
     const handleDynamicSEO = async (req: any, res: any) => {
       const indexHtmlPath = path.join(distPath, "index.html");
