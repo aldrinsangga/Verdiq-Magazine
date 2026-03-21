@@ -153,14 +153,14 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
         {mode === 'signup' && (
           <>
             <div>
-              <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2 ml-1">Full Name</label>
+              <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2 ml-1">Artist Name</label>
               <input 
                 required
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                placeholder="John Doe"
+                placeholder="Artist Name"
                 data-testid="name-input"
               />
             </div>

@@ -222,15 +222,15 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
       {/* Hero / Submission Section */}
       <div className="max-w-6xl mx-auto relative z-10 mb-24">
         <div className="text-center mb-12">
-          <h1 className="text-5xl sm:text-7xl md:text-8xl font-extrabold mb-6 tracking-tighter leading-none">
+          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold mb-6 tracking-tighter leading-none">
             <span className="gradient-text">Submit Your Track</span>
           </h1>
-          <p className="text-lg sm:text-2xl text-slate-400 font-light max-w-3xl mx-auto leading-relaxed px-4">
-            Upload your track for a magazine-style review, podcast feature, and technical music audit.
+          <p className="text-base sm:text-xl text-slate-400 font-light max-w-3xl mx-auto leading-relaxed px-4">
+            Upload your track for instant magazine-style review, podcast feature, and technical music audit.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6 card-premium !p-6 md:!p-8 relative overflow-hidden group" data-testid="submission-form">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6 card-premium !p-4 md:!p-6 relative overflow-hidden group" data-testid="submission-form">
           <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
           
           <div className="space-y-3 relative z-10 min-w-0">
@@ -360,10 +360,10 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
             <div className="flex-grow">
               <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">Lyrics & Bio (Recommended)</label>
               <textarea 
-                rows={12}
+                rows={8}
                 value={formData.lyrics}
                 onChange={e => setFormData({...formData, lyrics: e.target.value})}
-                className="input-field h-[calc(100%-3rem)] resize-none font-serif !text-lg !leading-relaxed"
+                className="input-field resize-none font-serif !text-lg !leading-relaxed overflow-y-auto"
                 placeholder="Paste lyrics and context for deeper semantic analysis..."
                 data-testid="lyrics-textarea"
               />
