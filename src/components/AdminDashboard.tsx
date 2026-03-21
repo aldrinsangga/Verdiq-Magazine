@@ -12,6 +12,7 @@ interface AdminDashboardProps {
   onUpdateUser?: (user: any) => void;
   onDeleteUser?: (id: string) => void;
   onUpdateReview?: (userId: string, review: any) => void;
+  onDeleteReview?: (reviewId: string) => void;
   styleGuides?: any[];
   onAddStyleGuide?: (guide: any) => void;
   onUpdateStyleGuide?: (id: string, guide: any) => void;
@@ -24,6 +25,7 @@ const AdminDashboard = ({
   onUpdateUser, 
   onDeleteUser, 
   onUpdateReview, 
+  onDeleteReview,
   styleGuides = [], 
   onAddStyleGuide, 
   onUpdateStyleGuide, 
@@ -67,6 +69,7 @@ const AdminDashboard = ({
   const [earnings, setEarnings] = useState({ purchases: [], totalEarnings: 0 });
   const [loadingEarnings, setLoadingEarnings] = useState(false);
   const [publishingReview, setPublishingReview] = useState(null);
+  const [deletingReview, setDeletingReview] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
   const [togglingStatus, setTogglingStatus] = useState(null);
 
@@ -280,6 +283,22 @@ const AdminDashboard = ({
       showNotification('Failed to update user status: ' + (error.message || 'Unknown error'), 'error');
     } finally {
       setTogglingStatus(null);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
+      return;
+    }
+    setDeletingReview(reviewId);
+    try {
+      await onDeleteReview(reviewId);
+      showNotification('Review deleted successfully', 'success');
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      showNotification('Failed to delete review: ' + (error.message || 'Unknown error'), 'error');
+    } finally {
+      setDeletingReview(null);
     }
   };
 
@@ -745,6 +764,17 @@ const AdminDashboard = ({
                         <Loader2 className="w-3 h-3 animate-spin" />
                       ) : null}
                       {review.isPublished ? 'Unpublish' : 'Publish'}
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteReview(review.id)}
+                      disabled={deletingReview === review.id}
+                      className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 flex items-center gap-1"
+                      data-testid={`delete-review-btn-${review.id}`}
+                    >
+                      {deletingReview === review.id ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : null}
+                      Delete
                     </button>
                   </div>
                 </div>

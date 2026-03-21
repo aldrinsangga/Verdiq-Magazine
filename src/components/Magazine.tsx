@@ -16,6 +16,10 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
   const featured = publishedReviews[0];
   const others = publishedReviews.slice(1);
 
+  const trendingReviews = [...allPublished]
+    .sort((a, b) => (b.podcastPlays || 0) - (a.podcastPlays || 0))
+    .slice(0, 5);
+
   if (allPublished.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-32 text-center" data-testid="empty-magazine">
@@ -112,8 +116,16 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                 </div>
                 <div className="h-12 w-px bg-white/20" />
                 <div className="flex flex-col">
-                  <span className="text-emerald-400 text-4xl font-black">{featured.rating}/10</span>
+                  <span className="text-emerald-400 text-4xl font-black">{featured.rating}</span>
                   <span className="text-[10px] text-white/60 uppercase font-black tracking-widest">Verdiq Score</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 mt-6">
+                <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">By Verdiq Critic Team</span>
+                <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="w-2 h-2 text-white">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
                 </div>
               </div>
             </div>
@@ -122,11 +134,12 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
       )}
 
       {/* Editorial Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-        <div className="lg:col-span-8 space-y-10">
-          <h3 className="text-sm font-black uppercase tracking-[0.5em] text-emerald-500 border-b border-slate-900 pb-2">Latest Reports</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
-            {others.slice(0, 4).map(r => (
+      <div className="flex flex-col">
+        {/* Latest Reports */}
+        <section className="mb-24">
+          <h3 className="text-sm font-black uppercase tracking-[0.5em] text-emerald-500 border-b border-slate-900 pb-2 mb-12">Latest Review</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-12">
+            {others.slice(0, 8).map(r => (
               <a 
                 key={r.id} 
                 href={`/review/${r.id}`}
@@ -149,26 +162,28 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                       <span className="text-[10px] text-white font-black uppercase tracking-[0.2em]">{r.analysis?.genre || 'Unknown'}</span>
                     </div>
-                    <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500/50 border border-emerald-500/20 px-2 py-0.5 rounded">Marketplace Item</span>
+                    <span className="text-4xl font-black text-emerald-500 tracking-tighter drop-shadow-lg">{r.rating}</span>
                   </div>
                 </div>
                 <div className="px-2">
                   <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-3">
                     {r.artistName} • {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </p>
-                  <h4 className="text-2xl md:text-3xl font-black transition-all leading-none mb-3 tracking-tighter review-title-split">{(r.headline || 'Latest Report').toUpperCase()}</h4>
-                  <p className="text-slate-400 text-base font-light leading-relaxed line-clamp-2 italic">"{r.hook}"</p>
+                  <h4 className="text-xl font-black transition-all leading-none mb-3 tracking-tighter review-title-split">{(r.headline || 'Latest Review').toUpperCase()}</h4>
+                  <p className="text-slate-400 text-sm font-light leading-relaxed line-clamp-2 italic">"{r.hook}"</p>
                 </div>
               </a>
             ))}
           </div>
-        </div>
+        </section>
 
-        {/* Sidebar */}
-        <aside className="lg:col-span-4 border-l-0 lg:border-l border-slate-900 pl-0 lg:pl-12 mt-12 lg:mt-0">
-          <h3 className="text-sm font-black uppercase tracking-[0.5em] text-emerald-500 border-b border-slate-900 pb-2 mb-6">Trending Now</h3>
-          <div className="space-y-6">
-            {publishedReviews.slice(0, 5).map((r, i) => (
+        {/* Trending Now - New Position */}
+        <section className="mb-24">
+          <div className="flex items-end justify-between border-b border-slate-900 pb-2 mb-12">
+            <h3 className="text-sm font-black uppercase tracking-[0.5em] text-emerald-500">Trending Now</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8">
+            {trendingReviews.map((r, i) => (
               <a 
                 key={r.id} 
                 href={`/review/${r.id}`}
@@ -176,43 +191,59 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                   e.preventDefault();
                   onSelect(r);
                 }} 
-                className="flex items-start gap-4 cursor-pointer group block"
+                className="flex flex-col gap-4 cursor-pointer group relative"
               >
-                <span className="text-4xl font-black text-slate-800 group-hover:text-emerald-500 transition-colors">0{i+1}</span>
+                <div className="relative aspect-square rounded-2xl overflow-hidden mb-2 bg-slate-900 border border-white/5">
+                  <img 
+                    src={r.imageUrl} 
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" 
+                    alt={r.songTitle} 
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute -top-2 -left-2 z-20 pointer-events-none">
+                    <span className="text-[5rem] font-black text-emerald-500 group-hover:text-emerald-500/40 transition-colors drop-shadow-[0_0_15px_rgba(0,0,0,0.5)] leading-none">0{i+1}</span>
+                  </div>
+                </div>
                 <div>
-                  <h5 className="font-black text-white group-hover:text-emerald-400 leading-none mb-1 uppercase tracking-tight">{r.songTitle}</h5>
-                  <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{r.artistName}</p>
+                  <h5 className="font-black text-white group-hover:text-emerald-400 leading-tight mb-1 uppercase tracking-tight text-sm line-clamp-1">{(r.headline || r.songTitle).toUpperCase()}</h5>
+                  <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest line-clamp-1">{r.artistName}</p>
                 </div>
               </a>
             ))}
           </div>
-          
-          <div className="mt-12 bg-emerald-500 p-8 rounded-3xl text-slate-950">
-            <h4 className="text-3xl font-black leading-none mb-4 tracking-tighter">Submit Your Track</h4>
-            <p className="text-sm font-bold mb-6 opacity-80">Get reviewed by the world's first Automated Music Journal. Technical data included.</p>
+        </section>
+
+        {/* Submit Your Track - New Position */}
+        <section className="bg-emerald-500 p-6 md:p-8 rounded-3xl text-slate-950 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="max-w-2xl">
+              <h4 className="text-2xl md:text-3xl font-black leading-none mb-2 tracking-tighter uppercase">Submit Your Track</h4>
+              <p className="text-xs md:text-sm font-bold opacity-80 leading-tight">Get reviewed by the world's first Automated Music Journal. Technical data and editorial critique included.</p>
+            </div>
             <a 
               href="/"
               onClick={(e) => {
                 e.preventDefault();
                 onNavigate?.('landing');
               }}
-              className="w-full bg-slate-950 text-white font-black py-4 rounded-xl text-sm uppercase tracking-widest hover:bg-slate-800 transition-colors cursor-pointer block text-center"
+              className="inline-block bg-slate-950 text-white font-black px-8 py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-slate-800 transition-all hover:scale-105 cursor-pointer text-center shadow-xl whitespace-nowrap"
               data-testid="submit-track-btn"
             >
               Submit Track
             </a>
           </div>
-        </aside>
+        </section>
       </div>
 
       {/* More from Verdiq Magazine - Bottom Section */}
-      <div className="mt-16 md:mt-32 pt-12 md:pt-24 border-t border-slate-900">
+      <div className="mt-12 md:mt-16 pt-12 md:pt-16 border-t border-slate-900">
         <div className="flex items-center justify-between mb-12">
           <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-emerald-500">More from Verdiq Magazine</h3>
           <div className="h-px flex-grow mx-4 md:mx-8 bg-slate-900" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {publishedReviews.slice(0, 8).map(r => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-16">
+          {publishedReviews.slice(0, 16).map(r => (
             <a 
               key={r.id} 
               href={`/review/${r.id}`}
@@ -222,20 +253,19 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
               }} 
               className="group block cursor-pointer"
             >
-              <div className="aspect-video rounded-2xl overflow-hidden mb-4 border border-white/5 relative bg-slate-900">
+              <div className="aspect-video rounded-2xl overflow-hidden mb-6 border border-white/5 relative bg-slate-900">
                 <img 
                   src={r.imageUrl} 
-                  className="w-full h-full object-cover transition-all duration-700 group-hover:opacity-50" 
+                  className="w-full h-full object-cover transition-all duration-700 group-hover:opacity-50 group-hover:scale-105" 
                   alt={r.songTitle} 
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent opacity-60" />
                 <div className="absolute bottom-3 left-3">
-                  <span className="text-[10px] font-black text-emerald-500">{r.rating}/10</span>
+                  <span className="text-[10px] font-black text-emerald-500">{r.rating}</span>
                 </div>
               </div>
-              <h4 className="font-black text-white group-hover:text-emerald-400 transition-colors leading-tight mb-1 uppercase tracking-tight text-sm">{r.songTitle}</h4>
-              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{r.artistName}</p>
+              <h4 className="font-black text-white group-hover:text-emerald-400 transition-colors leading-tight uppercase tracking-tight text-base">{(r.headline || r.songTitle).toUpperCase()}</h4>
             </a>
           ))}
         </div>

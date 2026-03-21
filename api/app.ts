@@ -669,6 +669,16 @@ app.get("/api/credits/status", async (req, res) => {
 });
 
 // Earnings & Purchases (Admin only)
+app.get("/api/admin/reviews", isAdmin, async (req, res, next) => {
+  try {
+    const snapshot = await db.collection('reviews').get();
+    const reviews = snapshot.docs.map(doc => doc.data());
+    res.json(reviews);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/admin/earnings", isAdmin, async (req, res, next) => {
   try {
     const snapshot = await db.collection('purchases').orderBy('createdAt', 'desc').get();
@@ -1269,6 +1279,31 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
     } else {
       res.status(404).json({ message: "Review not found" });
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/reviews/:id", requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.uid;
+    const userDoc = await db.collection('users').doc(userId).get();
+    const user = userDoc.data();
+    const isAdminUser = isAdminEmail(user?.email) || user?.role === 'admin';
+
+    const reviewDoc = await db.collection('reviews').doc(id).get();
+    if (!reviewDoc.exists) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    const review = reviewDoc.data();
+    if (review.userId !== userId && !isAdminUser) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await db.collection('reviews').doc(id).delete();
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

@@ -88,6 +88,7 @@ export interface Review {
   userId?: string; // Reference to the user who submitted it
   podcastAudio?: string; // Base64 encoded podcast audio
   hasPodcast?: boolean; // Whether a podcast has been generated
+  podcastPlays?: number; // Number of podcast plays for secret trending logic
   songAudio?: string; // Base64 encoded original song audio for background
   artistPhotoUrl?: string; // Transformed artist photo URL
   socialLinks?: {

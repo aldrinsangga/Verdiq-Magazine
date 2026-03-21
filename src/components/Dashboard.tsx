@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const Dashboard = ({ reviews, onSelect, onUpdateReview }) => {
-  const [activeTab, setActiveTab] = useState('published');
+  const [activeTab, setActiveTab] = useState('draft');
 
   const handleDelete = async (e, review) => {
     e.stopPropagation();
@@ -23,8 +23,8 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview }) => {
   });
 
   const tabs = [
-    { id: 'published', label: 'Published', count: reviews.filter(r => r.isPublished && !r.isDeleted).length },
     { id: 'draft', label: 'Draft', count: reviews.filter(r => !r.isPublished && !r.isDeleted).length },
+    { id: 'published', label: 'Published', count: reviews.filter(r => r.isPublished && !r.isDeleted).length },
     { id: 'deleted', label: 'Deleted', count: reviews.filter(r => r.isDeleted).length },
   ];
 

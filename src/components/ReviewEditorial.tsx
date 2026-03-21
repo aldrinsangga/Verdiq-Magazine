@@ -133,7 +133,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
           )}
         </div>
       ) : (
-        review.breakdown && Object.entries(review.breakdown).map(([key, value]) => (
+        review.breakdown && typeof review.breakdown === 'object' && Object.entries(review.breakdown).map(([key, value]) => (
           value && (
             <div key={key} className="mb-10">
               <h3 className="text-sm font-black uppercase tracking-[0.3em] text-emerald-500 mb-4">{key.replace(/([A-Z])/g, ' $1').trim()}</h3>
@@ -151,7 +151,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
       )}
 
       {/* Social Links Section */}
-      {(editMode || (review.socialLinks && Object.values(review.socialLinks).some(link => link))) && (
+      {(editMode || (review.socialLinks && typeof review.socialLinks === 'object' && Object.values(review.socialLinks).some(link => link))) && (
         <div className="mb-10 p-8 bg-slate-900/50 rounded-3xl border border-slate-800">
           <h3 className="text-sm font-black uppercase tracking-[0.3em] text-emerald-500 mb-6">Connect with Artist</h3>
           
@@ -255,7 +255,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
         </div>
       )}
 
-      {review.pullQuotes && review.pullQuotes.length > 0 && (
+      {Array.isArray(review.pullQuotes) && review.pullQuotes.length > 0 && (
         <div className="my-12 md:my-16 bg-emerald-500 p-6 md:p-12 rounded-3xl shadow-2xl relative z-10">
           <blockquote className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-950 leading-tight text-center tracking-tight italic">
             "{review.pullQuotes[0]}"

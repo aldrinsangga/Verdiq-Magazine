@@ -14,6 +14,7 @@ interface AdminDashboardWrapperProps {
   onUpdateUser: (user: any) => Promise<any>;
   onDeleteUser: (userId: string) => Promise<void>;
   onUpdateReview: (review: any, userId: string) => Promise<void>;
+  onDeleteReview: (reviewId: string) => Promise<void>;
   styleGuides: any[];
   onAddStyleGuide: (guide: any) => Promise<void>;
   onUpdateStyleGuide: (id: string, guide: any) => Promise<void>;
@@ -28,6 +29,7 @@ const AdminDashboardWrapper: React.FC<AdminDashboardWrapperProps> = ({
   onUpdateUser, 
   onDeleteUser, 
   onUpdateReview, 
+  onDeleteReview,
   styleGuides, 
   onAddStyleGuide, 
   onUpdateStyleGuide, 
@@ -78,20 +80,26 @@ const AdminDashboardWrapper: React.FC<AdminDashboardWrapperProps> = ({
     const fetchUsers = async () => {
       try {
         const headers = await getAuthHeaders();
-        const res = await fetch(`${API_URL}/api/users`, { headers });
+        const [usersRes, reviewsRes] = await Promise.all([
+          fetch(`${API_URL}/api/users`, { headers }),
+          fetch(`${API_URL}/api/admin/reviews`, { headers })
+        ]);
         
         if (!isMounted) return;
         
-        if (res.ok) {
-          const list = await res.json();
+        if (usersRes.ok && reviewsRes.ok) {
+          const [list, allReviewsList] = await Promise.all([
+            usersRes.json(),
+            reviewsRes.json()
+          ]);
           if (isMounted) {
             setLocalUsers(list);
             setUsersRef.current(list);
-            setAllReviewsRef.current(list.flatMap((u: any) => u.history || []));
+            setAllReviewsRef.current(allReviewsList);
           }
         } else {
           if (isMounted) {
-            setError('Failed to load users');
+            setError('Failed to load admin data');
           }
         }
       } catch (e) {
@@ -150,6 +158,7 @@ const AdminDashboardWrapper: React.FC<AdminDashboardWrapperProps> = ({
       onUpdateUser={onUpdateUser} 
       onDeleteUser={onDeleteUser}
       onUpdateReview={onUpdateReview}
+      onDeleteReview={onDeleteReview}
       styleGuides={styleGuides}
       onAddStyleGuide={onAddStyleGuide}
       onUpdateStyleGuide={onUpdateStyleGuide}

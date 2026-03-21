@@ -39,6 +39,7 @@ interface MainContentProps {
   handleUpdateProfile: (user: any) => Promise<any>;
   handleDeleteUser: (userId: string) => Promise<void>;
   handleAdminUpdateReview: (review: any, userId: string) => Promise<void>;
+  handleDeleteReview: (reviewId: string) => Promise<void>;
   handleAddStyleGuide: (guide: any) => Promise<void>;
   handleUpdateStyleGuide: (id: string, guide: any) => Promise<void>;
   handleDeleteStyleGuide: (id: string) => Promise<void>;
@@ -75,6 +76,7 @@ const MainContent: React.FC<MainContentProps> = ({
   handleUpdateProfile,
   handleDeleteUser,
   handleAdminUpdateReview,
+  handleDeleteReview,
   handleAddStyleGuide,
   handleUpdateStyleGuide,
   handleDeleteStyleGuide,
@@ -211,6 +213,7 @@ const MainContent: React.FC<MainContentProps> = ({
           onUpdateUser={handleUpdateProfile} 
           onDeleteUser={handleDeleteUser}
           onUpdateReview={handleAdminUpdateReview}
+          onDeleteReview={handleDeleteReview}
           styleGuides={styleGuides}
           onAddStyleGuide={handleAddStyleGuide}
           onUpdateStyleGuide={handleUpdateStyleGuide}

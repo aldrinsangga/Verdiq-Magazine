@@ -94,6 +94,7 @@ function AppContent() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [allReviews, setAllReviews] = useState([]);
+
   const [styleGuides, setStyleGuides] = useState([]);
   const [targetPodcastId, setTargetPodcastId] = useState(null);
   const [accountTab, setAccountTab] = useState('profile');
@@ -1066,6 +1067,36 @@ function AppContent() {
     }
   };
 
+  const handleDeleteReview = async (reviewId) => {
+    const headers = await getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
+      method: 'DELETE',
+      headers
+    });
+
+    if (res.ok) {
+      setAllReviews(prev => prev.filter(r => r.id !== reviewId));
+      // Also update current user history if it's their review
+      if (currentUser?.history?.find(r => r.id === reviewId)) {
+        setCurrentUser(prev => ({
+          ...prev,
+          history: prev.history.filter(r => r.id !== reviewId)
+        }));
+      }
+      // Refresh users list for admin
+      if (isAdmin(currentUser)) {
+        const usersRes = await fetch(`${API_URL}/api/users`, { headers });
+        if (usersRes.ok) {
+          const usersList = await usersRes.json();
+          setUsers(usersList);
+        }
+      }
+    } else {
+      const error = await res.json().catch(() => ({ detail: 'Failed to delete review' }));
+      throw new Error(error.detail || 'Failed to delete review');
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
       <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
@@ -1118,6 +1149,7 @@ function AppContent() {
               handleUpdateProfile={handleUpdateProfile}
               handleDeleteUser={handleDeleteUser}
               handleAdminUpdateReview={handleAdminUpdateReview}
+              handleDeleteReview={handleDeleteReview}
               handleAddStyleGuide={handleAddStyleGuide}
               handleUpdateStyleGuide={handleUpdateStyleGuide}
               handleDeleteStyleGuide={handleDeleteStyleGuide}

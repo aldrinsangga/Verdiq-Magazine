@@ -64,7 +64,8 @@
         "isDeleted": { "type": "boolean" },
         "rating": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" },
-        "hasPodcast": { "type": "boolean" }
+        "hasPodcast": { "type": "boolean" },
+        "podcastPlays": { "type": "integer" }
       },
       "required": ["id", "userId", "songTitle", "artistName", "createdAt"]
     },

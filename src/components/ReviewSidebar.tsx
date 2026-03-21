@@ -27,7 +27,7 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
       </div>
 
       {/* Instruments */}
-      {review.analysis?.instruments && review.analysis.instruments.length > 0 && (
+      {Array.isArray(review.analysis?.instruments) && review.analysis.instruments.length > 0 && (
         <div className="glass p-6 rounded-3xl border border-slate-700">
           <h4 className="text-xs font-black uppercase tracking-[0.3em] text-emerald-500 mb-4">Instruments Detected</h4>
           <div className="flex flex-wrap gap-2">
@@ -43,7 +43,7 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
       {/* Spectrally Similar */}
       <div className="glass p-6 rounded-3xl border border-slate-700" data-testid="spectrally-similar-section">
         <h4 className="text-xs font-black uppercase tracking-[0.3em] text-emerald-500 mb-4">Spectrally Similar</h4>
-        {review.soundsLike && review.soundsLike.length > 0 ? (
+        {Array.isArray(review.soundsLike) && review.soundsLike.length > 0 ? (
           <div className="space-y-3">
             {review.soundsLike.map((item, i) => (
               <div key={i} className="flex items-start gap-3">
@@ -76,7 +76,7 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
             <span className="text-3xl font-black text-emerald-500">{review.semanticSynergy.score}%</span>
           </div>
           <p className="text-sm text-slate-400 mb-4">{review.semanticSynergy.analysis}</p>
-          {review.semanticSynergy.keyThematicMatches && (
+          {Array.isArray(review.semanticSynergy.keyThematicMatches) && (
             <div className="flex flex-wrap gap-2">
               {review.semanticSynergy.keyThematicMatches.map((match, i) => (
                 <span key={i} className="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold">
@@ -114,7 +114,7 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
           </div>
 
           <div className="space-y-4 mb-8">
-            {review.marketScore.breakdown && Object.entries(review.marketScore.breakdown).map(([key, data]: [string, any]) => (
+            {review.marketScore.breakdown && typeof review.marketScore.breakdown === 'object' && Object.entries(review.marketScore.breakdown).map(([key, data]: [string, any]) => (
               data && (
                 <div key={key}>
                   <div className="flex justify-between text-[8px] uppercase font-black tracking-widest text-slate-500 mb-1.5">
@@ -134,13 +134,26 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
 
           {review.marketScore.recommendations && (
             <div className="space-y-4 pt-4 border-t border-slate-800">
-              {review.marketScore.recommendations.focus && (
+              {Array.isArray(review.marketScore.recommendations.focus) && review.marketScore.recommendations.focus.length > 0 && (
                 <div>
                   <h5 className="text-[8px] font-black uppercase tracking-widest text-emerald-500 mb-2">Focus On</h5>
                   <ul className="space-y-1">
                     {review.marketScore.recommendations.focus.slice(0, 2).map((item, i) => (
                       <li key={i} className="flex items-start gap-2">
                         <span className="text-emerald-500 text-[10px] mt-0.5">•</span>
+                        <span className="text-[10px] text-slate-400 leading-tight">{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(review.marketScore.recommendations.avoid) && review.marketScore.recommendations.avoid.length > 0 && (
+                <div>
+                  <h5 className="text-[8px] font-black uppercase tracking-widest text-red-500 mb-2">Avoid</h5>
+                  <ul className="space-y-1">
+                    {review.marketScore.recommendations.avoid.slice(0, 2).map((item, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-red-500 text-[10px] mt-0.5">•</span>
                         <span className="text-[10px] text-slate-400 leading-tight">{item}</span>
                       </li>
                     ))}
