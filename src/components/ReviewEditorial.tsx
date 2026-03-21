@@ -91,7 +91,12 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
                   
                   {i === 1 && (review as any).artistPhotoUrl && (
                     <div className="my-8 md:my-12 rounded-[24px] md:rounded-[40px] overflow-hidden border border-white/5 shadow-2xl bg-slate-900">
-                      <img src={(review as any).artistPhotoUrl} className="w-full object-cover" alt="Artist Portrait" />
+                      <img 
+                        src={(review as any).artistPhotoUrl} 
+                        className="w-full object-cover" 
+                        alt="Artist Portrait" 
+                        referrerPolicy="no-referrer"
+                      />
                     </div>
                   )}
 

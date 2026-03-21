@@ -137,7 +137,12 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                 className="group block cursor-pointer"
               >
                 <div className="aspect-[4/5] rounded-[32px] md:rounded-[40px] overflow-hidden mb-8 border border-white/5 shadow-xl relative bg-slate-900">
-                  <img src={r.imageUrl} className="w-full h-full object-cover transition-all duration-1000 group-hover:scale-110 group-hover:opacity-50" alt={r.songTitle} />
+                  <img 
+                    src={r.imageUrl} 
+                    className="w-full h-full object-cover transition-all duration-1000 group-hover:scale-110 group-hover:opacity-50" 
+                    alt={r.songTitle} 
+                    referrerPolicy="no-referrer"
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-80" />
                   <div className="absolute bottom-6 left-6 right-6 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -218,7 +223,12 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
               className="group block cursor-pointer"
             >
               <div className="aspect-video rounded-2xl overflow-hidden mb-4 border border-white/5 relative bg-slate-900">
-                <img src={r.imageUrl} className="w-full h-full object-cover transition-all duration-700 group-hover:opacity-50" alt={r.songTitle} />
+                <img 
+                  src={r.imageUrl} 
+                  className="w-full h-full object-cover transition-all duration-700 group-hover:opacity-50" 
+                  alt={r.songTitle} 
+                  referrerPolicy="no-referrer"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent opacity-60" />
                 <div className="absolute bottom-3 left-3">
                   <span className="text-[10px] font-black text-emerald-500">{r.rating}/10</span>

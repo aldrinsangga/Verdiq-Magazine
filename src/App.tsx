@@ -263,19 +263,21 @@ function AppContent() {
   
   // Update URL when view changes (without triggering navigation)
   const updateUrlForView = (newView, reviewId = null) => {
+    // Ensure we only pass cloneable data to pushState
+    const safeReviewId = typeof reviewId === 'string' ? reviewId : null;
     let newPath = viewToPath[newView] || '/';
     
     // Special case for review with ID
-    if (newView === 'review' && reviewId) {
-      newPath = `/review/${reviewId}`;
-    } else if (newView === 'podcasts' && reviewId) {
-      newPath = `/podcasts/${reviewId}`;
+    if (newView === 'review' && safeReviewId) {
+      newPath = `/review/${safeReviewId}`;
+    } else if (newView === 'podcasts' && safeReviewId) {
+      newPath = `/podcasts/${safeReviewId}`;
     }
     
     // Only update if path actually changed
     if (window.location.pathname !== newPath) {
       try {
-        window.history.pushState({ view: newView }, '', newPath);
+        window.history.pushState({ view: String(newView) }, '', newPath);
       } catch (e) {
         console.error('pushState failed:', e);
       }

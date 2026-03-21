@@ -106,8 +106,8 @@ const MainContent: React.FC<MainContentProps> = ({
           onSave={handleUpdateReview} 
           onPublish={handlePublish}
           onBack={() => navigate('magazine')}
-          onViewPodcast={(id) => {
-            setTargetPodcastId(id);
+          onViewPodcast={() => {
+            setTargetPodcastId(currentReview.id);
             navigate('podcasts');
           }}
           onSelectReview={async (r) => {

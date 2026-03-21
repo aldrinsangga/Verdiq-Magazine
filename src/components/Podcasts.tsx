@@ -35,7 +35,9 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
       const newPath = `/podcasts/${activeId}`;
       if (window.location.pathname !== newPath) {
         try {
-          window.history.pushState({ podcastId: activeId }, '', newPath);
+          // Ensure activeId is a string before pushing to history
+          const safeId = typeof activeId === 'string' ? activeId : String(activeId);
+          window.history.pushState({ podcastId: safeId }, '', newPath);
         } catch (e) {
           console.error('pushState failed:', e);
         }
