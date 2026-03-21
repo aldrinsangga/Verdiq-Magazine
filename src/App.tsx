@@ -71,6 +71,7 @@ function AppContent() {
     'account': '/account',
     'admin': '/admin',
     'auth': '/login',
+    'signup': '/signup',
     'review': '/review',
     'guide': '/guide',
     'faq': '/faq',
@@ -140,6 +141,12 @@ function AppContent() {
     if ((v === 'dashboard' || v === 'account') && !currentUser) {
       setView('auth');
       updateUrlForView('auth');
+      window.scrollTo(0, 0);
+      return;
+    }
+    if (v === 'signup' && currentUser) {
+      setView('dashboard');
+      updateUrlForView('dashboard');
       window.scrollTo(0, 0);
       return;
     }

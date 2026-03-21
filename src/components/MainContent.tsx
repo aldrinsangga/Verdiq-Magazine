@@ -107,6 +107,7 @@ const MainContent: React.FC<MainContentProps> = ({
         />
       )}
       {view === 'auth' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} />}
+      {view === 'signup' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} initialMode="signup" />}
       {!isUnverified && view === 'review' && currentReview && (
         <ReviewDisplay 
           review={currentReview} 

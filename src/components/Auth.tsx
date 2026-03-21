@@ -6,8 +6,8 @@ const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEN
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
   : '';
 
-const Auth = ({ onLogin, onClose }) => {
-  const [mode, setMode] = useState('login');
+const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
+  const [mode, setMode] = useState(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');

@@ -137,15 +137,15 @@ const Navigation: React.FC<NavigationProps> = ({
                 Login
               </a>
               <a 
-                href="/pricing"
+                href="/signup"
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate('pricing');
+                  navigate('signup');
                 }} 
                 className="btn-primary !px-6 !py-2.5 !text-xs" 
-                data-testid="go-pro-btn"
+                data-testid="signup-btn"
               >
-                Go Pro
+                Try For Free
               </a>
             </div>
           )}
