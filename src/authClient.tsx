@@ -56,22 +56,46 @@ export const clearSession = () => {
  * Get auth headers for API calls
  */
 export const getAuthHeaders = async () => {
-  // Try to get fresh token from Firebase first
-  const user = auth.currentUser;
+  // Wait for auth to initialize if it hasn't yet
+  let user = auth.currentUser;
+  
+  if (!user) {
+    // Wait for auth to initialize (max 5 seconds for slow connections)
+    await new Promise(resolve => {
+      const unsubscribe = onAuthStateChanged(auth, (u) => {
+        user = u;
+        unsubscribe();
+        resolve(null);
+      });
+      // Increased timeout to 5 seconds
+      setTimeout(() => {
+        unsubscribe();
+        resolve(null);
+      }, 5000);
+    });
+  }
+
   if (user) {
     try {
-      const token = await user.getIdToken();
+      // getIdToken(true) forces a refresh of the token
+      // This is the most reliable way to ensure the token is not expired
+      // when sending it to the backend.
+      const token = await user.getIdToken(true);
       return { 'Authorization': `Bearer ${token}` };
     } catch (e) {
-      console.error('Failed to get fresh token from Firebase:', e);
+      console.error('[getAuthHeaders] Failed to get fresh token from Firebase:', e);
+      // If we have a user but failed to get token, we should NOT fallback to stale localStorage
+      // because that token is almost certainly expired too.
     }
   }
 
-  // Fallback to stored session token
+  // Fallback to stored session token ONLY as a last resort if no Firebase user is available
   const session = getSession();
   if (session?.session?.access_token) {
+    // If we have a session but no Firebase user, it might be a mock token or a stale session
     return { 'Authorization': `Bearer ${session.session.access_token}` };
   }
+  
   return {};
 };
 
@@ -126,7 +150,14 @@ export const login = async (email, password) => {
     }
     
     const userData = await safeJson(res);
-    console.log(`[Login] User data fetched successfully for ${user.uid}`);
+    console.log(`[Login] User data fetched successfully for ${user.uid}`, { mfaEnabled: userData.mfaEnabled });
+    
+    // Check if MFA is enabled for this user
+    if (userData.mfaEnabled) {
+      console.log(`[Login] MFA is enabled for user ${user.uid}, returning mfa_required`);
+      return { mfa_required: true, email: userData.email || user.email };
+    }
+
     const sessionData = {
       ...userData,
       email: userData.email || user.email,
@@ -156,7 +187,7 @@ export const login = async (email, password) => {
 /**
  * Signup user
  */
-export const signup = async (email, password, name, website = "") => {
+export const signup = async (email, password, name, website = "", referralCode = "") => {
   const userCredential = await createUserWithEmailAndPassword(auth, email, password);
   const user = userCredential.user;
   await updateProfile(user, { displayName: name });
@@ -172,7 +203,8 @@ export const signup = async (email, password, name, website = "") => {
       password, 
       name: name || email.split('@')[0],
       id: user.uid, // Use Firebase UID
-      website // Honeypot field
+      website, // Honeypot field
+      referralCode
     })
   });
   

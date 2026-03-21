@@ -36,6 +36,13 @@ const Footer: React.FC<FooterProps> = ({ navigate }) => {
                Pricing
              </a>
              <a 
+               href="/referrals"
+               onClick={(e) => { e.preventDefault(); navigate('referrals'); }} 
+               className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"
+             >
+               Referral Program
+             </a>
+             <a 
                href="/faq"
                onClick={(e) => { e.preventDefault(); navigate('faq'); }} 
                className="text-xs font-bold uppercase text-slate-500 hover:text-emerald-500 transition-colors border-none bg-transparent"

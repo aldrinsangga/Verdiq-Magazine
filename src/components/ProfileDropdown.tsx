@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, CreditCard, HelpCircle, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { User, CreditCard, HelpCircle, LogOut, ChevronDown, Settings, Users } from 'lucide-react';
 import { auth, isAdmin as checkIsAdmin } from '../authClient';
 
 interface ProfileDropdownProps {
   user: any;
   onLogout: () => void;
-  onNavigate: (view: any) => void;
+  onNavigate: (view: string, extra?: string) => void;
 }
 
 const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNavigate }) => {
@@ -38,9 +38,14 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
       onClick: () => { onNavigate('account'); setIsOpen(false); } 
     },
     { 
+      label: 'Referral Program', 
+      icon: Users, 
+      onClick: () => { onNavigate('referrals'); setIsOpen(false); } 
+    },
+    { 
       label: 'Billing Details', 
       icon: CreditCard, 
-      onClick: () => { onNavigate('pricing'); setIsOpen(false); } 
+      onClick: () => { onNavigate('account', 'billing'); setIsOpen(false); } 
     },
     { 
       label: 'Help Center', 
@@ -97,7 +102,8 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ user, onLogout, onNav
                   key={idx}
                   href={item.label === 'Admin Dashboard' ? '/admin' : 
                         item.label === 'Edit Profile' ? '/account' :
-                        item.label === 'Billing Details' ? '/pricing' :
+                        item.label === 'Referral Program' ? '/referrals' :
+                        item.label === 'Billing Details' ? '/account' :
                         item.label === 'Help Center' ? '/faq' : '#'}
                   onClick={(e) => {
                     e.preventDefault();

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, QrCode, Key, Check, TriangleAlert, X, Loader2 } from 'lucide-react';
+import { auth } from '../authClient';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -20,9 +21,10 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
 
   const checkMFAStatus = async () => {
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/auth/mfa/status`, {
         headers: {
-          'Authorization': `Bearer ${session?.access_token}`
+          'Authorization': `Bearer ${token}`
         }
       });
       const data = await res.json();
@@ -35,24 +37,30 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
   const startSetup = async () => {
     setLoading(true);
     setError(null);
+    console.log('MFASetup: Starting MFA setup...');
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/auth/mfa/setup`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
       
+      console.log('MFASetup: Setup response status:', res.status);
       if (!res.ok) {
         const err = await res.json();
+        console.error('MFASetup: Setup failed:', err);
         throw new Error(err.detail || 'Failed to setup MFA');
       }
       
       const data = await res.json();
+      console.log('MFASetup: Setup data received:', data);
       setSetupData(data);
       setStep('setup');
     } catch (e) {
+      console.error('MFASetup: Setup error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -67,28 +75,34 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
     
     setLoading(true);
     setError(null);
+    console.log('MFASetup: Verifying MFA setup with code:', verifyCode);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch(`${API_URL}/api/auth/mfa/verify-setup`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ code: verifyCode })
       });
       
+      console.log('MFASetup: Verify response status:', res.status);
       if (!res.ok) {
         const err = await res.json();
+        console.error('MFASetup: Verify failed:', err);
         throw new Error(err.detail || 'Failed to verify MFA');
       }
       
       const data = await res.json();
+      console.log('MFASetup: Verify success data:', data);
       if (data.success) {
         setStep('success');
         setMfaEnabled(true);
         if (onMFAEnabled) onMFAEnabled();
       }
     } catch (e) {
+      console.error('MFASetup: Verify error:', e);
       setError(e.message);
     } finally {
       setLoading(false);
@@ -176,6 +190,7 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
                 src={setupData.qr_code} 
                 alt="MFA QR Code" 
                 className="w-48 h-48"
+                referrerPolicy="no-referrer"
               />
             </div>
           </div>

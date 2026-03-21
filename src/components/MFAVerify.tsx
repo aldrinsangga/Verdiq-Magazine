@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Loader2, TriangleAlert } from 'lucide-react';
+import { getAuthHeaders } from '../authClient';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -24,12 +25,15 @@ const MFAVerify = ({ email, password, onSuccess, onCancel }) => {
 
     setLoading(true);
     setError(null);
+    console.log('MFAVerify: Verifying MFA code for email:', email);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/auth/mfa/verify`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authHeaders
         },
         body: JSON.stringify({
           email,
@@ -38,14 +42,18 @@ const MFAVerify = ({ email, password, onSuccess, onCancel }) => {
         })
       });
 
+      console.log('MFAVerify: Verify response status:', res.status);
       if (!res.ok) {
         const err = await res.json();
+        console.error('MFAVerify: Verify failed:', err);
         throw new Error(err.detail || 'Invalid MFA code');
       }
 
       const userData = await res.json();
+      console.log('MFAVerify: Verify success, user data received');
       onSuccess(userData);
     } catch (e) {
+      console.error('MFAVerify: Verify error:', e);
       setError(e.message);
       setCode('');
     } finally {

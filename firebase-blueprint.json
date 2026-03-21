@@ -26,9 +26,27 @@
         "credits": { "type": "integer" },
         "role": { "type": "string", "enum": ["admin", "user"] },
         "mfaEnabled": { "type": "boolean" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "referralCode": { "type": "string" },
+        "referredBy": { "type": "string" }
       },
       "required": ["id", "email", "name", "credits", "role"]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "A record of a user referral",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referrerId": { "type": "string" },
+        "referredId": { "type": "string" },
+        "referredName": { "type": "string" },
+        "referredEmail": { "type": "string" },
+        "status": { "type": "string", "enum": ["signed_up", "completed"] },
+        "creditsAwarded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "referrerId", "referredId", "status", "creditsAwarded", "createdAt"]
     },
     "Review": {
       "title": "Review",
@@ -147,6 +165,10 @@
     "/support_tickets/{ticketId}": {
       "schema": "SupportTicket",
       "description": "User support requests"
+    },
+    "/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "User referral records"
     }
   }
 }

@@ -2,11 +2,11 @@ import { initializeApp as initializeAdminApp, getApps as getAdminApps, getApp as
 import admin from 'firebase-admin';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue } from 'firebase-admin/firestore';
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit, addDoc, deleteField as clientDeleteField, serverTimestamp as clientServerTimestamp, increment as clientIncrement, FieldValue as ClientFieldValue } from 'firebase/firestore';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
@@ -61,6 +61,7 @@ try {
 }
 
 export const adminAuth = adminApp ? getAdminAuth(adminApp) : null;
+console.log("[Firebase] adminAuth initialized:", !!adminAuth);
 export const adminStorage = adminApp ? getAdminStorage(adminApp) : null;
 
 // Try to get Admin Firestore
@@ -141,6 +142,63 @@ export const storage = getStorage(app);
 
 const clientDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
+// Sentinel for FieldValue translation
+const SENTINEL_TYPE = '@@FIREBASE_SENTINEL@@';
+
+const isPlainObject = (obj: any) => {
+  return Object.prototype.toString.call(obj) === '[object Object]';
+};
+
+const toAdmin = (data: any): any => {
+  if (data === null || data === undefined) return data;
+  
+  // If it's already a native Admin FieldValue, return it
+  if (data instanceof AdminFieldValue) return data;
+  
+  if (typeof data === 'object' && data.__type === SENTINEL_TYPE) {
+    console.log(`[Firebase] Translating sentinel to Admin: ${data.method}`);
+    if (data.method === 'serverTimestamp') return AdminFieldValue.serverTimestamp();
+    if (data.method === 'increment') return AdminFieldValue.increment(data.value);
+    if (data.method === 'delete') return AdminFieldValue.delete();
+  }
+  
+  if (Array.isArray(data)) return data.map(toAdmin);
+  
+  if (isPlainObject(data)) {
+    const newData: any = {};
+    for (const key in data) {
+      newData[key] = toAdmin(data[key]);
+    }
+    return newData;
+  }
+  return data;
+};
+
+const toClient = (data: any): any => {
+  if (data === null || data === undefined) return data;
+  
+  // If it's already a native Client FieldValue, return it
+  if (data instanceof ClientFieldValue) return data;
+  
+  if (typeof data === 'object' && data.__type === SENTINEL_TYPE) {
+    console.log(`[Firebase] Translating sentinel to Client: ${data.method}`);
+    if (data.method === 'serverTimestamp') return clientServerTimestamp();
+    if (data.method === 'increment') return clientIncrement(data.value);
+    if (data.method === 'delete') return clientDeleteField();
+  }
+  
+  if (Array.isArray(data)) return data.map(toClient);
+  
+  if (isPlainObject(data)) {
+    const newData: any = {};
+    for (const key in data) {
+      newData[key] = toClient(data[key]);
+    }
+    return newData;
+  }
+  return data;
+};
+
 const createClientDbWrapper = (dbInstance: any) => ({
   collection: (path: string) => {
     const colRef = collection(dbInstance, path);
@@ -167,13 +225,13 @@ const createClientDbWrapper = (dbInstance: any) => ({
             const d = await getDoc(docRef);
             return { exists: d.exists(), id: d.id, data: () => d.data() };
           },
-          set: (data: any) => setDoc(docRef, data),
-          update: (data: any) => updateDoc(docRef, data),
+          set: (data: any) => setDoc(docRef, toClient(data)),
+          update: (data: any) => updateDoc(docRef, toClient(data)),
           delete: () => deleteDoc(docRef)
         };
       },
       add: async (data: any) => {
-        const ref = await addDoc(colRef, data);
+        const ref = await addDoc(colRef, toClient(data));
         return { id: ref.id };
       },
       get: async () => {
@@ -255,11 +313,11 @@ export const db: any = {
                 throw e;
               }
             },
-            set: (data: any) => adminDoc.set(data).catch((e: any) => {
+            set: (data: any) => adminDoc.set(toAdmin(data)).catch((e: any) => {
               if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).set(data);
               throw e;
             }),
-            update: (data: any) => adminDoc.update(data).catch((e: any) => {
+            update: (data: any) => adminDoc.update(toAdmin(data)).catch((e: any) => {
               if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).update(data);
               throw e;
             }),
@@ -271,7 +329,7 @@ export const db: any = {
         },
         add: async (data: any) => {
           try {
-            const ref = await adminCol.add(data);
+            const ref = await adminCol.add(toAdmin(data));
             return { id: ref.id };
           } catch (e: any) {
             if (isPermissionError(e)) return clientDbWrapper.collection(path).add(data);
@@ -357,9 +415,9 @@ const signInServer = async () => {
 signInServer().catch(() => {});
 
 export const FieldValue = {
-  serverTimestamp: () => new Date(),
-  increment: (n: number) => n,
-  delete: () => undefined
+  serverTimestamp: () => ({ __type: SENTINEL_TYPE, method: 'serverTimestamp' }),
+  increment: (n: number) => ({ __type: SENTINEL_TYPE, method: 'increment', value: n }),
+  delete: () => ({ __type: SENTINEL_TYPE, method: 'delete' })
 };
 
 // Storage helper

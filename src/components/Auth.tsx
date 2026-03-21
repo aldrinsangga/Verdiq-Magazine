@@ -25,8 +25,11 @@ const Auth = ({ onLogin, onClose }) => {
 
     try {
       if (mode === 'signup') {
-        const userData = await signup(email, password, name, website);
+        const referralCode = sessionStorage.getItem('referralCode') || '';
+        const userData = await signup(email, password, name, website, referralCode);
         setVerificationSent(true);
+        // Clear referral code after successful signup
+        sessionStorage.removeItem('referralCode');
         // We don't call onLogin yet because they need to verify email
       } else if (mode === 'login') {
         try {

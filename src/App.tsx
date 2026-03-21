@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MainContent from './components/MainContent';
 import SupportWidget from './components/SupportWidget';
 import SEO from './components/SEO';
 import InsufficientCreditsModal from './components/InsufficientCreditsModal';
-import ErrorBoundary from './components/ErrorBoundary.tsx';
+import ErrorBoundary from './components/ErrorBoundary';
 import Notification, { NotificationType } from './components/Notification';
 import { NotificationProvider, useNotification } from './components/NotificationContext';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
@@ -76,7 +76,8 @@ function AppContent() {
     'faq': '/faq',
     'terms': '/terms',
     'privacy': '/privacy',
-    'contact': '/contact'
+    'contact': '/contact',
+    'referrals': '/referrals'
   };
   
   const pathToView = Object.fromEntries(
@@ -95,9 +96,30 @@ function AppContent() {
   const [allReviews, setAllReviews] = useState([]);
   const [styleGuides, setStyleGuides] = useState([]);
   const [targetPodcastId, setTargetPodcastId] = useState(null);
+  const [accountTab, setAccountTab] = useState('profile');
   const [paypalClientId, setPaypalClientId] = useState("");
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportView, setSupportView] = useState<'list' | 'form' | 'chat'>('list');
+
+  const handleContactSupport = () => {
+    if (!currentUser) {
+      navigate('auth');
+      return;
+    }
+    navigate('dashboard');
+    setSupportOpen(true);
+    setSupportView('form');
+  };
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const analysisCancelledRef = useRef(false);
+
+  const handleCancelAnalysis = () => {
+    analysisCancelledRef.current = true;
+    setLoading(false);
+    setStatus("");
+    showNotification("Analysis cancelled. No credits were deducted.", "success");
+  };
   
   // Credit system state
   const [creditStatus, setCreditStatus] = useState(null);
@@ -125,6 +147,12 @@ function AppContent() {
       updateUrlForView('landing');
       window.scrollTo(0, 0);
       return;
+    }
+    
+    if (v === 'account' && reviewId) {
+      setAccountTab(reviewId);
+    } else if (v === 'account') {
+      setAccountTab('profile');
     }
     
     setView(v);
@@ -196,6 +224,14 @@ function AppContent() {
 
   // Initial load effect
   useEffect(() => {
+    // Capture referral code from URL
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      console.log('[Referral] Captured referral code:', ref);
+      sessionStorage.setItem('referralCode', ref);
+    }
+
     const initialView = getViewFromPath();
     setView(initialView);
     
@@ -615,6 +651,7 @@ function AppContent() {
 
     setLoading(true);
     setStatus("Extracting Technical Features...");
+    analysisCancelledRef.current = false;
     
     try {
       setCurrentAudioFile(data.audioFile);
@@ -625,6 +662,8 @@ function AppContent() {
         reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
         reader.readAsDataURL(data.audioFile);
       });
+
+      if (analysisCancelledRef.current) return;
 
       // Convert image if provided
       let imageBase64 = null;
@@ -641,6 +680,8 @@ function AppContent() {
         imageMimeType = 'image/jpeg';
       }
 
+      if (analysisCancelledRef.current) return;
+
       // Convert artist photo if provided
       let artistPhotoBase64 = null;
       let artistPhotoMimeType = null;
@@ -655,6 +696,8 @@ function AppContent() {
         artistPhotoBase64 = (await compressImage(rawArtistBase64, 1000, 1000) as string).split(',')[1];
         artistPhotoMimeType = 'image/jpeg';
       }
+
+      if (analysisCancelledRef.current) return;
 
       setStatus("Writing editorial draft...");
       
@@ -675,13 +718,15 @@ function AppContent() {
         artistPhotoMimeType: artistPhotoMimeType,
         preset: data.stylePreset || 'dark'
       });
+
+      if (analysisCancelledRef.current) return;
       
       // Generate podcast audio directly on frontend
       let podcastAudio = null;
       let podcastError = null;
       try {
         setStatus("Synthesizing session voices...");
-        const podcastData = await generatePodcast(review);
+        const podcastData = await generatePodcast(review, audioBase64 as string);
         podcastAudio = podcastData.audio;
         if (!podcastAudio) {
           podcastError = 'Podcast audio was empty';
@@ -691,6 +736,8 @@ function AppContent() {
         podcastError = err.message || 'Podcast generation failed';
       }
 
+      if (analysisCancelledRef.current) return;
+
       // If podcast generation failed, show error and ask user to retry
       if (!podcastAudio || podcastError) {
         setLoading(false);
@@ -698,10 +745,7 @@ function AppContent() {
         throw new Error(`Podcast generation failed: ${podcastError || 'No audio generated'}. Please try again.`);
       }
 
-      // Store song audio locally
-      const songAudio = audioBase64;
-
-      // Create review for storage WITH podcast audio
+      // Create review for storage WITH podcast audio, but WITHOUT original song audio
       const reviewForStorage = { 
         ...review, 
         userId: currentUser.id,
@@ -711,9 +755,15 @@ function AppContent() {
       
       // Save to backend
       setStatus("Saving to studio...");
+      // Get FRESH auth headers right before the final save call
+      // to prevent "token expired" errors after long AI generation
+      const freshAuthHeaders = await getAuthHeadersLocal();
+
+      if (analysisCancelledRef.current) return;
+      
       const saveRes = await fetch(`${API_URL}/api/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
+        headers: { 'Content-Type': 'application/json', ...freshAuthHeaders },
         body: JSON.stringify({ userId: currentUser.id, review: reviewForStorage })
       });
 
@@ -738,12 +788,11 @@ function AppContent() {
       const refreshedReview = await fetchReviewWithAudio(reviewForStorage.id);
       
       // Keep full review with audio in local state for playback
+      // Note: songAudio is intentionally omitted here as per user request to delete it
       const fullReview = { 
         ...reviewForStorage, 
         podcastAudio, 
-        songAudio,
         podcastAudioUrl: refreshedReview?.podcastAudioUrl || refreshedReview?.podcastAudio,
-        songAudioUrl: refreshedReview?.songAudioUrl || refreshedReview?.songAudio
       };
       setCurrentReview(fullReview);
 
@@ -1073,9 +1122,12 @@ function AppContent() {
               handleUpdateStyleGuide={handleUpdateStyleGuide}
               handleDeleteStyleGuide={handleDeleteStyleGuide}
               handleLogout={handleLogout}
+              handleCancelAnalysis={handleCancelAnalysis}
+              accountTab={accountTab}
               fetchReviewWithAudio={fetchReviewWithAudio}
               navigateToReview={navigateToReview}
               navigate={navigate}
+              onContactSupport={handleContactSupport}
             />
           </div>
         </PayPalScriptProvider>
@@ -1084,8 +1136,14 @@ function AppContent() {
       <Footer navigate={navigate} />
 
       {/* Support Widget */}
-      {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing') && (
-        <SupportWidget currentUser={currentUser} />
+      {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing' || supportOpen) && (
+        <SupportWidget 
+          currentUser={currentUser} 
+          isOpen={supportOpen}
+          setIsOpen={setSupportOpen}
+          view={supportView}
+          setView={setSupportView}
+        />
       )}
 
       {/* Insufficient Credits Modal */}

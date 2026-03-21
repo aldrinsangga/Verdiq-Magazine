@@ -4,9 +4,9 @@ import { useNotification } from './NotificationContext';
 
 import { isAdmin } from '../authClient';
 
-const AccountSettings = ({ user, session, onUpdate }) => {
+const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) => {
   const { showNotification } = useNotification();
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [formData, setFormData] = useState({
     name: user.name,
     email: user.email
@@ -32,6 +32,11 @@ const AccountSettings = ({ user, session, onUpdate }) => {
     showNotification('Password updated successfully!', 'success');
   };
 
+  const handleDownloadInvoice = (invoiceId) => {
+    showNotification(`Downloading invoice ${invoiceId}...`, 'info');
+    // In a real app, this would trigger a PDF download
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-8" data-testid="account-settings">
       <h1 className="text-3xl font-black mb-6">Account Settings</h1>
@@ -42,6 +47,7 @@ const AccountSettings = ({ user, session, onUpdate }) => {
             {[
               { id: 'profile', label: 'Profile' },
               { id: 'security', label: 'Security' },
+              { id: 'billing', label: 'Billing' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -132,6 +138,83 @@ const AccountSettings = ({ user, session, onUpdate }) => {
                 <button onClick={handlePasswordChange} className="bg-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl">
                   Update Password
                 </button>
+              </div>
+            </div>
+          )}
+          {activeTab === 'billing' && (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                  <p className="text-[10px] uppercase font-black text-emerald-500 mb-1">Credits Remaining</p>
+                  <p className="text-3xl font-black text-white">{user.credits || 0}</p>
+                </div>
+                <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+                  <p className="text-[10px] uppercase font-black text-rose-500 mb-1">Credits Spent</p>
+                  <p className="text-3xl font-black text-white">{(user.history?.length || 0) * 10}</p>
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-xl font-bold mb-6">Transaction History</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-800">
+                        <th className="pb-4 text-[10px] uppercase font-black text-slate-500">Date</th>
+                        <th className="pb-4 text-[10px] uppercase font-black text-slate-500">Credits</th>
+                        <th className="pb-4 text-[10px] uppercase font-black text-slate-500">Amount</th>
+                        <th className="pb-4 text-[10px] uppercase font-black text-slate-500">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {(user.purchases || []).map((purchase, idx) => (
+                        <tr key={idx}>
+                          <td className="py-4 text-sm text-slate-300">{new Date(purchase.createdAt).toLocaleDateString()}</td>
+                          <td className="py-4 text-sm text-white font-bold">+{purchase.credits}</td>
+                          <td className="py-4 text-sm text-slate-300">${purchase.amount.toFixed(2)}</td>
+                          <td className="py-4 text-sm">
+                            <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-black uppercase">
+                              {purchase.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {(!user.purchases || user.purchases.length === 0) && (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-slate-500 text-sm italic">No transactions found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-xl font-bold mb-6">PayPal Invoices & Receipts</h2>
+                <div className="space-y-4">
+                  {(user.invoices || []).map((invoice, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                      <div>
+                        <p className="text-sm font-bold text-white">{invoice.plan}</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-black">{invoice.date} • {invoice.id}</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p className="text-sm font-black text-white">{invoice.amount}</p>
+                        <button 
+                          onClick={() => handleDownloadInvoice(invoice.id)}
+                          className="text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-emerald-400 transition-colors border-none bg-transparent"
+                        >
+                          Download PDF
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {(!user.invoices || user.invoices.length === 0) && (
+                    <div className="p-8 text-center text-slate-500 text-sm italic bg-slate-800/20 rounded-2xl border border-dashed border-slate-700">
+                      No invoices available yet
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

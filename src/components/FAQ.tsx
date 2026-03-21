@@ -1,6 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
 
-const FAQ = () => {
+interface FAQProps {
+  onContactSupport?: () => void;
+}
+
+const FAQ: React.FC<FAQProps> = ({ onContactSupport }) => {
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
+
   const faqs = [
     {
       question: "What is Verdiq?",
@@ -29,8 +36,28 @@ const FAQ = () => {
     {
       question: "Do you offer refunds?",
       answer: "Due to the computational costs associated with AI processing and audio generation, we generally do not offer refunds on used credits or purchased credit packages. If you experience a technical failure where credits were deducted but no review was generated, please contact our support team."
+    },
+    {
+      question: "How long does it take to generate a review?",
+      answer: "Typically, the AI analysis and editorial writing take about 30-60 seconds. Generating the full multi-speaker podcast episode can take an additional 1-2 minutes depending on the length of the track and server load."
+    },
+    {
+      question: "Can I use the podcast audio on my social media?",
+      answer: "Absolutely! The podcast audio is generated for you to use as promotional content. You can share it on Instagram, TikTok, YouTube, or any other platform to give your fans a unique 'behind-the-scenes' look at your music."
+    },
+    {
+      question: "What is the 'Studio History'?",
+      answer: "The Studio History is your personal archive where all your generated reviews, drafts, and deleted items are stored. You can access your previous work, publish drafts to the Magazine, or download your podcast episodes at any time."
+    },
+    {
+      question: "How do I earn referral credits?",
+      answer: "You can find your unique referral link in the 'Referral Program' section of your profile menu. When a fellow artist signs up using your link and makes their first credit purchase, you'll automatically receive 5 bonus credits."
     }
   ];
+
+  const toggleFaq = (index: number) => {
+    setOpenIndex(openIndex === index ? null : index);
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-8 py-24">
@@ -39,21 +66,55 @@ const FAQ = () => {
         <p className="text-slate-400 text-lg">Everything you need to know about Verdiq.</p>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {faqs.map((faq, index) => (
-          <div key={index} className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 hover:border-emerald-500/30 transition-colors">
-            <h3 className="text-xl font-bold text-white mb-3">{faq.question}</h3>
-            <p className="text-slate-400 leading-relaxed">{faq.answer}</p>
+          <div 
+            key={index} 
+            className={`bg-slate-900/50 border rounded-2xl overflow-hidden transition-all duration-300 ${
+              openIndex === index ? 'border-emerald-500/50 bg-slate-900' : 'border-white/5 hover:border-white/10'
+            }`}
+          >
+            <button 
+              onClick={() => toggleFaq(index)}
+              className="w-full flex items-center justify-between p-6 text-left focus:outline-none"
+            >
+              <h3 className={`text-xl font-bold transition-colors ${openIndex === index ? 'text-emerald-400' : 'text-white'}`}>
+                {faq.question}
+              </h3>
+              {openIndex === index ? (
+                <ChevronUp className="w-6 h-6 text-emerald-500" />
+              ) : (
+                <ChevronDown className="w-6 h-6 text-slate-500" />
+              )}
+            </button>
+            <div 
+              className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                openIndex === index ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+              }`}
+            >
+              <div className="p-6 pt-0 border-t border-white/5">
+                <p className="text-slate-400 leading-relaxed">{faq.answer}</p>
+              </div>
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-16 text-center bg-slate-900 rounded-3xl p-8 border border-white/10">
-        <h3 className="text-2xl font-bold text-white mb-4">Still have questions?</h3>
-        <p className="text-slate-400 mb-6">Our team is here to help you get the most out of Verdiq.</p>
-        <a href="mailto:verdiqmag@gmail.com" className="inline-block bg-emerald-500 text-slate-950 px-8 py-3 rounded-xl font-bold hover:bg-emerald-400 transition-colors">
-          Contact Support
-        </a>
+      <div className="mt-16 text-center bg-slate-900 rounded-[40px] p-12 border border-white/10 relative overflow-hidden group">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+        <div className="relative z-10">
+          <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-emerald-500">
+            <MessageCircle className="w-8 h-8" />
+          </div>
+          <h3 className="text-3xl font-black text-white mb-4 tracking-tight">Still have questions?</h3>
+          <p className="text-slate-400 mb-8 max-w-md mx-auto">Our team is here to help you get the most out of Verdiq. Open a ticket in the Support Studio for direct assistance.</p>
+          <button 
+            onClick={onContactSupport}
+            className="inline-flex items-center gap-3 bg-emerald-500 text-slate-950 px-10 py-4 rounded-2xl font-black hover:bg-emerald-400 transition-all hover:scale-105 shadow-xl shadow-emerald-500/20 uppercase tracking-widest text-sm"
+          >
+            Contact Support
+          </button>
+        </div>
       </div>
     </div>
   );

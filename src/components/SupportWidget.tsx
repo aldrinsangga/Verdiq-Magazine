@@ -9,11 +9,27 @@ const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEN
 
 interface SupportWidgetProps {
   currentUser: any;
+  isOpen?: boolean;
+  setIsOpen?: (open: boolean) => void;
+  view?: 'list' | 'form' | 'chat';
+  setView?: (view: 'list' | 'form' | 'chat') => void;
 }
 
-const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [view, setView] = useState<'list' | 'form' | 'chat'>('list');
+const SupportWidget: React.FC<SupportWidgetProps> = ({ 
+  currentUser, 
+  isOpen: externalIsOpen, 
+  setIsOpen: externalSetIsOpen,
+  view: externalView,
+  setView: externalSetView
+}) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const [internalView, setInternalView] = useState<'list' | 'form' | 'chat'>('list');
+  
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const setIsOpen = externalSetIsOpen !== undefined ? externalSetIsOpen : setInternalIsOpen;
+  const view = externalView !== undefined ? externalView : internalView;
+  const setView = externalSetView !== undefined ? externalSetView : setInternalView;
+
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [loading, setLoading] = useState(false);
@@ -148,11 +164,11 @@ const SupportWidget: React.FC<SupportWidgetProps> = ({ currentUser }) => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-16 h-16 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 relative group ${
-          isOpen ? 'bg-slate-800 rotate-90' : 'bg-emerald-500 hover:scale-110'
+          isOpen ? 'bg-emerald-500 rotate-90' : 'bg-emerald-500 hover:scale-110'
         }`}
       >
         {isOpen ? (
-          <X className="w-8 h-8 text-white" />
+          <X className="w-8 h-8 text-slate-950" />
         ) : (
           <MessageCircle className="w-8 h-8 text-slate-950" />
         )}

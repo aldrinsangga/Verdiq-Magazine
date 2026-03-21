@@ -5,7 +5,7 @@ import Waveform from './Waveform';
 import { storage, auth } from '../firebase';
 import { ref, getDownloadURL } from 'firebase/storage';
 
-const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, onNavigate }) => {
+const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubscribed, onNavigate }) => {
   const [formData, setFormData] = useState({
     trackName: '',
     artistName: '',
@@ -405,6 +405,20 @@ const SearchSection = ({ onAnalyze, isLoading, credits, status, isSubscribed, on
                 <span>Run Analysis</span>
               )}
             </button>
+
+            {isLoading && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 hover:text-red-500 transition-colors flex items-center justify-center gap-2"
+                data-testid="cancel-analyze-btn"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+                Cancel Analysis
+              </button>
+            )}
 
             <AnimatePresence>
               {error && (

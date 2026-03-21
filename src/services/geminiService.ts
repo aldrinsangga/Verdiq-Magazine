@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { getAuthHeaders } from '../authClient';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -49,16 +50,21 @@ const sanitizeInput = (text: string | null | undefined): string => {
 };
 
 const checkQuota = async () => {
-  const token = localStorage.getItem('access_token');
-  if (!token) return { success: true }; // Fallback if no token (might be handled by auth)
-
   try {
-    const res = await fetch(`${API_URL}/api/ai/preflight`, {
+    const headers = await getAuthHeaders();
+    if (!headers.Authorization) {
+      console.warn("[Quota] No auth headers found, skipping preflight check");
+      return { success: true };
+    }
+
+    // Use credits/check as the preflight check
+    const res = await fetch(`${API_URL}/api/credits/check`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        ...headers,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({ action: 'review' })
     });
     
     if (res.status === 429) {
@@ -67,12 +73,12 @@ const checkQuota = async () => {
     }
     
     if (!res.ok) {
-      // If it's not a 429, we might just log it and continue (fail open)
       console.warn("Quota check failed but continuing:", res.status);
     }
     
     return { success: true };
   } catch (e: any) {
+    console.error("[Quota] Error during preflight check:", e);
     throw e;
   }
 };
@@ -416,7 +422,90 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
   };
 };
 
-export const generatePodcast = async (review: any) => {
+// Helper to decode base64 to AudioBuffer
+const decodeAudio = async (base64: string, audioContext: AudioContext): Promise<AudioBuffer> => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return await audioContext.decodeAudioData(bytes.buffer);
+};
+
+// Helper to encode AudioBuffer to WAV base64
+const encodeWAV = (buffer: AudioBuffer): string => {
+  const sampleRate = buffer.sampleRate;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const pcmData = buffer.getChannelData(0);
+  const numSamples = pcmData.length;
+  const dataSize = numSamples * 2;
+  
+  const wavHeader = new ArrayBuffer(44);
+  const view = new DataView(wavHeader);
+  
+  // RIFF identifier
+  view.setUint8(0, 'R'.charCodeAt(0));
+  view.setUint8(1, 'I'.charCodeAt(0));
+  view.setUint8(2, 'F'.charCodeAt(0));
+  view.setUint8(3, 'F'.charCodeAt(0));
+  // file length
+  view.setUint32(4, 36 + dataSize, true);
+  // WAVE identifier
+  view.setUint8(8, 'W'.charCodeAt(0));
+  view.setUint8(9, 'A'.charCodeAt(0));
+  view.setUint8(10, 'V'.charCodeAt(0));
+  view.setUint8(11, 'E'.charCodeAt(0));
+  // fmt chunk identifier
+  view.setUint8(12, 'f'.charCodeAt(0));
+  view.setUint8(13, 'm'.charCodeAt(0));
+  view.setUint8(14, 't'.charCodeAt(0));
+  view.setUint8(15, ' '.charCodeAt(0));
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // sample format (raw)
+  view.setUint16(20, 1, true);
+  // channel count
+  view.setUint16(22, numChannels, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate
+  view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+  // block align
+  view.setUint16(32, numChannels * bitsPerSample / 8, true);
+  // bits per sample
+  view.setUint16(34, bitsPerSample, true);
+  // data chunk identifier
+  view.setUint8(36, 'd'.charCodeAt(0));
+  view.setUint8(37, 'a'.charCodeAt(0));
+  view.setUint8(38, 't'.charCodeAt(0));
+  view.setUint8(39, 'a'.charCodeAt(0));
+  // data chunk length
+  view.setUint32(40, dataSize, true);
+  
+  const wavBuffer = new Uint8Array(44 + dataSize);
+  wavBuffer.set(new Uint8Array(wavHeader), 0);
+  
+  // Convert float to 16-bit PCM
+  for (let i = 0; i < numSamples; i++) {
+    const s = Math.max(-1, Math.min(1, pcmData[i]));
+    const val = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    const offset = 44 + i * 2;
+    wavBuffer[offset] = val & 0xFF;
+    wavBuffer[offset + 1] = (val >> 8) & 0xFF;
+  }
+  
+  // Convert to base64 safely
+  let binary = '';
+  const CHUNK_SIZE = 0x8000;
+  for (let i = 0; i < wavBuffer.length; i += CHUNK_SIZE) {
+    const chunk = wavBuffer.subarray(i, i + CHUNK_SIZE);
+    binary += String.fromCharCode.apply(null, chunk as any);
+  }
+  return btoa(binary);
+};
+
+export const generatePodcast = async (review: any, originalAudioBase64?: string) => {
   // Check Quota
   await checkQuota();
   
@@ -455,7 +544,55 @@ export const generatePodcast = async (review: any) => {
   const pcmData = audioResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   if (!pcmData) throw new Error("No audio generated");
 
-  // Convert base64 PCM to WAV format
+  // If original audio is provided, mix it as background music
+  if (originalAudioBase64) {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Convert raw PCM from Gemini (24kHz, 16-bit) to Float32 for AudioBuffer
+      const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
+      const floatData = new Float32Array(pcmBuffer.length / 2);
+      const dataView = new DataView(pcmBuffer.buffer);
+      for (let i = 0; i < floatData.length; i++) {
+        floatData[i] = dataView.getInt16(i * 2, true) / 32768;
+      }
+      
+      const podcastBuffer = audioContext.createBuffer(1, floatData.length, 24000);
+      podcastBuffer.getChannelData(0).set(floatData);
+      
+      // Decode original audio
+      const songBuffer = await decodeAudio(originalAudioBase64, audioContext);
+      
+      // Mix using OfflineAudioContext
+      const offlineCtx = new OfflineAudioContext(1, podcastBuffer.length, podcastBuffer.sampleRate);
+      
+      const podcastSource = offlineCtx.createBufferSource();
+      podcastSource.buffer = podcastBuffer;
+      podcastSource.connect(offlineCtx.destination);
+      
+      const songSource = offlineCtx.createBufferSource();
+      songSource.buffer = songBuffer;
+      
+      const gainNode = offlineCtx.createGain();
+      gainNode.gain.value = 0.12; // Subtle background music
+      
+      songSource.connect(gainNode);
+      gainNode.connect(offlineCtx.destination);
+      
+      podcastSource.start(0);
+      songSource.start(0);
+      songSource.loop = true; // Loop the song clip if it's shorter than the podcast
+      
+      const renderedBuffer = await offlineCtx.startRendering();
+      const mixedAudioBase64 = encodeWAV(renderedBuffer);
+      
+      return { audio: mixedAudioBase64, script };
+    } catch (err) {
+      console.error("Audio mixing failed, falling back to raw TTS", err);
+    }
+  }
+
+  // Fallback to standard WAV encoding if mixing fails or no original audio
   const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
   const sampleRate = 24000;
   const numChannels = 1;
@@ -510,9 +647,9 @@ export const generatePodcast = async (review: any) => {
   wavBuffer.set(new Uint8Array(wavHeader), 0);
   wavBuffer.set(pcmBuffer, 44);
   
-  // Convert to base64 safely to avoid "Maximum call stack size exceeded"
+  // Convert to base64 safely
   let binary = '';
-  const CHUNK_SIZE = 0x8000; // 32768
+  const CHUNK_SIZE = 0x8000;
   for (let i = 0; i < wavBuffer.length; i += CHUNK_SIZE) {
     const chunk = wavBuffer.subarray(i, i + CHUNK_SIZE);
     binary += String.fromCharCode.apply(null, chunk as any);

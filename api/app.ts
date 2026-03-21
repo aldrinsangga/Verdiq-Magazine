@@ -4,7 +4,11 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { body, validationResult } from "express-validator";
-import { db, storage, auth, uploadToStorage, adminAuth } from "./firebase";
+import { db, storage, auth, uploadToStorage, adminAuth, FieldValue } from "./firebase";
+import { createRequire } from 'module';
+import * as otplib from 'otplib';
+const authenticator = (otplib as any).authenticator || (otplib as any).default?.authenticator || otplib;
+import QRCode from 'qrcode';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
@@ -38,7 +42,7 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://cdn.jsdelivr.net"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https://picsum.photos", "https://www.paypalobjects.com", "https://firebasestorage.googleapis.com", "https://storage.googleapis.com", "https://*.firebasestorage.app", "https://images.unsplash.com", "https://*.unsplash.com"],
+      imgSrc: ["'self'", "data:", "https://api.qrserver.com", "https://picsum.photos", "https://www.paypalobjects.com", "https://firebasestorage.googleapis.com", "https://storage.googleapis.com", "https://*.firebasestorage.app", "https://images.unsplash.com", "https://*.unsplash.com"],
       mediaSrc: ["'self'", "blob:", "https://firebasestorage.googleapis.com", "https://storage.googleapis.com", "https://*.firebasestorage.app"],
       connectSrc: ["'self'", "https://verdiqmag.com", "https://www.verdiqmag.com", "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://storage.googleapis.com", "https://*.firebasestorage.app"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -141,10 +145,14 @@ const isAdminEmail = (email: string | undefined) => {
 
 // Helper to verify Firebase ID token and get user info
 const getUserFromAuth = async (authHeader: string | undefined): Promise<{ uid: string, email?: string } | null> => {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log("[Auth] No Bearer token found in header");
+    return null;
+  }
   const idToken = authHeader.split('Bearer ')[1]?.trim();
   
   if (!idToken || idToken === 'null' || idToken === 'undefined') {
+    console.log("[Auth] Token is null or undefined");
     return null;
   }
   
@@ -152,13 +160,18 @@ const getUserFromAuth = async (authHeader: string | undefined): Promise<{ uid: s
     if (adminAuth) {
       // Strictly verify the token with Firebase Admin SDK
       const decodedToken = await adminAuth.verifyIdToken(idToken);
+      console.log(`[Auth] Token verified for UID: ${decodedToken.uid}`);
       return { uid: decodedToken.uid, email: decodedToken.email };
     } else {
       console.error("[Auth] adminAuth is not initialized");
+      // Fallback for development if adminAuth is missing
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn("[Auth] DEV FALLBACK: Returning mock user for testing");
+        return { uid: "dev-user-id", email: "dev@example.com" };
+      }
       return null;
     }
   } catch (error: any) {
-    // Log specific auth errors for debugging but don't leak details to client
     console.error(`[Auth] Token verification failed: ${error.message}`);
     return null;
   }
@@ -385,8 +398,16 @@ app.get("/api/debug/firebase", async (req, res) => {
 // API Routes
 
 // Auth
-app.post("/api/auth/login", async (req, res, next) => {
+app.post("/api/auth/login", 
+  [
+    body('email').isEmail().normalizeEmail(),
+  ],
+  async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
     const { email, password } = req.body;
     const usersRef = db.collection('users');
     const snapshot = await usersRef.where('email', '==', email).where('password', '==', password).limit(1).get();
@@ -424,7 +445,7 @@ app.post("/api/auth/signup",
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const { email, password, name, id, website } = req.body;
+    const { email, password, name, id, website, referralCode: signupReferralCode } = req.body;
     
     // Bot protection: website is a honeypot field
     if (website) {
@@ -445,6 +466,20 @@ app.post("/api/auth/signup",
     
     const userId = id || Math.random().toString(36).substring(2, 11);
     const isSpecialAdmin = isAdminEmail(email);
+    
+    // Generate unique referral code
+    const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    // Check for referrer
+    let referredBy = null;
+    if (signupReferralCode) {
+      const referrerSnapshot = await usersRef.where('referralCode', '==', signupReferralCode).limit(1).get();
+      if (!referrerSnapshot.empty) {
+        referredBy = referrerSnapshot.docs[0].id;
+        console.log(`[signup] User ${email} referred by ${referredBy}`);
+      }
+    }
+
     const newUser = {
       id: userId,
       email,
@@ -453,11 +488,29 @@ app.post("/api/auth/signup",
       credits: isSpecialAdmin ? 999999 : 10,
       role: isSpecialAdmin ? 'admin' : 'user',
       mfaEnabled: false,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      referralCode,
+      referredBy
     };
     
     console.log("[signup] Creating user:", userId);
     await usersRef.doc(userId).set(newUser);
+    
+    // Create referral record if referred
+    if (referredBy) {
+      const referralId = `ref_${userId}`;
+      await db.collection('referrals').doc(referralId).set({
+        id: referralId,
+        referrerId: referredBy,
+        referredId: userId,
+        referredName: name,
+        referredEmail: email,
+        status: 'signed_up',
+        creditsAwarded: false,
+        createdAt: new Date().toISOString()
+      });
+    }
+
     console.log("[signup] User created successfully");
     const sanitized = sanitizeUser(newUser);
     res.json({ ...sanitized, session: { access_token: "mock-jwt-token-" + userId } });
@@ -716,6 +769,35 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
         isSubscribed: true 
       });
 
+      // Handle Referral Reward
+      if (user.referredBy) {
+        const referralId = `ref_${userId}`;
+        const referralRef = db.collection('referrals').doc(referralId);
+        const referralDoc = await referralRef.get();
+        
+        if (referralDoc.exists && !referralDoc.data()?.creditsAwarded) {
+          const referrerId = user.referredBy;
+          const referrerRef = db.collection('users').doc(referrerId);
+          const referrerDoc = await referrerRef.get();
+          
+          if (referrerDoc.exists) {
+            const referrerData = referrerDoc.data();
+            const currentReferrerCredits = referrerData?.credits || 0;
+            
+            await referrerRef.update({
+              credits: currentReferrerCredits + 5
+            });
+            
+            await referralRef.update({
+              status: 'completed',
+              creditsAwarded: true
+            });
+            
+            console.log(`[Referral] Awarded 5 credits to ${referrerId} for referring ${userId}`);
+          }
+        }
+      }
+
       res.json({ success: true, credits: newCredits, purchase });
     } else {
       res.status(400).json({ message: "Payment not completed" });
@@ -821,66 +903,194 @@ app.post("/api/ai/preflight", requireAuth, checkUsageQuota, (req, res) => {
   res.json({ success: true, message: "Quota check passed" });
 });
 
-// MFA Endpoints (Mock)
-app.get("/api/auth/mfa/status", async (req, res, next) => {
+// MFA Endpoints (Real implementation using otplib)
+app.get("/api/auth/mfa/status", requireAuth, async (req, res, next) => {
   try {
-    const userId = await getUserIdFromAuth(req.headers.authorization);
+    const userId = (req as any).user.uid;
+    console.log(`[MFA Status] Checking status for user: ${userId}`);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     
     const userDoc = await db.collection('users').doc(userId).get();
     const user = userDoc.data();
     
+    console.log(`[MFA Status] User ${userId} mfaEnabled: ${user?.mfaEnabled || false}`);
     res.json({ mfa_enabled: user?.mfaEnabled || false });
   } catch (error) {
+    console.error(`[MFA Status] Error for user: ${(req as any).user?.uid}:`, error);
     next(error);
   }
 });
 
-app.post("/api/auth/mfa/setup", async (req, res, next) => {
+app.post("/api/auth/mfa/setup", requireAuth, async (req, res, next) => {
   try {
-    res.json({
-      qr_code: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=otpauth://totp/Verdiq:Admin?secret=MOCKSECRET123&issuer=Verdiq",
-      manual_entry_key: "MOCKSECRET123"
+    const userId = (req as any).user.uid;
+    console.log(`[MFA] Starting setup for user: ${userId}`);
+    const userDoc = await db.collection('users').doc(userId).get();
+    const user = userDoc.data();
+    
+    if (!user) {
+      console.error(`[MFA] User ${userId} not found in database`);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!authenticator) {
+      console.error("[MFA] authenticator is undefined");
+      return res.status(500).json({ message: "MFA service not available" });
+    }
+
+    // Generate a new secret
+    console.log(`[MFA] Authenticator keys: ${Object.keys(authenticator).join(', ')}`);
+    const secret = authenticator.generateSecret();
+    console.log(`[MFA] Secret generated for ${userId}`);
+    const issuer = "Verdiq";
+    const account = user.email || "Admin";
+    
+    // Check for keyuri or keyURI (case sensitivity can vary between versions/environments)
+    let otpauthUrl = '';
+    try {
+      if (typeof (authenticator as any).keyuri === 'function') {
+        otpauthUrl = (authenticator as any).keyuri(account, issuer, secret);
+      } else if (typeof (authenticator as any).keyURI === 'function') {
+        otpauthUrl = (authenticator as any).keyURI(account, issuer, secret);
+      } else {
+        console.warn("[MFA] Neither keyuri nor keyURI is a function on authenticator. Using manual fallback.");
+        // Manual fallback for otpauth URL
+        otpauthUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+      }
+    } catch (err) {
+      console.error("[MFA] Error generating keyuri, using manual fallback:", err);
+      otpauthUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+    }
+    
+    console.log(`[MFA] OTPAuth URL generated`);
+    const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+    console.log(`[MFA] QR Code generated`);
+    
+    // Store temporary secret for verification
+    await db.collection('users').doc(userId).update({ 
+      tempMfaSecret: secret 
     });
-  } catch (error) {
+    console.log(`[MFA] Temp secret stored for ${userId}`);
+
+    res.json({
+      qr_code: qrCodeDataUrl,
+      manual_entry_key: secret
+    });
+  } catch (error: any) {
+    console.error(`[MFA] Setup failed: ${error.message}`);
     next(error);
   }
 });
 
-app.post("/api/auth/mfa/verify-setup", async (req, res, next) => {
+app.post("/api/auth/mfa/verify-setup", requireAuth, async (req, res, next) => {
   try {
-    const userId = await getUserIdFromAuth(req.headers.authorization);
+    const userId = (req as any).user.uid;
+    console.log(`[MFA] Verifying setup for user: ${userId}`);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     
     const { code } = req.body;
-    if (code === "123456" || code === "000000") {
-      await db.collection('users').doc(userId).update({ mfaEnabled: true });
+    const userDoc = await db.collection('users').doc(userId).get();
+    const user = userDoc.data();
+
+    if (!user || !user.tempMfaSecret) {
+      console.error(`[MFA] Setup not initiated for ${userId}`);
+      return res.status(400).json({ detail: "MFA setup not initiated" });
+    }
+
+    if (!authenticator) {
+      console.error("[MFA] authenticator is undefined");
+      return res.status(500).json({ message: "MFA service not available" });
+    }
+
+    console.log(`[MFA] Verifying code ${code} against secret for ${userId}`);
+    const isValid = authenticator.verify({
+      token: code,
+      secret: user.tempMfaSecret,
+      window: 1
+    });
+
+    if (isValid) {
+      console.log(`[MFA] Setup verified successfully for ${userId}`);
+      await db.collection('users').doc(userId).update({ 
+        mfaEnabled: true,
+        mfaSecret: user.tempMfaSecret,
+        tempMfaSecret: FieldValue.delete() // Clean up
+      });
       res.json({ success: true });
     } else {
-      res.status(400).json({ detail: "Invalid verification code. Try 123456." });
+      console.warn(`[MFA] Invalid code ${code} for ${userId}`);
+      res.status(400).json({ detail: "Invalid verification code. Please check your authenticator app." });
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`[MFA] Verification failed: ${error.message}`);
     next(error);
   }
 });
 
-app.post("/api/auth/mfa/verify", async (req, res, next) => {
+app.post("/api/auth/mfa/verify", 
+  [
+    body('email').optional().isEmail().normalizeEmail(),
+  ],
+  async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
     const { email, password, mfa_code } = req.body;
-    const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('email', '==', email).where('password', '==', password).limit(1).get();
     
-    if (!snapshot.empty && (mfa_code === "123456" || mfa_code === "000000")) {
-      const user = snapshot.docs[0].data();
+    // Try to get user from Authorization header first
+    const authUser = await getUserFromAuth(req.headers.authorization);
+    let userDoc;
+    
+    if (authUser) {
+      console.log(`[MFA] Login verification via Auth token for UID: ${authUser.uid}`);
+      userDoc = await db.collection('users').doc(authUser.uid).get();
+    } else if (email && password) {
+      console.log(`[MFA] Login verification via credentials for email: ${email}`);
+      const snapshot = await db.collection('users').where('email', '==', email).where('password', '==', password).limit(1).get();
+      if (!snapshot.empty) {
+        userDoc = snapshot.docs[0];
+      }
+    }
+    
+    if (!userDoc || !userDoc.exists) {
+      console.warn(`[MFA] Invalid credentials or user not found`);
+      return res.status(401).json({ detail: "Invalid credentials" });
+    }
+
+    const user = userDoc.data();
+
+    if (!user.mfaEnabled || !user.mfaSecret) {
+      console.warn(`[MFA] MFA not enabled for ${email}`);
+      return res.status(400).json({ detail: "MFA not enabled for this account" });
+    }
+
+    if (!authenticator) {
+      console.error("[MFA] authenticator is undefined");
+      return res.status(500).json({ message: "MFA service not available" });
+    }
+
+    console.log(`[MFA] Verifying login code ${mfa_code} for ${email}`);
+    const isValid = authenticator.verify({
+      token: mfa_code,
+      secret: user.mfaSecret,
+      window: 1
+    });
+
+    if (isValid) {
+      console.log(`[MFA] Login verification successful for ${email}`);
       const sanitized = sanitizeUser(user);
       res.json({
         ...sanitized,
-        session: { access_token: "mock-jwt-token-" + snapshot.docs[0].id }
+        session: { access_token: "mock-jwt-token-" + userDoc.id }
       });
     } else {
-      res.status(401).json({ detail: "Invalid MFA code. Try 123456." });
+      console.warn(`[MFA] Invalid login code ${mfa_code} for ${email}`);
+      res.status(401).json({ detail: "Invalid MFA code. Please check your authenticator app." });
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`[MFA] Login verification failed: ${error.message}`);
     next(error);
   }
 });
@@ -1334,6 +1544,61 @@ app.delete("/api/admin/support/:id", isAdmin, async (req, res, next) => {
     await db.collection('support_tickets').doc(id).delete();
     res.json({ success: true });
   } catch (error) {
+    next(error);
+  }
+});
+
+// Referrals
+app.get("/api/referrals", async (req, res, next) => {
+  try {
+    const auth = await getUserFromAuth(req.headers.authorization);
+    if (!auth) return res.status(401).json({ message: "Unauthorized" });
+    
+    const snapshot = await db.collection('referrals')
+      .where('referrerId', '==', auth.uid)
+      .get();
+      
+    const referrals = snapshot.docs.map(doc => doc.data());
+    res.json(referrals);
+  } catch (error) {
+    console.error("[GET /api/referrals] Error:", error);
+    next(error);
+  }
+});
+
+app.get("/api/referral/stats", async (req, res, next) => {
+  try {
+    const auth = await getUserFromAuth(req.headers.authorization);
+    if (!auth) return res.status(401).json({ message: "Unauthorized" });
+    
+    const userDoc = await db.collection('users').doc(auth.uid).get();
+    let user = userDoc.data();
+    
+    if (!user) return res.status(404).json({ message: "User not found" });
+    
+    // Lazy generate referral code if missing
+    if (!user.referralCode) {
+      const referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      await db.collection('users').doc(auth.uid).update({ referralCode });
+      user.referralCode = referralCode;
+    }
+    
+    const snapshot = await db.collection('referrals')
+      .where('referrerId', '==', auth.uid)
+      .get();
+      
+    const referrals = snapshot.docs.map(doc => doc.data());
+    const totalReferred = referrals.length;
+    const totalCreditsEarned = referrals.filter(r => r.creditsAwarded).length * 5;
+    
+    res.json({
+      referralCode: user.referralCode,
+      totalReferred,
+      totalCreditsEarned,
+      referrals
+    });
+  } catch (error) {
+    console.error("[GET /api/referral/stats] Error:", error);
     next(error);
   }
 });

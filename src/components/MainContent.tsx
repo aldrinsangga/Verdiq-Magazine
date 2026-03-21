@@ -13,6 +13,7 @@ import TermsAndConditions from './TermsAndConditions';
 import FAQ from './FAQ';
 import ContactUs from './ContactUs';
 import SubmissionGuide from './SubmissionGuide';
+import ReferralDashboard from './ReferralDashboard';
 import VerificationRequired from './VerificationRequired';
 import { auth, isAdmin } from '../authClient';
 
@@ -42,9 +43,12 @@ interface MainContentProps {
   handleUpdateStyleGuide: (id: string, guide: any) => Promise<void>;
   handleDeleteStyleGuide: (id: string) => Promise<void>;
   handleLogout: () => void;
+  handleCancelAnalysis: () => void;
+  accountTab: string;
   fetchReviewWithAudio: (id: string) => Promise<any>;
   navigateToReview: (review: any, viewOnly: boolean) => void;
-  navigate: (view: string) => void;
+  navigate: (view: string, extra?: string) => void;
+  onContactSupport: () => void;
   paypalClientId: string;
 }
 
@@ -75,9 +79,12 @@ const MainContent: React.FC<MainContentProps> = ({
   handleUpdateStyleGuide,
   handleDeleteStyleGuide,
   handleLogout,
+  handleCancelAnalysis,
+  accountTab,
   fetchReviewWithAudio,
   navigateToReview,
-  navigate
+  navigate,
+  onContactSupport
 }) => {
   const isUnverified = currentUser && auth.currentUser && !auth.currentUser.emailVerified;
 
@@ -89,6 +96,7 @@ const MainContent: React.FC<MainContentProps> = ({
       {!isUnverified && view === 'landing' && (
         <SearchSection 
           onAnalyze={handleAnalyze} 
+          onCancel={handleCancelAnalysis}
           isLoading={loading} 
           credits={currentUser?.credits || 0} 
           status={status} 
@@ -191,6 +199,7 @@ const MainContent: React.FC<MainContentProps> = ({
           user={currentUser} 
           session={currentUser?.session}
           onUpdate={handleUpdateProfile} 
+          initialTab={accountTab}
         />
       )}
       {!isUnverified && view === 'admin' && isAdmin(currentUser) && (
@@ -210,9 +219,12 @@ const MainContent: React.FC<MainContentProps> = ({
       )}
       {view === 'privacy' && <PrivacyPolicy />}
       {view === 'terms' && <TermsAndConditions />}
-      {view === 'faq' && <FAQ />}
+      {view === 'faq' && <FAQ onContactSupport={onContactSupport} />}
       {view === 'contact' && <ContactUs />}
       {view === 'guide' && <SubmissionGuide onNavigate={navigate} />}
+      {!isUnverified && view === 'referrals' && currentUser && (
+        <ReferralDashboard currentUser={currentUser} onNavigate={navigate} />
+      )}
     </main>
   );
 };

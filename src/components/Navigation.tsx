@@ -8,7 +8,7 @@ interface NavigationProps {
   creditStatus: any;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
-  navigate: (view: string) => void;
+  navigate: (view: string, extra?: string) => void;
   handleLogout: () => void;
 }
 
@@ -188,6 +188,16 @@ const Navigation: React.FC<NavigationProps> = ({
             >
               Studio History
             </a>
+            {currentUser && (
+              <a 
+                href="/referrals"
+                onClick={(e) => { e.preventDefault(); navigate('referrals'); setMobileMenuOpen(false); }} 
+                className={`text-left py-3 px-4 rounded-lg text-sm font-bold transition-colors ${view === 'referrals' ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-300 hover:bg-slate-800'} border-none bg-transparent block`}
+                data-testid="mobile-nav-referrals"
+              >
+                Referral Program
+              </a>
+            )}
           </div>
         </div>
       )}
