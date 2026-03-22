@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { login, signup, requestPasswordReset, saveSession, sendVerificationEmail } from '../authClient';
 import MFAVerify from './MFAVerify';
 
@@ -12,6 +12,7 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [referralCode, setReferralCode] = useState(sessionStorage.getItem('referralCode') || '');
   const [website, setWebsite] = useState(''); // Honeypot field
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +20,7 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
   const [mfaCredentials, setMfaCredentials] = useState(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -27,7 +29,6 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
 
     try {
       if (mode === 'signup') {
-        const referralCode = sessionStorage.getItem('referralCode') || '';
         const userData = await signup(email, password, name, website, referralCode);
         setVerificationSent(true);
         // Clear referral code after successful signup
@@ -106,7 +107,7 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
         <h2 className="text-3xl font-black mb-4 tracking-tighter">Check Your Email</h2>
         <p className="text-slate-400 mb-8 leading-relaxed">
           We've sent a verification link to <span className="text-white font-bold">{email}</span>. 
-          Please click the link to activate your account.
+          Please click the link to activate your account. <span className="text-emerald-500 font-bold italic">Check your spam folder if you don't see it.</span>
         </p>
         <div className="space-y-4">
           <button 
@@ -173,7 +174,6 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                placeholder="Artist Name"
                 data-testid="name-input"
               />
             </div>
@@ -199,7 +199,6 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
             value={email}
             onChange={e => setEmail(e.target.value)}
             className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-            placeholder="name@example.com"
             data-testid="email-input"
           />
         </div>
@@ -207,19 +206,41 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
         {mode !== 'forgot' && (
           <div>
             <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2 ml-1">Password</label>
-            <input 
-              required
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-              placeholder="••••••••"
-              minLength={6}
-              data-testid="password-input"
-            />
+            <div className="relative">
+              <input 
+                required
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 pr-12"
+                minLength={6}
+                data-testid="password-input"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-emerald-500 transition-colors bg-transparent border-none p-0"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {mode === 'signup' && (
               <p className="text-[10px] text-slate-500 mt-1 ml-1">Password must be at least 8 characters with uppercase, lowercase, and number</p>
             )}
+          </div>
+        )}
+
+        {mode === 'signup' && (
+          <div>
+            <label className="block text-[10px] uppercase font-black text-emerald-500 mb-2 ml-1">Referral Code (Optional)</label>
+            <input 
+              type="text"
+              value={referralCode}
+              onChange={e => setReferralCode(e.target.value)}
+              className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              placeholder="Enter referral code"
+              data-testid="referral-input"
+            />
           </div>
         )}
 

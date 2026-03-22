@@ -46,8 +46,9 @@ const ReviewMoreFromMagazine: React.FC<ReviewMoreFromMagazineProps> = ({
                   </span>
                 </div>
               </div>
-              <h3 className="text-white font-bold group-hover:text-emerald-400 transition-colors">{r.songTitle}</h3>
-              <p className="text-slate-500 text-xs uppercase tracking-widest font-bold">{r.artistName}</p>
+              <h3 className="font-black text-emerald-500 [&::first-line]:text-white group-hover:text-emerald-400 transition-colors leading-tight uppercase tracking-tight text-base">
+                {(r.headline || r.songTitle).toUpperCase()}
+              </h3>
             </div>
           ))}
         </div>

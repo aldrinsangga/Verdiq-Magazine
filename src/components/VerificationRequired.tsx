@@ -35,7 +35,7 @@ const VerificationRequired: React.FC<VerificationRequiredProps> = ({ email, onLo
       <h2 className="text-3xl font-black mb-4 tracking-tighter text-white">Verify Your Email</h2>
       <p className="text-slate-400 mb-8 leading-relaxed">
         We've sent a verification link to <span className="text-white font-bold">{email}</span>. 
-        Please verify your email to access your studio.
+        Please verify your email to access your studio. <span className="text-emerald-500 font-bold italic">Check your spam folder if you don't see it.</span>
       </p>
 
       <div className="space-y-4">
