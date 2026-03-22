@@ -45,6 +45,7 @@ interface MainContentProps {
   handleDeleteStyleGuide: (id: string) => Promise<void>;
   handleLogout: () => void;
   handleCancelAnalysis: () => void;
+  refreshUserData: () => Promise<void>;
   accountTab: string;
   fetchReviewWithAudio: (id: string) => Promise<any>;
   navigateToReview: (review: any, viewOnly: boolean) => void;
@@ -82,6 +83,7 @@ const MainContent: React.FC<MainContentProps> = ({
   handleDeleteStyleGuide,
   handleLogout,
   handleCancelAnalysis,
+  refreshUserData,
   accountTab,
   fetchReviewWithAudio,
   navigateToReview,
@@ -176,25 +178,10 @@ const MainContent: React.FC<MainContentProps> = ({
         <Pricing 
           currentUser={currentUser}
           paypalClientId={paypalClientId}
-          onUpgrade={(data) => { 
+          onUpgrade={async (data) => { 
             if (!currentUser) { navigate('auth'); return; }
-            // Update user state with subscription data
-            const updated = { 
-              ...currentUser, 
-              isSubscribed: true, 
-              credits: data?.credits || 12,
-              invoices: [
-                { 
-                  id: 'INV-'+Date.now(), 
-                  date: new Date().toLocaleDateString(), 
-                  amount: data?.plan === 'label' ? '$49.00' : '$12.00', 
-                  status: 'Paid', 
-                  plan: data?.plan === 'label' ? 'Label' : 'Artist Pro' 
-                }, 
-                ...(currentUser.invoices || [])
-              ] 
-            };
-            handleUpdateProfile(updated);
+            // Refresh user data from backend to get latest credits and purchases
+            await refreshUserData();
             navigate('landing'); 
           }} 
         />

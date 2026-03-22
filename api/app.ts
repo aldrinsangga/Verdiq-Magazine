@@ -278,10 +278,14 @@ const getFullUser = async (userId: string) => {
     }
     
     const user = userDoc.data();
-    console.log(`[getFullUser] Fetching reviews for user: ${userId}`);
+    console.log(`[getFullUser] Fetching reviews and purchases for user: ${userId}`);
     
     let history = [];
+    let purchases = [];
+    let invoices = [];
+
     try {
+      // Fetch Reviews (History)
       const reviewsSnapshot = await db.collection('reviews')
         .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
@@ -312,12 +316,29 @@ const getFullUser = async (userId: string) => {
       }
       
       history = validReviews;
-    } catch (reviewErr: any) {
-      console.warn(`[getFullUser] Could not fetch reviews for user ${userId}:`, reviewErr.message);
-      // Continue with empty history if reviews fetch fails
+
+      // Fetch Purchases
+      const purchasesSnapshot = await db.collection('purchases')
+        .where('userId', '==', userId)
+        .orderBy('createdAt', 'desc')
+        .get();
+      
+      purchases = purchasesSnapshot.docs.map(doc => doc.data());
+
+      // Map purchases to invoices
+      invoices = purchases.map(p => ({
+        id: p.id,
+        date: new Date(p.createdAt).toLocaleDateString(),
+        amount: `$${p.amount}.00`,
+        status: 'Paid',
+        plan: `${p.credits} Credits Pack`
+      }));
+
+    } catch (err: any) {
+      console.warn(`[getFullUser] Could not fetch data for user ${userId}:`, err.message);
     }
 
-    return sanitizeUser({ ...user, history });
+    return sanitizeUser({ ...user, history, purchases, invoices });
   } catch (error: any) {
     console.error(`[getFullUser] Critical error fetching user ${userId}:`, error);
     return null;
@@ -800,8 +821,7 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
       
       const newCredits = (user.credits || 0) + pkg.credits;
       await userRef.update({ 
-        credits: newCredits,
-        isSubscribed: true 
+        credits: newCredits
       });
 
       // Handle Referral Reward
@@ -848,6 +868,110 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
 
 // PayPal Subscription Order Capture
 // Removed as per user request (Credit model only)
+
+// Download Receipt
+app.get("/api/purchases/:id/receipt", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization || (req.query.authorization as string);
+    const userId = await getUserIdFromAuth(authHeader);
+    if (!userId) return res.status(401).send("Unauthorized");
+
+    const purchaseDoc = await db.collection('purchases').doc(id).get();
+    if (!purchaseDoc.exists) return res.status(404).send("Receipt not found");
+
+    const purchase = purchaseDoc.data();
+    if (purchase?.userId !== userId && !isAdminEmail(await getUserFromAuth(authHeader).then(a => a?.email))) {
+      return res.status(403).send("Forbidden");
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Receipt - ${purchase?.id}</title>
+        <style>
+          body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; }
+          .receipt-box { max-width: 800px; margin: auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 20px; }
+          .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #10b981; padding-bottom: 20px; }
+          .logo { font-size: 24px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; }
+          .logo span { color: #10b981; }
+          .details { margin-bottom: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          .details h4 { margin: 0 0 10px 0; text-transform: uppercase; font-size: 10px; letter-spacing: 2px; color: #64748b; }
+          .details p { margin: 0; font-weight: 600; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+          th { text-align: left; border-bottom: 1px solid #e2e8f0; padding: 10px; font-size: 12px; text-transform: uppercase; color: #64748b; }
+          td { padding: 15px 10px; border-bottom: 1px solid #f1f5f9; }
+          .total { text-align: right; font-size: 20px; font-weight: 900; }
+          .footer { text-align: center; color: #94a3b8; font-size: 12px; margin-top: 40px; }
+          @media print { .no-print { display: none; } }
+          .btn { background: #10b981; color: white; padding: 10px 20px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block; margin-bottom: 20px; cursor: pointer; border: none; }
+        </style>
+      </head>
+      <body>
+        <div class="receipt-box">
+          <div class="no-print" style="text-align: right;">
+            <button class="btn" onclick="window.print()">Print Receipt</button>
+          </div>
+          <div class="header">
+            <div class="logo">VERDIQ<span>.</span></div>
+            <div style="text-align: right;">
+              <h2 style="margin: 0; font-weight: 900; text-transform: uppercase;">Receipt</h2>
+              <p style="margin: 5px 0 0 0; color: #64748b; font-size: 12px;">${purchase?.id}</p>
+            </div>
+          </div>
+          
+          <div class="details">
+            <div>
+              <h4>Billed To</h4>
+              <p>${purchase?.userName}</p>
+              <p style="font-weight: 400; color: #64748b;">${purchase?.userEmail}</p>
+            </div>
+            <div style="text-align: right;">
+              <h4>Date</h4>
+              <p>${new Date(purchase?.createdAt).toLocaleDateString()}</p>
+              <h4 style="margin-top: 20px;">Payment Method</h4>
+              <p>${purchase?.paymentMethod}</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <p style="margin: 0; font-weight: 700;">${purchase?.credits} Credits Pack</p>
+                  <p style="margin: 5px 0 0 0; font-size: 12px; color: #64748b;">Digital credits for Verdiq platform analysis and publishing.</p>
+                </td>
+                <td style="text-align: right; font-weight: 700;">$${purchase?.amount}.00</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="total">
+            <span style="font-size: 14px; color: #64748b; font-weight: 600; margin-right: 20px;">Total Paid</span>
+            $${purchase?.amount}.00
+          </div>
+
+          <div class="footer">
+            <p>Thank you for your purchase! For support, contact support@verdiq.com</p>
+            <p>&copy; ${new Date().getFullYear()} Verdiq. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    res.send(html);
+  } catch (error) {
+    console.error("Receipt Download Error:", error);
+    res.status(500).send("Error generating receipt");
+  }
+});
 app.get("/api/health", async (req, res) => {
   try {
     // Test Firestore connection

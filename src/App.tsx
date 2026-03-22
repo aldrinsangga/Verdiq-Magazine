@@ -1170,6 +1170,7 @@ function AppContent() {
               handleDeleteStyleGuide={handleDeleteStyleGuide}
               handleLogout={handleLogout}
               handleCancelAnalysis={handleCancelAnalysis}
+              refreshUserData={refreshUserData}
               accountTab={accountTab}
               fetchReviewWithAudio={fetchReviewWithAudio}
               navigateToReview={navigateToReview}

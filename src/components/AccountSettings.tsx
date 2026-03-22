@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import MFASetup from './MFASetup';
 import { useNotification } from './NotificationContext';
 
-import { isAdmin } from '../authClient';
+import { isAdmin, auth, getIdTokenWithRetry } from '../authClient';
 
 const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) => {
   const { showNotification } = useNotification();
@@ -49,9 +49,26 @@ const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) =>
     }
   };
 
-  const handleDownloadInvoice = (invoiceId) => {
-    showNotification(`Downloading invoice ${invoiceId}...`, 'info');
-    // In a real app, this would trigger a PDF download
+  const handleDownloadInvoice = async (invoiceId: string) => {
+    const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+      ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
+      : '';
+    
+    try {
+      showNotification('Generating receipt...', 'info');
+      const user = auth.currentUser;
+      if (!user) {
+        showNotification('Session expired. Please log in again.', 'error');
+        return;
+      }
+      
+      const token = await getIdTokenWithRetry(user);
+      // Open receipt in new tab
+      window.open(`${API_URL}/api/purchases/${invoiceId}/receipt?authorization=${token}`, '_blank');
+    } catch (e) {
+      console.error('Failed to get auth token for receipt:', e);
+      showNotification('Failed to download receipt. Please try again.', 'error');
+    }
   };
 
   return (
@@ -250,7 +267,7 @@ const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) =>
                           onClick={() => handleDownloadInvoice(invoice.id)}
                           className="text-[10px] font-black uppercase tracking-widest text-emerald-500 hover:text-emerald-400 transition-colors border-none bg-transparent"
                         >
-                          Download PDF
+                          Download Receipt
                         </button>
                       </div>
                     </div>
