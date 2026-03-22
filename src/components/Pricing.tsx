@@ -9,7 +9,20 @@ const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEN
 const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
   const [loading, setLoading] = useState(null);
   const [error, setError] = useState(null);
+  const [checkoutItem, setCheckoutItem] = useState(null); // { id: string, name: string, price: string }
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Reset processing state when checkout item changes
+  useEffect(() => {
+    if (checkoutItem) {
+      setIsProcessing(false);
+    }
+  }, [checkoutItem]);
+
+  const handleTopUp = (packageId) => {
+    const pkg = topUpPackages.find(p => p.id === packageId);
+    setCheckoutItem({ id: packageId, name: `${pkg.credits} Credits`, price: pkg.price });
+  };
 
   const createOrder = async (data, actions, packageId) => {
     setIsProcessing(true);
@@ -55,6 +68,10 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
       if (res.ok) {
         const result = await res.json();
         onUpgrade({ ...result, type: 'topup' });
+        // Small delay before closing modal to allow PayPal SDK to finish cleanup
+        setTimeout(() => {
+          setCheckoutItem(null);
+        }, 500);
       } else {
         const err = await res.json();
         setError(err.message || 'Payment capture failed');
@@ -105,7 +122,7 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
           {topUpPackages.map((pkg) => (
             <div
               key={pkg.id}
-              className={`relative p-8 rounded-[40px] text-center transition-all flex flex-col items-center bg-slate-900 border border-white/10 ${
+              className={`relative p-8 rounded-[40px] text-center transition-all flex flex-col items-center justify-center bg-slate-900 border border-white/10 ${
                 pkg.popular 
                   ? 'border-emerald-500 ring-1 ring-emerald-500/20 scale-105 z-10' 
                   : ''
@@ -118,41 +135,18 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
               )}
               <p className="text-6xl font-black text-white mb-2 tracking-tighter">{pkg.credits}</p>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-6">Credits</p>
-              <p className="text-3xl font-black text-emerald-500 mb-8">{pkg.price}</p>
+              <p className="text-3xl font-black text-emerald-500 mb-6">{pkg.price}</p>
               
-              <div className="mt-auto w-full min-h-[100px] flex flex-col gap-4">
-                <div className="relative">
-                  {isProcessing && loading === pkg.id && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm rounded-2xl z-10">
-                      <div className="w-5 h-5 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-                    </div>
-                  )}
-                  <PayPalButtons 
-                    style={{ 
-                      layout: "vertical", 
-                      color: "gold", 
-                      shape: "pill", 
-                      label: "pay",
-                      height: 40,
-                      tagline: false
-                    }}
-                    createOrder={(data, actions) => {
-                      setLoading(pkg.id);
-                      return createOrder(data, actions, pkg.id);
-                    }}
-                    onApprove={(data, actions) => onApprove(data, actions, pkg.id)}
-                    onCancel={() => setLoading(null)}
-                    onError={(err) => {
-                      console.error("PayPal Error:", err);
-                      setError("Payment failed. Please try again.");
-                      setLoading(null);
-                    }}
-                  />
-                </div>
-                {pkg.bonus && (
-                  <p className="text-xs font-bold text-emerald-400/80 uppercase tracking-widest">{pkg.bonus}</p>
-                )}
-              </div>
+              <button
+                onClick={() => handleTopUp(pkg.id)}
+                className="mt-auto w-full py-4 bg-emerald-500 text-slate-950 rounded-full font-black uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
+              >
+                Select
+              </button>
+
+              {pkg.bonus && (
+                <p className="text-xs font-bold text-emerald-400/80 uppercase tracking-widest mt-4">{pkg.bonus}</p>
+              )}
             </div>
           ))}
         </div>
@@ -180,6 +174,75 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
           <p className="text-slate-500 text-xs mt-6 font-medium uppercase tracking-[0.2em]">Purchased credits never expire and stay in your studio forever.</p>
         </div>
       </div>
+
+      {/* Checkout Modal */}
+      {checkoutItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xl" onClick={() => setCheckoutItem(null)}></div>
+          <div className="relative w-full max-w-md max-h-[90vh] bg-slate-900 border border-white/10 rounded-[40px] p-10 shadow-2xl overflow-y-auto">
+            <button 
+              onClick={() => setCheckoutItem(null)}
+              className="absolute top-6 right-6 text-slate-400 hover:text-white transition-colors z-10"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="text-center mb-8">
+              <p className="text-[11px] font-black uppercase tracking-[0.3em] text-emerald-400 mb-2">Secure Checkout</p>
+              <h3 className="text-3xl font-black text-white uppercase tracking-tighter">{checkoutItem.name}</h3>
+              <p className="text-slate-300 mt-2 text-sm font-medium">Complete your purchase via PayPal</p>
+            </div>
+
+            <div className="bg-slate-950/80 rounded-3xl p-6 mb-8 border border-white/10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Item</span>
+                <span className="text-white font-bold text-sm">{checkoutItem.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Total Amount</span>
+                <span className="text-emerald-400 font-black text-3xl tracking-tighter">{checkoutItem.price}</span>
+              </div>
+            </div>
+
+            <div className="min-h-[150px] bg-white rounded-3xl p-6 shadow-inner relative">
+              {isProcessing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm rounded-3xl z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Processing...</p>
+                  </div>
+                </div>
+              )}
+              
+              <PayPalButtons 
+                style={{ 
+                  layout: "vertical", 
+                  color: "blue", 
+                  shape: "pill", 
+                  label: "pay",
+                  height: 45
+                }}
+                createOrder={(data, actions) => createOrder(data, actions, checkoutItem.id)}
+                onApprove={(data, actions) => onApprove(data, actions, checkoutItem.id)}
+                onCancel={() => {
+                  setTimeout(() => setCheckoutItem(null), 500);
+                }}
+                onError={(err) => {
+                  console.error("PayPal Error:", err);
+                  setError("PayPal checkout failed. Please try again.");
+                  setTimeout(() => setCheckoutItem(null), 500);
+                }}
+              />
+            </div>
+
+            <p className="text-[10px] text-slate-400 text-center mt-8 font-bold uppercase tracking-widest">
+              Secure encrypted transaction
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
