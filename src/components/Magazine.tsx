@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Search, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Magazine = ({ reviews, onSelect, onNavigate }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentSlide, setCurrentSlide] = useState(0);
   
   const allPublished = reviews.filter(r => r.isPublished && !r.isDeleted);
   
@@ -13,8 +14,22 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
     r.hook?.toLowerCase().includes(searchQuery.toLowerCase())
   );
   
-  const featured = publishedReviews[0];
-  const others = publishedReviews.slice(1);
+  const featuredReviews = publishedReviews.slice(0, 3);
+  const others = publishedReviews.slice(featuredReviews.length);
+
+  const nextSlide = useCallback(() => {
+    setCurrentSlide((prev) => (prev + 1) % featuredReviews.length);
+  }, [featuredReviews.length]);
+
+  const prevSlide = useCallback(() => {
+    setCurrentSlide((prev) => (prev - 1 + featuredReviews.length) % featuredReviews.length);
+  }, [featuredReviews.length]);
+
+  useEffect(() => {
+    if (featuredReviews.length <= 1) return;
+    const timer = setInterval(nextSlide, 8000);
+    return () => clearInterval(timer);
+  }, [nextSlide, featuredReviews.length]);
 
   const trendingReviews = [...allPublished]
     .sort((a, b) => (b.podcastPlays || 0) - (a.podcastPlays || 0))
@@ -76,61 +91,104 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
         </div>
       </div>
 
-      {/* Featured Headline */}
-      {featured && (
-        <a 
-          href={`/review/${featured.id}`}
-          onClick={(e) => {
-            e.preventDefault();
-            onSelect(featured);
-          }}
-          className="group block cursor-pointer mb-24 relative rounded-[32px] md:rounded-[60px] overflow-hidden min-h-[600px] md:min-h-[800px] flex items-end"
-          data-testid="featured-review"
-        >
-          <div className="absolute inset-0">
-            <img 
-              src={featured.imageUrl || `https://picsum.photos/seed/${featured.id}/1200/800`} 
-              alt={featured.songTitle}
-              className="w-full h-full object-cover transition-all duration-1000 group-hover:scale-105 group-hover:opacity-70"
-              referrerPolicy="no-referrer"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+      {/* Featured Headline Carousel */}
+      {featuredReviews.length > 0 && (
+        <div className="relative mb-24 group/carousel">
+          <div className="relative rounded-[32px] md:rounded-[60px] overflow-hidden min-h-[500px] md:min-h-[650px] flex items-end">
+            {featuredReviews.map((featured, index) => (
+              <a 
+                key={featured.id}
+                href={`/review/${featured.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onSelect(featured);
+                }}
+                className={`absolute inset-0 transition-all duration-700 ease-in-out flex items-end ${
+                  index === currentSlide 
+                    ? 'opacity-100 translate-x-0 z-10' 
+                    : index < currentSlide 
+                      ? 'opacity-0 -translate-x-full z-0' 
+                      : 'opacity-0 translate-x-full z-0'
+                }`}
+                data-testid={`featured-review-${index}`}
+              >
+                <div className="absolute inset-0">
+                  <img 
+                    src={featured.imageUrl || `https://picsum.photos/seed/${featured.id}/1200/800`} 
+                    alt={featured.songTitle}
+                    className="w-full h-full object-cover transition-all duration-1000 hover:scale-105"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                </div>
+                
+                <div className="relative z-10 p-8 md:p-16 max-w-5xl">
+                  <div className="space-y-4 md:space-y-6">
+                    <div className="flex items-center gap-4">
+                      <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Cover Story</span>
+                      <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">{new Date(featured.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                    </div>
+                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter leading-[0.9] transition-all review-title-split">
+                      {(featured.headline || 'Featured Story').toUpperCase()}
+                    </h2>
+                    <p className="text-slate-200 text-lg md:text-2xl font-light leading-relaxed line-clamp-2 italic max-w-3xl">
+                      "{featured.hook}"
+                    </p>
+                    <div className="flex items-center gap-6 md:gap-8 pt-4">
+                      <div>
+                        <p className="text-white font-black text-xl md:text-2xl uppercase tracking-tighter">{featured.artistName}</p>
+                        <p className="text-[10px] text-emerald-500 uppercase font-black tracking-widest">Featured Artist</p>
+                      </div>
+                      <div className="h-10 md:h-12 w-px bg-white/20" />
+                      <div className="flex flex-col">
+                        <span className="text-emerald-400 text-3xl md:text-4xl font-black">{featured.rating}</span>
+                        <span className="text-[10px] text-white/60 uppercase font-black tracking-widest">Verdiq Score</span>
+                      </div>
+                      <div className="h-10 md:h-12 w-px bg-white/20" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">By Verdiq Critic Team</span>
+                        <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="w-2 h-2 text-white">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </a>
+            ))}
           </div>
-          
-          <div className="relative z-10 p-8 md:p-20 max-w-5xl">
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest">Cover Story</span>
-                <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">{new Date(featured.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+
+          {/* Carousel Controls */}
+          {featuredReviews.length > 1 && (
+            <>
+              <button 
+                onClick={(e) => { e.stopPropagation(); prevSlide(); }}
+                className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 hover:text-slate-950 transition-all opacity-0 group-hover/carousel:opacity-100"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <button 
+                onClick={(e) => { e.stopPropagation(); nextSlide(); }}
+                className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-emerald-500 hover:text-slate-950 transition-all opacity-0 group-hover/carousel:opacity-100"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+
+              {/* Indicators */}
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+                {featuredReviews.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={(e) => { e.stopPropagation(); setCurrentSlide(i); }}
+                    className={`h-1 rounded-full transition-all duration-300 ${i === currentSlide ? 'w-8 bg-emerald-500' : 'w-2 bg-white/20 hover:bg-white/40'}`}
+                  />
+                ))}
               </div>
-              <h2 className="text-4xl sm:text-6xl md:text-7xl font-black tracking-tighter leading-[0.8] transition-all review-title-split">
-                {(featured.headline || 'Featured Story').toUpperCase()}
-              </h2>
-              <p className="text-slate-200 text-xl md:text-3xl font-light leading-relaxed line-clamp-3 italic max-w-3xl">
-                "{featured.hook}"
-              </p>
-              <div className="flex items-center gap-8 pt-6">
-                <div>
-                  <p className="text-white font-black text-2xl uppercase tracking-tighter">{featured.artistName}</p>
-                  <p className="text-[10px] text-emerald-500 uppercase font-black tracking-widest">Featured Artist</p>
-                </div>
-                <div className="h-12 w-px bg-white/20" />
-                <div className="flex flex-col">
-                  <span className="text-emerald-400 text-4xl font-black">{featured.rating}</span>
-                  <span className="text-[10px] text-white/60 uppercase font-black tracking-widest">Verdiq Score</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 mt-6">
-                <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">By Verdiq Critic Team</span>
-                <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="w-2 h-2 text-white">
-                    <polyline points="20 6 9 17 4 12"></polyline>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        </a>
+            </>
+          )}
+        </div>
       )}
 
       {/* Editorial Grid */}
@@ -265,7 +323,7 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                   <span className="text-[10px] font-black text-emerald-500">{r.rating}</span>
                 </div>
               </div>
-              <h4 className="font-black text-white group-hover:text-emerald-400 transition-colors leading-tight uppercase tracking-tight text-base">{(r.headline || r.songTitle).toUpperCase()}</h4>
+              <h4 className="font-black text-emerald-500 [&::first-line]:text-white group-hover:text-emerald-400 transition-colors leading-tight uppercase tracking-tight text-base">{(r.headline || r.songTitle).toUpperCase()}</h4>
             </a>
           ))}
         </div>
