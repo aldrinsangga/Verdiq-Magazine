@@ -13,12 +13,22 @@ const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) =>
   });
   const [password, setPassword] = useState({ current: '', new: '', confirm: '' });
 
-  const handleProfileUpdate = () => {
-    onUpdate({ ...user, name: formData.name, email: formData.email });
-    showNotification('Profile updated successfully!', 'success');
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const handleProfileUpdate = async () => {
+    setIsUpdatingProfile(true);
+    try {
+      await onUpdate({ ...user, name: formData.name, email: formData.email });
+      showNotification('Profile updated successfully!', 'success');
+    } catch (error) {
+      showNotification('Failed to update profile.', 'error');
+    } finally {
+      setIsUpdatingProfile(false);
+    }
   };
 
-  const handlePasswordChange = () => {
+  const handlePasswordChange = async () => {
     if (password.new !== password.confirm) {
       showNotification('Passwords do not match!', 'error');
       return;
@@ -27,9 +37,16 @@ const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) =>
       showNotification('Current password is incorrect!', 'error');
       return;
     }
-    onUpdate({ ...user, password: password.new });
-    setPassword({ current: '', new: '', confirm: '' });
-    showNotification('Password updated successfully!', 'success');
+    setIsUpdatingPassword(true);
+    try {
+      await onUpdate({ ...user, password: password.new });
+      setPassword({ current: '', new: '', confirm: '' });
+      showNotification('Password updated successfully!', 'success');
+    } catch (error) {
+      showNotification('Failed to update password.', 'error');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
   };
 
   const handleDownloadInvoice = (invoiceId) => {
@@ -83,8 +100,23 @@ const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) =>
                   data-testid="profile-email-input"
                 />
               </div>
-              <button onClick={handleProfileUpdate} className="bg-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl" data-testid="save-profile-btn">
-                Save Changes
+              <button 
+                onClick={handleProfileUpdate} 
+                disabled={isUpdatingProfile}
+                className="bg-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" 
+                data-testid="save-profile-btn"
+              >
+                {isUpdatingProfile ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
               </button>
             </div>
           )}
@@ -135,8 +167,22 @@ const AccountSettings = ({ user, session, onUpdate, initialTab = 'profile' }) =>
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   />
                 </div>
-                <button onClick={handlePasswordChange} className="bg-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl">
-                  Update Password
+                <button 
+                  onClick={handlePasswordChange} 
+                  disabled={isUpdatingPassword}
+                  className="bg-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isUpdatingPassword ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    'Update Password'
+                  )}
                 </button>
               </div>
             </div>

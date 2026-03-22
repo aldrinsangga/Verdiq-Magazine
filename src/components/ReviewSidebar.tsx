@@ -2,9 +2,10 @@ import React from 'react';
 
 interface ReviewSidebarProps {
   review: any;
+  onNavigate?: (view: string) => void;
 }
 
-const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
+const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review, onNavigate }) => {
   return (
     <aside className="lg:col-span-4 space-y-8">
       {/* Technical Analysis */}
@@ -164,6 +165,20 @@ const ReviewSidebar: React.FC<ReviewSidebarProps> = ({ review }) => {
           )}
         </div>
       )}
+
+      {/* Submit Your Track Call to Action */}
+      <div className="bg-emerald-500 p-8 rounded-3xl shadow-[0_20px_40px_rgba(16,185,129,0.2)]">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.5em] text-black mb-4">Submit Your Track</h4>
+        <p className="text-black/70 text-sm font-medium leading-relaxed mb-8">
+          Ready for a professional technical audit and magazine-style review? Submit your latest production now.
+        </p>
+        <button 
+          onClick={() => onNavigate?.('landing')}
+          className="w-full py-4 bg-black text-emerald-500 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-900 transition-all shadow-xl"
+        >
+          Submit Track
+        </button>
+      </div>
     </aside>
   );
 };

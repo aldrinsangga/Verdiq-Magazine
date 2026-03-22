@@ -130,12 +130,14 @@ const MainContent: React.FC<MainContentProps> = ({
           audioFile={currentAudioFile}
           isSubscribed={creditStatus?.isSubscribed || currentUser?.isSubscribed || false}
           features={creditStatus?.features || {}}
+          onNavigate={navigate}
         />
       )}
       {!isUnverified && view === 'dashboard' && currentUser && (
         <Dashboard 
           reviews={currentUser.history || []} 
           onUpdateReview={handleUpdateReview}
+          onNavigate={navigate}
           onSelect={async (r) => { 
             console.log('Dashboard: Selecting review:', r.id);
             const fullReview = await fetchReviewWithAudio(r.id);

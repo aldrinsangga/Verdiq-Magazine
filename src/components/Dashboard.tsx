@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const Dashboard = ({ reviews, onSelect, onUpdateReview }) => {
+const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('draft');
 
   const handleDelete = async (e, review) => {
@@ -35,14 +35,22 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview }) => {
           <h2 className="text-[10px] font-black uppercase tracking-[0.5em] text-emerald-500 mb-4">Studio Archives</h2>
           <h3 className="text-4xl sm:text-6xl font-black tracking-tighter uppercase text-white">Your <span className="gradient-text">History</span></h3>
         </div>
-        <div className="text-left md:text-right">
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Artist Average</p>
-          <p className="text-3xl sm:text-4xl font-black text-white">
-            {reviews.length > 0 
-              ? (reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviews.length).toFixed(1) 
-              : '0.0'}
-            <span className="text-slate-700 text-xl">/10</span>
-          </p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <button 
+            onClick={() => onNavigate('referrals')}
+            className="px-6 py-2 bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-emerald-400 transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+          >
+            Get Free Credits
+          </button>
+          <div className="text-left md:text-right">
+            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-1">Artist Average</p>
+            <p className="text-3xl sm:text-4xl font-black text-white">
+              {reviews.length > 0 
+                ? (reviews.reduce((acc, r) => acc + (r.rating || 0), 0) / reviews.length).toFixed(1) 
+                : '0.0'}
+              <span className="text-slate-700 text-xl">/10</span>
+            </p>
+          </div>
         </div>
       </div>
 

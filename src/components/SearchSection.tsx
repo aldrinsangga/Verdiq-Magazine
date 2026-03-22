@@ -311,7 +311,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                   />
                   <div className="w-16 h-16 bg-slate-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-white/5">
                     {photoPreview ? (
-                      <img src={photoPreview} className="w-full h-full object-cover" alt="Preview" />
+                      <img src={photoPreview} className="w-full h-full object-cover transition-opacity duration-300 group-hover/photo:opacity-50" alt="Preview" />
                     ) : (
                       <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     )}
@@ -342,7 +342,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                   />
                   <div className="w-16 h-16 bg-slate-800 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 border border-white/5">
                     {artistPhotoPreview ? (
-                      <img src={artistPhotoPreview} className="w-full h-full object-cover" alt="Artist Preview" />
+                      <img src={artistPhotoPreview} className="w-full h-full object-cover transition-opacity duration-300 group-hover/artist-photo:opacity-50" alt="Artist Preview" />
                     ) : (
                       <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                     )}
@@ -507,7 +507,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
               <img 
                 src={editorialUrl} 
                 alt="Editorial Feature" 
-                className="w-full h-auto block object-contain grayscale opacity-80 group-hover/mag:grayscale-0 group-hover/mag:opacity-100 transition-all duration-700"
+                className="w-full h-auto block object-contain opacity-100 group-hover/mag:grayscale group-hover/mag:opacity-50 transition-all duration-700"
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -518,7 +518,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                 <img 
                   src={podcastUrl} 
                   alt="Podcast Feature" 
-                  className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover/pod:opacity-60 transition-opacity grayscale group-hover/pod:grayscale-0"
+                  className="absolute inset-0 w-full h-full object-cover opacity-100 group-hover/pod:opacity-40 transition-opacity group-hover/pod:grayscale"
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
@@ -642,7 +642,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                 <div className="relative h-64 rounded-3xl overflow-hidden mb-6 border border-slate-800 transition-all group-hover:border-emerald-500/50">
                   <img 
                     src={step.img} 
-                    className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" 
+                    className="w-full h-full object-cover opacity-100 group-hover:grayscale group-hover:opacity-50 transition-all duration-500" 
                     alt={step.title} 
                   />
                   <div className="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition-colors" />
@@ -733,7 +733,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                 className="card-premium flex flex-col w-[350px] md:w-[500px] flex-shrink-0 !p-10"
               >
                 <div className="flex items-center gap-5 mb-8">
-                  <img src={t.avatar} className="w-16 h-16 rounded-2xl object-cover grayscale border border-white/5" alt={t.name} />
+                  <img src={t.avatar} className="w-16 h-16 rounded-2xl object-cover border border-white/5 hover:grayscale hover:opacity-50 transition-all duration-500" alt={t.name} />
                   <div>
                     <h5 className="text-white text-lg font-bold leading-tight">{t.name}</h5>
                     <p className="text-[10px] text-emerald-500 font-black uppercase tracking-[0.2em] mt-1">{t.role}</p>

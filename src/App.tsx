@@ -883,12 +883,12 @@ function AppContent() {
       });
 
       if (res.ok) {
-        // Deduct credits for magazine submission
-        const deductRes = await deductCredits('publish');
-        if (deductRes) {
+        const data = await res.json();
+        // Update credits from the response
+        if (data.remaining !== undefined) {
           setCreditStatus(prev => ({
             ...prev,
-            credits: deductRes.remaining,
+            credits: data.remaining,
           }));
         }
         
@@ -918,7 +918,11 @@ function AppContent() {
         navigate('magazine');
       } else {
         const errorData = await res.json().catch(() => ({}));
-        showNotification(`Failed to publish: ${errorData.message || 'Server error'}`, 'error');
+        if (res.status === 402) {
+          setShowCreditModal(true);
+        } else {
+          showNotification(`Failed to publish: ${errorData.message || 'Server error'}`, 'error');
+        }
       }
     } catch (error) {
       console.error('handlePublish error:', error);
@@ -944,12 +948,12 @@ function AppContent() {
       });
 
       if (res.ok) {
-        // Deduct credits for editing
-        const deductRes = await deductCredits('edit');
-        if (deductRes) {
+        const data = await res.json();
+        // Update credits from the response
+        if (data.remaining !== undefined) {
           setCreditStatus(prev => ({
             ...prev,
-            credits: deductRes.remaining,
+            credits: data.remaining,
           }));
         }
 
@@ -974,7 +978,11 @@ function AppContent() {
         }
       } else {
         const errorData = await res.json().catch(() => ({}));
-        showNotification(`Failed to save changes: ${errorData.message || 'Server error'}`, 'error');
+        if (res.status === 402) {
+          setShowCreditModal(true);
+        } else {
+          showNotification(`Failed to save changes: ${errorData.message || 'Server error'}`, 'error');
+        }
       }
     } catch (error) {
       console.error('handleUpdateReview error:', error);

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { login, signup, requestPasswordReset, saveSession, sendVerificationEmail } from '../authClient';
 import MFAVerify from './MFAVerify';
 
@@ -16,6 +17,7 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
   const [error, setError] = useState('');
   const [showMFA, setShowMFA] = useState(false);
   const [mfaCredentials, setMfaCredentials] = useState(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
   const [verificationSent, setVerificationSent] = useState(false);
 
   const handleAuth = async (e) => {
@@ -118,16 +120,27 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
           </button>
           <button 
             onClick={async () => {
+              setResendingEmail(true);
               try {
                 await sendVerificationEmail();
                 setError('Verification email resent! Please check your inbox.');
               } catch (err) {
                 setError(err.message);
+              } finally {
+                setResendingEmail(false);
               }
             }}
-            className="text-xs text-slate-500 hover:text-white transition-colors"
+            disabled={resendingEmail}
+            className="text-xs text-slate-500 hover:text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mx-auto"
           >
-            Didn't receive the email? <span className="font-bold">Resend</span>
+            {resendingEmail ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Resending...
+              </>
+            ) : (
+              <>Didn't receive the email? <span className="font-bold">Resend</span></>
+            )}
           </button>
         </div>
       </div>
@@ -215,10 +228,18 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 text-sm uppercase tracking-widest mt-4"
+          className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 text-sm uppercase tracking-widest mt-4 flex items-center justify-center gap-2"
           data-testid="auth-submit-btn"
         >
-          {loading ? 'Processing...' : (
+          {loading ? (
+            <>
+              <svg className="animate-spin h-5 w-5 text-slate-950" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <span>Processing...</span>
+            </>
+          ) : (
             mode === 'login' ? 'Sign In' : 
             mode === 'signup' ? 'Create Account' : 
             'Send Reset Link'

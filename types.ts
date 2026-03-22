@@ -91,6 +91,8 @@ export interface Review {
   podcastPlays?: number; // Number of podcast plays for secret trending logic
   songAudio?: string; // Base64 encoded original song audio for background
   artistPhotoUrl?: string; // Transformed artist photo URL
+  expiresAt?: string; // ISO string for expiration time
+  isTemporary?: boolean; // Flag for temporary reviews
   socialLinks?: {
     instagram?: string;
     twitter?: string;

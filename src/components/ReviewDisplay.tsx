@@ -1,5 +1,6 @@
 import React, { useState, useRef, useMemo } from 'react';
 import html2pdf from 'html2pdf.js';
+import { Clock } from 'lucide-react';
 import ReviewHeader from './ReviewHeader';
 import ReviewHero from './ReviewHero';
 import ReviewEditorial from './ReviewEditorial';
@@ -22,7 +23,8 @@ const ReviewDisplay = ({
   onSelectReview, 
   allReviews = [], 
   features = {}, 
-  viewOnly = false 
+  viewOnly = false,
+  onNavigate
 }) => {
   const [editMode, setEditMode] = useState(false);
   const [editedReview, setEditedReview] = useState(review);
@@ -233,6 +235,25 @@ const ReviewDisplay = ({
 
   return (
     <div className="relative w-full overflow-x-hidden" data-testid="review-display">
+      {review.isTemporary && (
+        <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-3 px-4 md:px-8 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+              <Clock className="w-4 h-4 text-emerald-500" />
+            </div>
+            <p className="text-sm text-slate-300">
+              <span className="text-emerald-500 font-bold uppercase tracking-wider text-[10px] mr-2">Temporary Review</span>
+              This review was generated using free credits and will expire in 1 hour. 
+              <button 
+                onClick={() => onUpgrade?.()}
+                className="ml-2 text-emerald-400 hover:text-emerald-300 underline font-medium"
+              >
+                Purchase credits to make it permanent.
+              </button>
+            </p>
+          </div>
+        </div>
+      )}
       <ReviewModals 
         showSubscribeModal={showSubscribeModal}
         setShowSubscribeModal={setShowSubscribeModal}
@@ -282,7 +303,7 @@ const ReviewDisplay = ({
               setShowShareModal={setShowShareModal}
             />
 
-            <ReviewSidebar review={review} />
+            <ReviewSidebar review={review} onNavigate={onNavigate} />
           </div>
         </div>
 

@@ -286,7 +286,32 @@ const getFullUser = async (userId: string) => {
         .where('userId', '==', userId)
         .orderBy('createdAt', 'desc')
         .get();
-      history = reviewsSnapshot.docs.map(doc => doc.data());
+      
+      const now = new Date();
+      const validReviews = [];
+      const expiredReviewIds: string[] = [];
+      
+      for (const doc of reviewsSnapshot.docs) {
+        const review = doc.data() as Review;
+        if (review.isTemporary && review.expiresAt) {
+          const expiresAt = new Date(review.expiresAt);
+          if (now > expiresAt) {
+            expiredReviewIds.push(doc.id);
+            continue;
+          }
+        }
+        validReviews.push(review);
+      }
+      
+      // Delete expired reviews in background
+      if (expiredReviewIds.length > 0) {
+        console.log(`[getFullUser] Deleting ${expiredReviewIds.length} expired reviews for user ${userId}`);
+        const batch = db.batch();
+        expiredReviewIds.forEach(id => batch.delete(db.collection('reviews').doc(id)));
+        batch.commit().catch(e => console.error(`[getFullUser] Failed to delete expired reviews:`, e));
+      }
+      
+      history = validReviews;
     } catch (reviewErr: any) {
       console.warn(`[getFullUser] Could not fetch reviews for user ${userId}:`, reviewErr.message);
       // Continue with empty history if reviews fetch fails
@@ -1132,13 +1157,25 @@ app.post("/api/reviews",
     const userDoc = await userRef.get();
     
     if (userDoc.exists) {
-      const user = userDoc.data();
+      const user = userDoc.data() as UserAccount;
       const cost = 10;
       const newCredits = Math.max(0, (user?.credits || 0) - cost);
       
       // Save review to separate collection
       const reviewId = review.id || Math.random().toString(36).substring(2, 11);
-      const reviewToSave = { ...review, id: reviewId, userId };
+      const reviewToSave: any = { ...review, id: reviewId, userId };
+
+      // Check if user is a "free user who never purchased credits"
+      const purchases = user?.purchases || [];
+      const hasPurchased = purchases.length > 0;
+      
+      if (!hasPurchased && user?.role !== 'admin') {
+        reviewToSave.isTemporary = true;
+        const oneHourFromNow = new Date();
+        oneHourFromNow.setHours(oneHourFromNow.getHours() + 1);
+        reviewToSave.expiresAt = oneHourFromNow.toISOString();
+        console.log(`[Review] Setting temporary status for free user ${userId}. Expires at: ${reviewToSave.expiresAt}`);
+      }
       
       // Handle large audio data - upload to storage
       if (review.podcastAudio && review.podcastAudio.length > 1000) {
@@ -1211,7 +1248,44 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    // Fetch current review to check status
+    const currentReviewDoc = await db.collection('reviews').doc(reviewId).get();
+    if (!currentReviewDoc.exists) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+    const currentReviewData = currentReviewDoc.data();
+
+    // Determine credit cost
+    let cost = 0;
+    const isNowPublishing = review.isPublished && !currentReviewData?.isPublished;
+    const isEditing = !isNowPublishing; // If not publishing now, it's an edit
+
+    if (!isAdminUser) {
+      if (isNowPublishing) {
+        cost = 5;
+      } else if (isEditing) {
+        cost = 3;
+      }
+
+      // Check if user has enough credits
+      if (requestingUser && requestingUser.credits < cost) {
+        return res.status(402).json({ message: "Insufficient credits", required: cost, current: requestingUser.credits });
+      }
+
+      // Deduct credits
+      if (cost > 0 && requestingUser) {
+        const newCredits = Math.max(0, requestingUser.credits - cost);
+        await db.collection('users').doc(authUserId).update({ credits: newCredits });
+      }
+    }
+
     const reviewToUpdate = { ...review };
+    
+    // If publishing, remove temporary status
+    if (reviewToUpdate.isPublished) {
+      delete reviewToUpdate.isTemporary;
+      delete reviewToUpdate.expiresAt;
+    }
     
     // Handle large audio data - upload to storage
     if (review.podcastAudio && review.podcastAudio.length > 1000 && !review.podcastAudio.startsWith('http')) {
@@ -1254,7 +1328,12 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     }
 
     await db.collection('reviews').doc(reviewId).update(reviewToUpdate);
-    res.json({ success: true });
+    
+    // Fetch updated credits to return
+    const updatedUserDoc = await db.collection('users').doc(authUserId).get();
+    const updatedCredits = updatedUserDoc.data()?.credits ?? requestingUser?.credits;
+
+    res.json({ success: true, remaining: updatedCredits });
   } catch (error) {
     next(error);
   }
@@ -1275,7 +1354,19 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
     const { id } = req.params;
     const doc = await db.collection('reviews').doc(id).get();
     if (doc.exists) {
-      res.json(doc.data());
+      const review = doc.data() as Review;
+      
+      // Check if temporary review is expired
+      if (review.isTemporary && review.expiresAt) {
+        const expiresAt = new Date(review.expiresAt);
+        if (new Date() > expiresAt) {
+          console.log(`[PublicReview] Review ${id} is expired. Deleting...`);
+          await db.collection('reviews').doc(id).delete();
+          return res.status(404).json({ message: "Review has expired" });
+        }
+      }
+      
+      res.json(review);
     } else {
       res.status(404).json({ message: "Review not found" });
     }

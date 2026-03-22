@@ -46,6 +46,31 @@ export const getSession = () => {
 };
 
 /**
+ * Helper to get ID token with retry logic for network errors
+ */
+export const getIdTokenWithRetry = async (user: User, forceRefresh = false, maxRetries = 3) => {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      return await user.getIdToken(forceRefresh);
+    } catch (e: any) {
+      retries++;
+      console.error(`[getIdTokenWithRetry] Attempt ${retries} failed:`, e);
+      
+      // If it's a network error, wait a bit and retry
+      if (e.code === 'auth/network-request-failed' && retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        continue;
+      }
+      
+      // If we failed after retries or it's not a network error, throw
+      throw e;
+    }
+  }
+  throw new Error('Failed to get ID token after retries');
+};
+
+/**
  * Clear session from localStorage
  */
 export const clearSession = () => {
@@ -55,7 +80,7 @@ export const clearSession = () => {
 /**
  * Get auth headers for API calls
  */
-export const getAuthHeaders = async () => {
+export const getAuthHeaders = async (forceRefresh = false) => {
   // Wait for auth to initialize if it hasn't yet
   let user = auth.currentUser;
   
@@ -77,22 +102,16 @@ export const getAuthHeaders = async () => {
 
   if (user) {
     try {
-      // getIdToken(true) forces a refresh of the token
-      // This is the most reliable way to ensure the token is not expired
-      // when sending it to the backend.
-      const token = await user.getIdToken(true);
+      const token = await getIdTokenWithRetry(user, forceRefresh);
       return { 'Authorization': `Bearer ${token}` };
-    } catch (e) {
-      console.error('[getAuthHeaders] Failed to get fresh token from Firebase:', e);
-      // If we have a user but failed to get token, we should NOT fallback to stale localStorage
-      // because that token is almost certainly expired too.
+    } catch (e: any) {
+      console.error(`[getAuthHeaders] Failed to get token:`, e);
     }
   }
 
   // Fallback to stored session token ONLY as a last resort if no Firebase user is available
   const session = getSession();
   if (session?.session?.access_token) {
-    // If we have a session but no Firebase user, it might be a mock token or a stale session
     return { 'Authorization': `Bearer ${session.session.access_token}` };
   }
   
@@ -251,7 +270,7 @@ export const getCurrentUser = async () => {
       unsubscribe();
       if (user) {
         try {
-          const token = await user.getIdToken();
+          const token = await getIdTokenWithRetry(user);
           const res = await fetch(`${API_URL}/api/users/${user.uid}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
