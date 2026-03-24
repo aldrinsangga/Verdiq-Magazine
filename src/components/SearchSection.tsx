@@ -218,6 +218,14 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
         .animate-progress {
           animation: progress-pulse 4s ease-in-out infinite;
         }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+          20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+        .animate-shake {
+          animation: shake 3s ease-in-out infinite;
+        }
       `}</style>
 
       {/* Hero / Submission Section */}
@@ -238,7 +246,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
             {/* Audio Upload */}
             <div>
               <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
-                Upload Track
+                Upload Track<span className="text-red-500 ml-1">*</span>
               </label>
               <div 
                 onClick={() => fileInputRef.current?.click()}
@@ -257,7 +265,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                   <Upload className="w-8 h-8 text-emerald-500" />
                 </div>
                 <div className="text-center w-full px-4">
-                  <p className="text-lg font-bold text-white truncate max-w-full">{selectedFile ? selectedFile.name : 'Upload Master Track'}</p>
+                  <p className="text-lg font-bold text-white truncate max-w-full">{selectedFile ? selectedFile.name : 'Upload Track'}</p>
                   <p className="text-[10px] text-slate-500 uppercase tracking-[0.1em] mt-1">WAV, MP3, AIFF Max 20MB</p>
                 </div>
               </div>
@@ -266,27 +274,27 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">
-                  Track Name
+                  Track Name<span className="text-red-500 ml-1">*</span>
                 </label>
                 <input 
                   required
                   value={formData.trackName}
                   onChange={e => setFormData({...formData, trackName: e.target.value})}
                   className="input-field"
-                  placeholder="e.g. Midnight City"
+                  placeholder=""
                   data-testid="track-name-input"
                 />
               </div>
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">
-                  Artist Name
+                  Artist Name<span className="text-red-500 ml-1">*</span>
                 </label>
                 <input 
                   required
                   value={formData.artistName}
                   onChange={e => setFormData({...formData, artistName: e.target.value})}
                   className="input-field"
-                  placeholder="e.g. M83"
+                  placeholder=""
                   data-testid="artist-name-input"
                 />
               </div>
@@ -296,7 +304,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
               {/* Featured Photo Upload */}
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
-                  Cover Art
+                  Cover Art<span className="text-red-500 ml-1">*</span>
                 </label>
                 <div 
                   onClick={() => photoInputRef.current?.click()}
@@ -327,7 +335,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
               {/* Artist Photo Upload */}
               <div>
                 <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-4 ml-1">
-                  Artist Photo
+                  Artist Photo<span className="text-red-500 ml-1">*</span>
                 </label>
                 <div 
                   onClick={() => artistPhotoInputRef.current?.click()}
@@ -359,13 +367,15 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
 
           <div className="flex flex-col relative z-10">
             <div className="flex-grow">
-              <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">Lyrics & Bio (Recommended)</label>
+              <label className="block text-[10px] uppercase font-black tracking-[0.2em] text-emerald-500 mb-3 ml-1">
+                Lyrics & Bio <span className="inline-block animate-shake text-emerald-500">(Recommended)</span>
+              </label>
               <textarea 
                 rows={8}
                 value={formData.lyrics}
                 onChange={e => setFormData({...formData, lyrics: e.target.value})}
                 className="input-field resize-none font-serif !text-lg !leading-relaxed overflow-y-auto"
-                placeholder="Paste lyrics and context for deeper semantic analysis..."
+                placeholder="Paste lyrics, bio and context here for more personalized and accurate review"
                 data-testid="lyrics-textarea"
               />
             </div>

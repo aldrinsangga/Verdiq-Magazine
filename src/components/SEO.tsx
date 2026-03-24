@@ -8,8 +8,8 @@ interface SEOProps {
 
 const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
   useEffect(() => {
-    let title = 'Verdiq | Music Critic';
-    let description = 'Verdiq is an AI-powered music review and analysis platform for independent artists and producers.';
+    let title = 'Verdiq Magazine';
+    let description = 'The future of music critic. Upload your track for instant magazine-style review, podcast feature, and technical music audit.';
     let ogTitle = title;
     let ogDescription = description;
     let ogImage = window.location.origin + '/logo.svg';
@@ -59,8 +59,8 @@ const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
       title = 'Verdiq Pricing | Studio Plans for Artists';
       description = 'Choose the right plan for your music career. Get professional reviews, podcasts, and technical audits.';
     } else if (view === 'landing') {
-      title = 'Verdiq | Music Critic';
-      description = 'Professional music reviews, spectral audits, and industry podcasts for independent artists. Submit your track today.';
+      title = 'Verdiq Magazine';
+      description = 'The future of music critic. Upload your track for instant magazine-style review, podcast feature, and technical music audit.';
     }
 
     // Update document title
@@ -105,7 +105,7 @@ const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
     const structuredData: any = {
       "@context": "https://schema.org",
       "@type": "WebSite",
-      "name": "Verdiq",
+      "name": "Verdiq Magazine",
       "url": window.location.origin
     };
 
@@ -133,7 +133,7 @@ const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
       };
       structuredData["publisher"] = {
         "@type": "Organization",
-        "name": "Verdiq",
+        "name": "Verdiq Magazine",
         "logo": {
           "@type": "ImageObject",
           "url": `${window.location.origin}/logo.svg`

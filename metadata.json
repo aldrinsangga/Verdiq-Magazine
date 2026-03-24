@@ -1,5 +1,5 @@
 {
-  "name": "VERDIQ",
-  "description": "AI-Powered Music Review & Magazine Platform",
+  "name": "Verdiq Magazine",
+  "description": "The future of music critic. Upload your track for instant magazine-style review, podcast feature, and technical music audit.",
   "requestFramePermissions": ["microphone", "camera"]
 }
