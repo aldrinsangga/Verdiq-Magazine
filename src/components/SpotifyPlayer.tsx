@@ -10,6 +10,7 @@ const SpotifyPlayer = ({
   artist, 
   imageUrl, 
   onPlaylistClick,
+  onPlay,
   className = ""
 }) => {
   const audioRef = useRef(null);
@@ -84,6 +85,7 @@ const SpotifyPlayer = ({
         try {
           await audio.play();
           setIsPlaying(true);
+          onPlay?.();
         } catch (e) {
           console.error('Play failed:', e);
         }
@@ -120,6 +122,7 @@ const SpotifyPlayer = ({
         console.log('Audio loaded, attempting playback...');
         await audio.play();
         setIsPlaying(true);
+        onPlay?.();
         console.log('Playback started successfully');
       } catch (e) {
         console.error('SpotifyPlayer playback failed:', e);

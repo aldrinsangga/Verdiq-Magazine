@@ -2,17 +2,33 @@ import React, { useState } from 'react';
 
 const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('draft');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const handleDelete = async (e, review) => {
+  const handleDeleteClick = (e, reviewId) => {
     e.stopPropagation();
-    if (window.confirm("Move this review to Deleted?")) {
-      await onUpdateReview({ ...review, isDeleted: true });
-    }
+    setDeleteConfirmId(reviewId);
+  };
+
+  const handleConfirmDelete = async (e, review) => {
+    e.stopPropagation();
+    setDeleteConfirmId(null);
+    await onUpdateReview({ ...review, isDeleted: true });
+  };
+
+  const handleCancelDelete = (e) => {
+    e.stopPropagation();
+    setDeleteConfirmId(null);
   };
 
   const handleRestore = async (e, review) => {
     e.stopPropagation();
     await onUpdateReview({ ...review, isDeleted: false });
+  };
+
+  const handleUnpublish = async (e, review) => {
+    e.stopPropagation();
+    await onUpdateReview({ ...review, isPublished: false });
+    setActiveTab('draft');
   };
 
   const filteredReviews = reviews.filter(r => {
@@ -112,14 +128,32 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>
+                  ) : deleteConfirmId === r.id ? (
+                    <div className="glass px-3 py-1 rounded-full border border-red-500/50 flex items-center gap-2">
+                      <span className="text-red-500 text-[10px] font-black uppercase tracking-widest">Delete?</span>
+                      <button onClick={(e) => handleConfirmDelete(e, r)} className="text-white hover:text-red-500 text-[10px] font-bold">YES</button>
+                      <span className="text-white/30">|</span>
+                      <button onClick={handleCancelDelete} className="text-white hover:text-slate-300 text-[10px] font-bold">NO</button>
+                    </div>
                   ) : (
-                    <button 
-                      onClick={(e) => handleDelete(e, r)}
-                      className="glass p-2 rounded-full border border-white/10 hover:border-red-500/50 hover:text-red-500 transition-all"
-                      title="Delete"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                    </button>
+                    <>
+                      {r.isPublished && (
+                        <button 
+                          onClick={(e) => handleUnpublish(e, r)}
+                          className="glass px-3 md:px-4 py-1 md:py-1.5 rounded-full border border-red-500/30 hover:bg-red-500/10 transition-all"
+                          title="Unpublish"
+                        >
+                          <span className="text-red-500 text-[8px] md:text-[10px] font-black uppercase tracking-widest">Unpublish</span>
+                        </button>
+                      )}
+                      <button 
+                        onClick={(e) => handleDeleteClick(e, r.id)}
+                        className="glass p-2 rounded-full border border-white/10 hover:border-red-500/50 hover:text-red-500 transition-all"
+                        title="Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </>
                   )}
                 </div>
 

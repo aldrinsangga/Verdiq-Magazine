@@ -109,8 +109,13 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
     return () => clearInterval(interval);
   }, []);
 
+  const trackedPlaysRef = useRef<Set<string>>(new Set());
+
   // Track play when podcast starts playing
   const trackPlay = async (reviewId) => {
+    if (trackedPlaysRef.current.has(reviewId)) return;
+    trackedPlaysRef.current.add(reviewId);
+    
     try {
       const res = await fetch(`${API_URL}/api/podcasts/${reviewId}/play`, {
         method: 'POST'
@@ -186,6 +191,7 @@ const Podcasts = ({ reviews, onSelectReview, initialPodcastId, fetchReviewWithAu
           try {
             await audioRef.current.play();
             setIsPlaying(true);
+            trackPlay(id);
           } catch (e) {
             console.error('Playback failed:', e);
           }

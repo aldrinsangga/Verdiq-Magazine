@@ -34,7 +34,27 @@ const ReviewDisplay = ({
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [readCount, setReadCount] = useState(review.readCount || 0);
   const printRef = useRef(null);
+  const hasTrackedRead = useRef(false);
+
+  React.useEffect(() => {
+    if (review?.id && !hasTrackedRead.current) {
+      hasTrackedRead.current = true;
+      const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+        ? import.meta.env.VITE_BACKEND_URL 
+        : '';
+      
+      fetch(`${API_URL}/api/reviews/${review.id}/read`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.read_count) {
+            setReadCount(data.read_count);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [review?.id]);
 
   const isViewOnly = viewOnly || review.viewOnly;
   const isAuthor = currentUser && review && (review.userId === currentUser.id);
@@ -229,7 +249,7 @@ const ReviewDisplay = ({
   const shouldShowPodcastSection = hasPodcastData || review.hasPodcast;
   const paragraphs = useMemo(() => {
     return review.reviewBody 
-      ? review.reviewBody.replace(/\\n/g, '\n').split(/\n\n+/).filter((p: string) => p.trim()) 
+      ? review.reviewBody.replace(/\\n/g, '\n').split(/\n+/).filter((p: string) => p.trim()) 
       : [];
   }, [review.reviewBody]);
 
@@ -243,7 +263,7 @@ const ReviewDisplay = ({
             </div>
             <p className="text-sm text-slate-300">
               <span className="text-emerald-500 font-bold uppercase tracking-wider text-[10px] mr-2">Temporary Review</span>
-              This review was generated using free credits and will expire in 1 hour. 
+              This review was generated using free credits and will expire in 24 hours. 
               <button 
                 onClick={() => onUpgrade?.()}
                 className="ml-2 text-emerald-400 hover:text-emerald-300 underline font-medium"
@@ -286,6 +306,7 @@ const ReviewDisplay = ({
           editMode={editMode}
           editedReview={editedReview}
           setEditedReview={setEditedReview}
+          readCount={readCount}
         />
 
         <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-12 md:py-20">

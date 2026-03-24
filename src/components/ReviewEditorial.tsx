@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import SpotifyPlayer from './SpotifyPlayer';
 import { Instagram, Twitter, Youtube, Globe, Music2 } from 'lucide-react';
@@ -28,6 +28,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
   onViewPodcast,
   setShowShareModal
 }) => {
+  const trackedPlaysRef = useRef<Set<string>>(new Set());
   return (
     <div className="lg:col-span-8">
       {/* Opening Quote */}
@@ -69,7 +70,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
                       </span>
                       <ReactMarkdown 
                         components={{ 
-                          p: React.Fragment,
+                          p: ({node, ...props}) => <span {...props} />,
                           a: ({node, ...props}) => <a {...props} className="review-link" target="_blank" rel="noopener noreferrer" />
                         }}
                       >
@@ -80,7 +81,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
                     <div className="mb-6">
                       <ReactMarkdown 
                         components={{ 
-                          p: React.Fragment,
+                          p: ({node, ...props}) => <span {...props} />,
                           a: ({node, ...props}) => <a {...props} className="review-link" target="_blank" rel="noopener noreferrer" />
                         }}
                       >
@@ -89,7 +90,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
                     </div>
                   )}
                   
-                  {i === 1 && (review as any).artistPhotoUrl && (
+                  {(i === 1 || (paragraphs.length === 1 && i === 0)) && (review as any).artistPhotoUrl && (
                     <div className="my-8 md:my-12 rounded-[24px] md:rounded-[40px] overflow-hidden border border-white/5 shadow-2xl bg-slate-900">
                       <img 
                         src={(review as any).artistPhotoUrl} 
@@ -118,6 +119,16 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
                             artist={review.artistName}
                             imageUrl={review.imageUrl}
                             onPlaylistClick={onViewPodcast}
+                            onPlay={() => {
+                              // Track play count
+                              if (trackedPlaysRef.current.has(review.id)) return;
+                              trackedPlaysRef.current.add(review.id);
+                              
+                              const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+                                ? import.meta.env.VITE_BACKEND_URL 
+                                : '';
+                              fetch(`${API_URL}/api/podcasts/${review.id}/play`, { method: 'POST' }).catch(console.error);
+                            }}
                           />
                         ) : (
                           <div className="text-slate-400 text-sm py-4 text-center">

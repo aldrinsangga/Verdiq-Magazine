@@ -69,7 +69,8 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
       const interval = setInterval(() => {
         setProgress(prev => {
           if (prev >= 99) return 99;
-          const increment = prev < 30 ? 0.3 : prev < 70 ? 0.8 : 1.5;
+          // Slow down the progress significantly to match a ~3-4 minute generation time
+          const increment = prev < 30 ? 0.1 : prev < 70 ? 0.15 : prev < 90 ? 0.05 : 0.02;
           return Math.min(prev + increment, 99);
         });
       }, 150);
@@ -466,6 +467,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                       style={{ width: `${progress}%` }}
                     />
                   </div>
+                  <p className="text-[10px] text-slate-400 italic mt-1">This may take up to 5 minutes. Please do not close this window.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

@@ -14,9 +14,12 @@ import { analyzeTrack, generatePodcast } from './services/geminiService';
 import { UserAccount } from '../types';
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 
-const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
+let API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
   : '';
+if (API_URL.includes('localhost')) {
+  API_URL = '';
+}
 
 // Utility to compress base64 images
 const compressImage = (base64Str, maxWidth = 800, maxHeight = 400) => {

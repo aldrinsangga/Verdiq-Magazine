@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 
 const Magazine = ({ reviews, onSelect, onNavigate }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,7 +32,7 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
   }, [nextSlide, featuredReviews.length]);
 
   const trendingReviews = [...allPublished]
-    .sort((a, b) => (b.podcastPlays || 0) - (a.podcastPlays || 0))
+    .sort((a, b) => (b.readCount || 0) - (a.readCount || 0))
     .slice(0, 5);
 
   if (allPublished.length === 0) {
@@ -152,6 +152,10 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                             <polyline points="20 6 9 17 4 12"></polyline>
                           </svg>
                         </div>
+                        <div className="flex items-center gap-1 ml-3 text-white/60">
+                          <Eye className="w-3 h-3" />
+                          <span className="text-[10px] font-black">{featured.readCount || 0}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -228,7 +232,19 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                     {r.artistName} • {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </p>
                   <h4 className="text-xl font-black transition-all leading-none mb-3 tracking-tighter review-title-split">{(r.headline || 'Latest Review').toUpperCase()}</h4>
-                  <p className="text-slate-400 text-sm font-light leading-relaxed line-clamp-2 italic">"{r.hook}"</p>
+                  <p className="text-slate-400 text-sm font-light leading-relaxed line-clamp-2 italic mb-4">"{r.hook}"</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">By Verdiq Critic Team</span>
+                    <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="w-2 h-2 text-white">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </div>
+                    <div className="flex items-center gap-1 ml-auto text-white/60">
+                      <Eye className="w-3 h-3" />
+                      <span className="text-[10px] font-black">{r.readCount || 0}</span>
+                    </div>
+                  </div>
                 </div>
               </a>
             ))}
@@ -264,7 +280,19 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                 </div>
                 <div>
                   <h5 className="font-black text-white group-hover:text-emerald-400 leading-tight mb-1 uppercase tracking-tight text-sm line-clamp-1">{(r.headline || r.songTitle).toUpperCase()}</h5>
-                  <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest line-clamp-1">{r.artistName}</p>
+                  <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest line-clamp-1 mb-2">{r.artistName}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">By Verdiq Critic Team</span>
+                    <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="w-2 h-2 text-white">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </div>
+                    <div className="flex items-center gap-1 ml-auto text-white/60">
+                      <Eye className="w-3 h-3" />
+                      <span className="text-[10px] font-black">{r.readCount || 0}</span>
+                    </div>
+                  </div>
                 </div>
               </a>
             ))}

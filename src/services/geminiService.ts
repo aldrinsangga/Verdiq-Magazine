@@ -304,23 +304,30 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     ${styleGuidesContext}
     
     REVIEW WRITING INSTRUCTIONS (STOP-SLOP PROTOCOL):
-    Write a fully human-sounding music review that feels natural, emotionally sharp, and specific.
+    Write a fully human-sounding music review that feels natural, emotionally sharp, specific, and charged with the raw excitement of a true fan. Treat the review as a short story about an encounter with a piece of art—build a narrative that connects technical details to a larger emotional truth.
     The 'reviewBody' MUST be exactly 5 paragraphs long. Use actual double newlines to separate paragraphs.
     
     CORE WRITING RULES:
-    1. CUT FILLER: Remove throat-clearing openers, emphasis crutches, and ALL adverbs (no -ly words).
+    1. CUT FILLER: Remove throat-clearing openers and emphasis crutches.
     2. BREAK FORMULAS: Avoid binary contrasts ("Not X, but Y"), negative listings, and rhetorical setups.
-    3. ACTIVE VOICE: Every sentence needs a human subject doing something. No passive constructions. No inanimate objects performing human actions (e.g., do NOT say "the beat creates a mood", say "the producer builds a mood with the beat").
+    3. EMOTIONAL RESONANCE: Share what the music actually feels like to listen to. Use longer, flowing, descriptive sentences to build an emotional atmosphere. Don't just list technical facts; describe the human experience of hearing the track.
     4. BE SPECIFIC: No vague declaratives ("The implications are significant"). Name the specific thing. No lazy extremes ("every," "always," "never").
-    5. TRUST THE READER: State facts directly. Skip softening, justification, or hand-holding.
-    6. VARY RHYTHM: Mix sentence lengths. Two items beat three. End paragraphs differently. 
-    7. NO EM DASHES: Do not use em dashes (—) anywhere in the text.
-    8. NO WH- STARTERS: Avoid starting sentences with "What," "Why," "Who," "How," etc., unless it's a direct question.
+    5. VARY RHYTHM: Embrace longer, complex, flowing sentences that tell a story. Avoid stacking short, choppy, declarative sentences back-to-back, as this creates a cold, robotic tone.
+    6. CONVERSATIONAL FLOW: Write like a passionate human speaking freely. Use conjunctions (and, but, so, because) to connect ideas into sweeping, poetic sentences. Do not write in a staccato, telegraphic style.
+    7. NO EM DASHES: Do not use em dashes (—) anywhere in the text. Use commas or parentheses instead if you need to separate clauses.
+    8. 100% CELEBRATORY & UPLIFTING: This review must be an absolute celebration of the artist's work. Focus entirely on the strengths, the magic, and the unique brilliance of the track. Make the artist feel incredibly proud of what they've created. This should be the kind of glowing, passionate review they immediately want to share with their fans.
+    9. VISCERAL EXCITEMENT: Don't just analyze; celebrate. Convey the physical thrill, the emotional gut-punch, and the sheer joy of the track. Write with the energy of someone who just heard their new favorite song and can't wait to tell the world.
+    10. HUMAN QUIRKS: Use contractions (it's, don't, can't) naturally. Write at an accessible reading level. Avoid overly academic or formal language, but remain professional.
+    11. NARRATIVE ARC: Every review should have a beginning, middle, and end. Start with a hook that sets a scene or a mood, explore the track's internal world, and conclude with a definitive statement on its place in the listener's life.
+    12. ACTIVE VOICE: Use active voice where possible. Instead of "The track is driven by a bassline", write "A bassline drives the track".
+    13. FIRST PERSON: You may occasionally use the first person ('I', 'me', 'my') to share a personal reaction, but keep the focus primarily on the artist and the music.
     
-    STRUCTURAL VARIETY & PACING:
-    - Vary your sentence structures. Use a mix of short, punchy statements and longer, complex observations.
-    - Paragraphs should NOT be of equal length. Some should be dense and analytical, others brief and impactful.
+    STRUCTURAL VARIETY & PACING (BURSTINESS):
+    - Vary your sentence structures wildly. Mix extremely long, rambling, passionate sentences with very short, punchy fragments.
+    - Paragraphs MUST NOT be of equal length. Make one paragraph very long and detailed, and the next paragraph just one or two sentences.
+    - Avoid symmetrical, perfectly balanced writing. Human writing is slightly messy and unpredictable.
     - Avoid "The [Subject] is [Adjective]" sentence patterns.
+    - Start sentences with conjunctions occasionally (And, But, Because) to sound more conversational.
     
     CRITICAL: If lyrics are provided, you MUST ensure any quotes used in the review are 100% accurate and verbatim from the provided text. Do not hallucinate or misquote lyrics.
     
@@ -335,11 +342,11 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     - Ensure the links feel integrated into the narrative of the review.
     
     CRITICAL STYLE CONSTRAINTS (BANNED AI TELLS):
-    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally", "The track", "This song", "Here's", "It turns out", "The truth is".
-    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape", "presents", "showcases", "navigate", "unpack", "lean into", "game-changer", "really", "just", "literally", "genuinely", "honestly", "simply", "actually", "deeply", "truly", "fundamentally", "inherently", "inevitably", "interestingly", "importantly", "crucially".
-    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core", "With its...", "From the opening...", "Let that sink in", "Make no mistake", "Here's why that matters", "Full stop", "It's worth noting", "At the end of the day", "When it comes to", "In a world where", "The reality is", "feature, not a bug", "I promise".
-    - AVOID being overly positive or flowery. Be a critical, professional journalist. If something is weak, say it.
-    - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary, sentence rhythm, and critical "bite".
+    - DO NOT start any paragraph with: "Musically", "Lyrically", "Vocally", "Ultimately", "Overall", "Finally", "The track", "This song", "Here's", "It turns out", "The truth is", "In the end".
+    - FORBIDDEN WORDS: "soundscape", "journey", "captures", "prowess", "sonic", "tapestry", "testament", "masterpiece", "vibrant", "seamlessly", "evocative", "captivating", "resonate", "delve", "dive into", "unfold", "crafted", "rich", "lush", "intricate", "landscape", "presents", "showcases", "navigate", "unpack", "lean into", "game-changer", "really", "just", "literally", "genuinely", "honestly", "simply", "actually", "deeply", "truly", "fundamentally", "inherently", "inevitably", "interestingly", "importantly", "crucially", "undeniable", "infectious", "palpable", "soars", "ethereal", "mesmerizing", "transcends", "delivers", "solidifies", "proves", "embodies", "embodying", "echoes", "encapsulated", "encapsulates".
+    - FORBIDDEN PHRASES: "Not just.. it's..", "The song is a...", "This track is a...", "A testament to...", "In conclusion", "At its core", "With its...", "From the opening...", "Let that sink in", "Make no mistake", "Here's why that matters", "Full stop", "It's worth noting", "At the end of the day", "When it comes to", "In a world where", "The reality is", "feature, not a bug", "I promise", "It's safe to say", "Leaves a lasting impression".
+    - BE A CHAMPION FOR THE ARTIST: Write with the enthusiasm of a dedicated fan or a passionate music blogger discovering a hidden gem. Build them up. Write like a human on a forum or a blog, not a PR machine.
+    - Use the provided STYLE GUIDES as your primary voice. Mimic their vocabulary and passion, but ensure the sentence rhythm is warm, flowing, and conversational.
     - Be specific about the production. Mention specific instruments, mixing choices, or textures you hear.
     
     REVIEW STRUCTURE VARIATIONS (Choose one randomly for each review and STICK TO IT):
@@ -362,15 +369,17 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
 
   const response = await ai.models.generateContent({
     model: "gemini-3.1-pro-preview",
-    contents: [
-      { text: prompt },
-      {
-        inlineData: {
-          data: audioBase64,
-          mimeType: audioMimeType
+    contents: {
+      parts: [
+        { text: prompt },
+        {
+          inlineData: {
+            data: audioBase64,
+            mimeType: audioMimeType
+          }
         }
-      }
-    ],
+      ]
+    },
     config: {
       responseMimeType: "application/json",
       responseSchema: REVIEW_SCHEMA as any,
@@ -389,15 +398,17 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     try {
       const imgResponse = await ai.models.generateContent({
         model: "gemini-2.5-flash-image",
-        contents: [
-          { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` },
-          {
-            inlineData: {
-              data: artistPhotoBase64,
-              mimeType: artistPhotoMimeType
-            }
-          }
-        ]
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: artistPhotoBase64,
+                mimeType: artistPhotoMimeType
+              }
+            },
+            { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
+          ]
+        }
       });
       
       for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
@@ -527,7 +538,7 @@ export const generatePodcast = async (review: any, originalAudioBase64?: string)
 
   const audioResponse = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
-    contents: script,
+    contents: [{ parts: [{ text: script }] }],
     config: {
       responseModalities: [Modality.AUDIO],
       speechConfig: {

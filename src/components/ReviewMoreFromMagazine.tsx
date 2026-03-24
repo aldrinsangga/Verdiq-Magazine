@@ -14,7 +14,7 @@ const ReviewMoreFromMagazine: React.FC<ReviewMoreFromMagazineProps> = ({
   if (allReviews.length === 0) return null;
 
   const filteredReviews = allReviews
-    .filter(r => r.id !== currentReviewId)
+    .filter(r => r.id !== currentReviewId && r.isPublished && !r.isDeleted)
     .slice(0, 8);
 
   if (filteredReviews.length === 0) return null;

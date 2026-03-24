@@ -44,7 +44,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https://api.qrserver.com", "https://picsum.photos", "https://www.paypalobjects.com", "https://firebasestorage.googleapis.com", "https://storage.googleapis.com", "https://*.firebasestorage.app", "https://images.unsplash.com", "https://*.unsplash.com"],
       mediaSrc: ["'self'", "blob:", "https://firebasestorage.googleapis.com", "https://storage.googleapis.com", "https://*.firebasestorage.app"],
-      connectSrc: ["'self'", "https://verdiqmag.com", "https://www.verdiqmag.com", "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://storage.googleapis.com", "https://*.firebasestorage.app"],
+      connectSrc: ["'self'", "https://verdiqmag.com", "https://www.verdiqmag.com", "https://ais-dev-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "https://ais-pre-cq5mcgtpnwz55m2mzdlu7n-109086387935.asia-southeast1.run.app", "wss://*.run.app:*", "https://www.paypal.com", "https://www.sandbox.paypal.com", "https://identitytoolkit.googleapis.com", "https://securetoken.googleapis.com", "https://*.googleapis.com", "https://*.firebaseio.com", "https://*.firebaseapp.com", "https://storage.googleapis.com", "https://*.firebasestorage.app"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       frameSrc: ["'self'", "https://www.paypal.com", "https://www.sandbox.paypal.com"],
       frameAncestors: ["'self'", "https://verdiqmag.com", "https://www.verdiqmag.com", "https://ai.studio", "https://aistudio.google.com", "https://*.google.com", "https://*.run.app"],
@@ -1295,9 +1295,9 @@ app.post("/api/reviews",
       
       if (!hasPurchased && user?.role !== 'admin') {
         reviewToSave.isTemporary = true;
-        const oneHourFromNow = new Date();
-        oneHourFromNow.setHours(oneHourFromNow.getHours() + 1);
-        reviewToSave.expiresAt = oneHourFromNow.toISOString();
+        const expirationTime = new Date();
+        expirationTime.setHours(expirationTime.getHours() + 24);
+        reviewToSave.expiresAt = expirationTime.toISOString();
         console.log(`[Review] Setting temporary status for free user ${userId}. Expires at: ${reviewToSave.expiresAt}`);
       }
       
@@ -1547,6 +1547,24 @@ app.get("/api/podcasts/stats", async (req, res, next) => {
       playCounts[doc.id] = data.playCount || 0;
     });
     res.json({ play_counts: playCounts });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/reviews/:id/read", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const reviewRef = db.collection('reviews').doc(id);
+    const doc = await reviewRef.get();
+    
+    if (doc.exists) {
+      const data = doc.data();
+      const newCount = (data?.readCount || 0) + 1;
+      await reviewRef.update({ readCount: newCount });
+      return res.json({ read_count: newCount });
+    }
+    res.status(404).json({ message: "Review not found" });
   } catch (error) {
     next(error);
   }

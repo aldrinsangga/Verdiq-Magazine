@@ -1,17 +1,20 @@
 import React from 'react';
+import { Eye } from 'lucide-react';
 
 interface ReviewHeroProps {
   review: any;
   editMode: boolean;
   editedReview: any;
   setEditedReview: (review: any) => void;
+  readCount?: number;
 }
 
 const ReviewHero: React.FC<ReviewHeroProps> = ({
   review,
   editMode,
   editedReview,
-  setEditedReview
+  setEditedReview,
+  readCount = 0
 }) => {
   const displayReview = editMode ? editedReview : review;
   const imageUrl = displayReview.imageUrl || `https://picsum.photos/seed/${displayReview.id}/1200/800`;
@@ -73,6 +76,10 @@ const ReviewHero: React.FC<ReviewHeroProps> = ({
               <circle cx="12" cy="12" r="10" fill="#3B82F6" />
               <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
             </svg>
+            <div className="flex items-center gap-1.5 ml-4 text-slate-400">
+              <Eye className="w-4 h-4" />
+              <span className="text-sm font-bold">{readCount}</span>
+            </div>
           </div>
         </div>
       </div>
