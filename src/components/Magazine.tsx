@@ -35,6 +35,15 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
     .sort((a, b) => (b.readCount || 0) - (a.readCount || 0))
     .slice(0, 5);
 
+  const getIssueAndVolume = () => {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+    const weekNumber = Math.ceil((now.getDay() + 1 + days) / 7);
+    const volume = now.getFullYear() - 2023; // Assuming 2024 is Vol 1
+    return `Issue No. ${weekNumber.toString().padStart(3, '0')} — Vol. ${volume}`;
+  };
+
   if (allPublished.length === 0) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-32 text-center" data-testid="empty-magazine">
@@ -57,18 +66,18 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
         <div className="text-left md:text-right flex flex-col items-start md:items-end gap-4">
           {/* Search Bar */}
           <div className="relative w-full max-w-[220px] group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 group-focus-within:text-emerald-500 transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-500 transition-colors" />
             <input 
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900/50 border border-slate-800 rounded-full py-1.5 pl-8 pr-8 text-[10px] text-white focus:outline-none focus:border-emerald-500/50 focus:bg-slate-900 transition-all placeholder:text-slate-600"
+              className="w-full bg-emerald-500/10 border border-emerald-500/50 rounded-full py-1.5 pl-8 pr-8 text-[10px] text-emerald-400 focus:outline-none focus:border-emerald-500 focus:bg-emerald-500/20 transition-all placeholder:text-emerald-500/50"
             />
             {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 hover:text-emerald-400 transition-colors"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -86,7 +95,7 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
 
           <div>
             <p className="text-slate-500 font-black uppercase text-sm">{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-            <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">Issue No. 001 — Vol. 1</p>
+            <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">{getIssueAndVolume()}</p>
           </div>
         </div>
       </div>
@@ -233,18 +242,6 @@ const Magazine = ({ reviews, onSelect, onNavigate }) => {
                   </p>
                   <h4 className="text-xl font-black transition-all leading-none mb-3 tracking-tighter review-title-split">{(r.headline || 'Latest Review').toUpperCase()}</h4>
                   <p className="text-slate-400 text-sm font-light leading-relaxed line-clamp-2 italic mb-4">"{r.hook}"</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-white/60 text-[10px] font-black uppercase tracking-widest">By Verdiq Critic Team</span>
-                    <div className="w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" className="w-2 h-2 text-white">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                    </div>
-                    <div className="flex items-center gap-1 ml-auto text-white/60">
-                      <Eye className="w-3 h-3" />
-                      <span className="text-[10px] font-black">{r.readCount || 0}</span>
-                    </div>
-                  </div>
                 </div>
               </a>
             ))}
