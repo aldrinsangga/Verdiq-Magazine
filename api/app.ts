@@ -288,11 +288,10 @@ const getFullUser = async (userId: string) => {
       // Fetch Reviews (History)
       const reviewsSnapshot = await db.collection('reviews')
         .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
         .get();
       
       const now = new Date();
-      const validReviews = [];
+      let validReviews = [];
       const expiredReviewIds: string[] = [];
       
       for (const doc of reviewsSnapshot.docs) {
@@ -307,6 +306,9 @@ const getFullUser = async (userId: string) => {
         validReviews.push(review);
       }
       
+      // Sort in memory
+      validReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
       // Delete expired reviews in background
       if (expiredReviewIds.length > 0) {
         console.log(`[getFullUser] Deleting ${expiredReviewIds.length} expired reviews for user ${userId}`);
@@ -320,10 +322,10 @@ const getFullUser = async (userId: string) => {
       // Fetch Purchases
       const purchasesSnapshot = await db.collection('purchases')
         .where('userId', '==', userId)
-        .orderBy('createdAt', 'desc')
         .get();
       
       purchases = purchasesSnapshot.docs.map(doc => doc.data());
+      purchases.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Map purchases to invoices
       invoices = purchases.map(p => ({
@@ -1465,8 +1467,9 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
 
 app.get("/api/public/published-reviews", async (req, res, next) => {
   try {
-    const snapshot = await db.collection('reviews').where('isPublished', '==', true).orderBy('createdAt', 'desc').get();
+    const snapshot = await db.collection('reviews').where('isPublished', '==', true).get();
     const reviews = snapshot.docs.map(doc => doc.data());
+    reviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json(reviews);
   } catch (error) {
     next(error);
