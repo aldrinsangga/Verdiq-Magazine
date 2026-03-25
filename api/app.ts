@@ -1381,6 +1381,11 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     }
     const currentReviewData = currentReviewDoc.data();
 
+    // Ensure the user owns the review or is an admin
+    if (currentReviewData?.userId !== authUserId && !isAdminUser) {
+      return res.status(403).json({ message: "Forbidden: You do not own this review" });
+    }
+
     // Determine credit cost
     let cost = 0;
     const isNowPublishing = review.isPublished && !currentReviewData?.isPublished;

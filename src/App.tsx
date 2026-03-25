@@ -885,22 +885,23 @@ function AppContent() {
       }
 
       let review = currentUser.history?.find(r => r.id === reviewId);
+      
+      if (!review && currentReview?.id === reviewId) {
+        review = currentReview;
+      }
+
       if (!review) {
-        console.log('Review not found in local history, refreshing user data...');
+        console.log('Review not found in local history, fetching directly...');
         const headers = await getAuthHeadersLocal();
-        const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
-        if (userRes.ok) {
-          const freshUser = await userRes.json();
-          const fullUser = { ...freshUser, session: currentUser.session };
-          setCurrentUser(fullUser);
-          saveSessionLocal(fullUser);
-          review = freshUser.history.find(r => r.id === reviewId);
+        const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`, { headers });
+        if (reviewRes.ok) {
+          review = await reviewRes.json();
         }
       }
 
       if (!review) {
-        console.error('Review not found in history:', reviewId);
-        showNotification('Could not find this review in your history. Please try refreshing the page.', 'error');
+        console.error('Review not found:', reviewId);
+        showNotification('Could not find this review. Please try refreshing the page.', 'error');
         return;
       }
 
