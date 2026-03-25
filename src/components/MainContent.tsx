@@ -29,9 +29,13 @@ interface MainContentProps {
   styleGuides: any[];
   creditStatus: any;
   targetPodcastId: string | null;
+  adminUsers: { users: any[], total: number, limit: number, offset: number };
+  adminReviews: { reviews: any[], total: number, limit: number, offset: number };
   setUsers: (users: any[]) => void;
   setAllReviews: (reviews: any[]) => void;
   setTargetPodcastId: (id: string | null) => void;
+  fetchAdminUsers: (offset: number, limit: number, search?: string) => Promise<void>;
+  fetchAdminReviews: (offset: number, limit: number) => Promise<void>;
   handleAnalyze: (data: any) => Promise<void>;
   handleLogin: (user: any) => void;
   handleUpdateReview: (review: any) => Promise<void>;
@@ -66,10 +70,14 @@ const MainContent: React.FC<MainContentProps> = ({
   styleGuides,
   creditStatus,
   targetPodcastId,
+  adminUsers,
+  adminReviews,
   paypalClientId,
   setUsers,
   setAllReviews,
   setTargetPodcastId,
+  fetchAdminUsers,
+  fetchAdminReviews,
   handleAnalyze,
   handleLogin,
   handleUpdateReview,
@@ -197,7 +205,10 @@ const MainContent: React.FC<MainContentProps> = ({
       {!isUnverified && view === 'admin' && isAdmin(currentUser) && (
         <AdminDashboardWrapper 
           currentUser={currentUser}
-          users={users}
+          adminUsers={adminUsers}
+          adminReviews={adminReviews}
+          fetchAdminUsers={fetchAdminUsers}
+          fetchAdminReviews={fetchAdminReviews}
           setUsers={setUsers}
           setAllReviews={setAllReviews}
           onUpdateUser={handleUpdateProfile} 

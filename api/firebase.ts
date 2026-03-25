@@ -220,15 +220,15 @@ const createClientDbWrapper = (dbInstance: any) => ({
     return {
       doc: (id: string) => {
         const docRef = doc(dbInstance, path, id);
-        return {
-          get: async () => {
-            const d = await getDoc(docRef);
-            return { exists: d.exists(), id: d.id, data: () => d.data() };
-          },
-          set: (data: any) => setDoc(docRef, toClient(data)),
-          update: (data: any) => updateDoc(docRef, toClient(data)),
-          delete: () => deleteDoc(docRef)
-        };
+          return {
+            get: async () => {
+              const d = await getDoc(docRef);
+              return { exists: d.exists(), id: d.id, data: () => d.data() };
+            },
+            set: (data: any, options?: any) => setDoc(docRef, toClient(data), options),
+            update: (data: any) => updateDoc(docRef, toClient(data)),
+            delete: () => deleteDoc(docRef)
+          };
       },
       add: async (data: any) => {
         const ref = await addDoc(colRef, toClient(data));
@@ -272,6 +272,18 @@ export const db: any = {
           adminBuilder(q.orderBy(field, direction), [...queryParams, { type: 'orderBy', field, direction }]),
         limit: (n: number) => 
           adminBuilder(q.limit(n), [...queryParams, { type: 'limit', value: n }]),
+        offset: (n: number) => 
+          adminBuilder(q.offset(n), [...queryParams, { type: 'offset', value: n }]),
+        count: async () => {
+          try {
+            const snapshot = await q.count().get();
+            return snapshot.data().count;
+          } catch (e: any) {
+            console.warn(`[Firebase] Admin SDK count() failed, falling back to full get()...`);
+            const snapshot = await q.get();
+            return snapshot.size;
+          }
+        },
         get: async () => {
           try {
             const snapshot = await q.get();
@@ -289,6 +301,8 @@ export const db: any = {
                 if (p.type === 'where') clientQ = clientQ.where(p.field, p.op, p.value);
                 if (p.type === 'orderBy') clientQ = clientQ.orderBy(p.field, p.direction);
                 if (p.type === 'limit') clientQ = clientQ.limit(p.value);
+                // Note: Client SDK doesn't support offset directly in the same way, 
+                // but we'll ignore it for fallback for now or handle it if needed.
               }
               return clientQ.get();
             }
@@ -313,8 +327,8 @@ export const db: any = {
                 throw e;
               }
             },
-            set: (data: any) => adminDoc.set(toAdmin(data)).catch((e: any) => {
-              if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).set(data);
+            set: (data: any, options?: any) => adminDoc.set(toAdmin(data), options).catch((e: any) => {
+              if (isPermissionError(e)) return clientDbWrapper.collection(path).doc(id).set(data, options);
               throw e;
             }),
             update: (data: any) => adminDoc.update(toAdmin(data)).catch((e: any) => {

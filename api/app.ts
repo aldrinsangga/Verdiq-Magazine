@@ -216,12 +216,26 @@ const checkUsageQuota = async (req: express.Request, res: express.Response, next
     const dailyCount = usage[today] || 0;
     const monthlyCount = userData.monthlyUsage?.[thisMonth] || 0;
     
-    const DAILY_LIMIT = 10; 
-    const MONTHLY_LIMIT = 100;
+    // Tiered limits based on user role
+    let DAILY_LIMIT = parseInt(process.env.AI_DAILY_LIMIT || "10"); 
+    let MONTHLY_LIMIT = parseInt(process.env.AI_MONTHLY_LIMIT || "100");
+
+    // Admins have virtually unlimited quota
+    if (user.role === 'admin') {
+      DAILY_LIMIT = 9999;
+      MONTHLY_LIMIT = 99999;
+    } 
+    // Pro users get a 5x boost
+    else if (user.isSubscribed || user.role === 'pro') {
+      DAILY_LIMIT = DAILY_LIMIT * 5;
+      MONTHLY_LIMIT = MONTHLY_LIMIT * 5;
+    }
 
     if (dailyCount >= DAILY_LIMIT) {
       console.warn(`[Quota] User ${userId} reached daily limit of ${DAILY_LIMIT}`);
       return res.status(429).json({ 
+        error: "QUOTA_EXCEEDED",
+        type: "DAILY",
         message: "Daily AI generation limit reached.",
         instruction: "Please upgrade to a Pro plan for unlimited generations or wait until tomorrow.",
         limit: DAILY_LIMIT,
@@ -232,6 +246,8 @@ const checkUsageQuota = async (req: express.Request, res: express.Response, next
     if (monthlyCount >= MONTHLY_LIMIT) {
       console.warn(`[Quota] User ${userId} reached monthly limit of ${MONTHLY_LIMIT}`);
       return res.status(429).json({ 
+        error: "QUOTA_EXCEEDED",
+        type: "MONTHLY",
         message: "Monthly AI generation limit reached.",
         instruction: "Please upgrade to a Pro plan for unlimited generations.",
         limit: MONTHLY_LIMIT,
@@ -577,31 +593,119 @@ app.post("/api/auth/logout", async (req, res) => {
 // Users
 app.get("/api/users", isAdmin, async (req, res, next) => {
   try {
-    console.log("[GET /api/users] Fetching all users");
-    const snapshot = await db.collection('users').get();
-    const users = await Promise.all(snapshot.docs.map(async doc => {
-      try {
-        const user = doc.data();
-        console.log(`[GET /api/users] Fetching history for user ${doc.id}`);
-        // Remove orderBy to avoid index issues, sort in memory instead
-        const reviewsSnapshot = await db.collection('reviews').where('userId', '==', doc.id).get();
-        const history = reviewsSnapshot.docs
-          .map(r => r.data())
-          .sort((a: any, b: any) => {
-            const dateA = new Date(a.createdAt || 0).getTime();
-            const dateB = new Date(b.createdAt || 0).getTime();
-            return dateB - dateA;
-          });
-        return sanitizeUser({ ...user, history });
-      } catch (err: any) {
-        console.error(`[GET /api/users] Error fetching history for user ${doc.id}:`, err.message);
-        if (err.stack) console.error(err.stack);
-        return sanitizeUser(doc.data());
-      }
-    }));
-    res.json(users);
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const search = (req.query.search as string || "").toLowerCase();
+
+    console.log(`[GET /api/users] Fetching users (limit: ${limit}, offset: ${offset}, search: ${search})`);
+    
+    let query: any = db.collection('users').orderBy('createdAt', 'desc');
+    
+    // Get total count using the new count() method
+    const totalCount = await query.count();
+
+    // Now get paginated data using limit and offset
+    const snapshot = await query.offset(offset).limit(limit).get();
+    let paginatedUsers = snapshot.docs.map((doc: any) => {
+      const u = doc.data();
+      // Return only basic info to save reads and bandwidth
+      const { password, history, purchases, ...basicInfo } = u;
+      return sanitizeUser(basicInfo);
+    });
+
+    // Filter by search if provided (Note: Firestore doesn't support easy case-insensitive search, 
+    // so we still filter in memory for now, but on a limited set if we can, 
+    // or we'd need to fetch all if searching. For now, let's fetch all only if searching)
+    if (search) {
+      const allSnapshot = await db.collection('users').get();
+      let allUsers = allSnapshot.docs.map((doc: any) => doc.data());
+      allUsers = allUsers.filter((u: any) => 
+        (u.name && u.name.toLowerCase().includes(search)) || 
+        (u.email && u.email.toLowerCase().includes(search))
+      );
+      allUsers.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      const filteredCount = allUsers.length;
+      const slicedUsers = allUsers.slice(offset, offset + limit).map((u: any) => {
+        const { password, history, purchases, ...basicInfo } = u;
+        return sanitizeUser(basicInfo);
+      });
+      return res.json({
+        users: slicedUsers,
+        totalCount: filteredCount,
+        limit,
+        offset
+      });
+    }
+
+    res.json({
+      users: paginatedUsers,
+      totalCount,
+      limit,
+      offset
+    });
   } catch (error) {
     console.error("[GET /api/users] Error:", error);
+    next(error);
+  }
+});
+
+// New endpoint for admin to fetch all reviews with pagination
+app.get("/api/admin/reviews", isAdmin, async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = parseInt(req.query.offset as string) || 0;
+    
+    console.log(`[GET /api/admin/reviews] Fetching all reviews (limit: ${limit}, offset: ${offset})`);
+    
+    const query = db.collection('reviews').orderBy('createdAt', 'desc');
+    const totalCount = await query.count();
+    const snapshot = await query.offset(offset).limit(limit).get();
+    const paginatedReviews = snapshot.docs.map((doc: any) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    res.json({
+      reviews: paginatedReviews,
+      totalCount,
+      limit,
+      offset
+    });
+  } catch (error) {
+    console.error("[GET /api/admin/reviews] Error:", error);
+    next(error);
+  }
+});
+
+// Earnings & Purchases (Admin only)
+app.get("/api/admin/earnings", isAdmin, async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    
+    const query = db.collection('purchases').orderBy('createdAt', 'desc');
+    const totalCount = await query.count();
+    const snapshot = await query.offset(offset).limit(limit).get();
+    const purchases = snapshot.docs.map((doc: any) => doc.data());
+    
+    // Use the optimized counter from stats/global
+    let statsDoc = await db.collection('stats').doc('global').get();
+    let totalEarnings = 0;
+    
+    if (!statsDoc.exists) {
+      // One-time sync if stats document doesn't exist
+      console.log("[Earnings] Stats document missing, performing one-time sync...");
+      const allSnapshot = await db.collection('purchases').get();
+      totalEarnings = allSnapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data().amount || 0), 0);
+      
+      // Save it for future use
+      await db.collection('stats').doc('global').set({ totalEarnings }, { merge: true });
+    } else {
+      totalEarnings = statsDoc.data().totalEarnings || 0;
+    }
+    
+    res.json({ purchases, totalEarnings, totalCount, limit, offset });
+  } catch (error) {
     next(error);
   }
 });
@@ -730,28 +834,6 @@ app.get("/api/credits/status", async (req, res) => {
   });
 });
 
-// Earnings & Purchases (Admin only)
-app.get("/api/admin/reviews", isAdmin, async (req, res, next) => {
-  try {
-    const snapshot = await db.collection('reviews').get();
-    const reviews = snapshot.docs.map(doc => doc.data());
-    res.json(reviews);
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/earnings", isAdmin, async (req, res, next) => {
-  try {
-    const snapshot = await db.collection('purchases').orderBy('createdAt', 'desc').get();
-    const purchases = snapshot.docs.map(doc => doc.data());
-    const totalEarnings = purchases.reduce((sum, p) => sum + (p.amount || 0), 0);
-    res.json({ purchases, totalEarnings });
-  } catch (error) {
-    next(error);
-  }
-});
-
 // PayPal Order Creation
 app.post("/api/paypal/create-order", async (req, res, next) => {
   try {
@@ -834,6 +916,11 @@ app.post("/api/paypal/capture-order", async (req, res, next) => {
       };
 
       await db.collection('purchases').doc(purchaseId).set(purchase);
+      
+      // Update global earnings counter
+      await db.collection('stats').doc('global').set({
+        totalEarnings: FieldValue.increment(pkg.price)
+      }, { merge: true });
       
       const newCredits = (user.credits || 0) + pkg.credits;
       await userRef.update({ 
@@ -1496,10 +1583,20 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
 
 app.get("/api/public/published-reviews", async (req, res, next) => {
   try {
-    const snapshot = await db.collection('reviews').where('isPublished', '==', true).get();
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = parseInt(req.query.offset as string) || 0;
+    
+    const query = db.collection('reviews').where('isPublished', '==', true).orderBy('createdAt', 'desc');
+    const totalCount = await query.count();
+    const snapshot = await query.offset(offset).limit(limit).get();
     const reviews = snapshot.docs.map(doc => doc.data());
-    reviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(reviews);
+    
+    res.json({
+      reviews,
+      totalCount,
+      limit,
+      offset
+    });
   } catch (error) {
     next(error);
   }

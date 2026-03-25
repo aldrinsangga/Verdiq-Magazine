@@ -96,10 +96,43 @@ function AppContent() {
   const [currentAudioFile, setCurrentAudioFile] = useState(null);
   
   const [users, setUsers] = useState([]);
+  const [adminUsers, setAdminUsers] = useState({ users: [], total: 0, limit: 20, offset: 0 });
+  const [adminReviews, setAdminReviews] = useState({ reviews: [], total: 0, limit: 20, offset: 0 });
   const [currentUser, setCurrentUser] = useState(null);
   const [allReviews, setAllReviews] = useState([]);
-
   const [styleGuides, setStyleGuides] = useState([]);
+  const [lastFetchTime, setLastFetchTime] = useState({ users: 0, reviews: 0 });
+
+  const fetchAdminUsers = async (offset = 0, limit = 20, search = "") => {
+    if (!isAdmin(currentUser)) return;
+    try {
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/users?offset=${offset}&limit=${limit}&search=${encodeURIComponent(search)}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminUsers(data);
+        setUsers(data.users); // Keep users for backward compatibility
+      }
+    } catch (e) {
+      console.error("Failed to fetch admin users", e);
+    }
+  };
+
+  const fetchAdminReviews = async (offset = 0, limit = 20) => {
+    if (!isAdmin(currentUser)) return;
+    try {
+      const headers = await getAuthHeadersLocal();
+      const res = await fetch(`${API_URL}/api/admin/reviews?offset=${offset}&limit=${limit}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminReviews(data);
+        setAllReviews(data.reviews); // Keep allReviews for backward compatibility
+      }
+    } catch (e) {
+      console.error("Failed to fetch admin reviews", e);
+    }
+  };
+
   const [targetPodcastId, setTargetPodcastId] = useState(null);
   const [accountTab, setAccountTab] = useState('profile');
   const [paypalClientId, setPaypalClientId] = useState("");
@@ -178,6 +211,12 @@ function AppContent() {
     
     // Use a small timeout to ensure DOM has updated before scrolling
     setTimeout(() => window.scrollTo(0, 0), 0);
+
+    // Fetch data based on view
+    if (v === 'admin' && isAdmin(currentUser)) {
+      fetchAdminUsers(0, 20);
+      fetchAdminReviews(0, 20);
+    }
   };
 
   // Function to navigate to a review and update URL
@@ -495,29 +534,19 @@ function AppContent() {
 
         // Load published reviews for magazine/podcasts
         try {
-          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews`);
+          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
           if (reviewsRes.ok) {
-            const publishedReviews = await reviewsRes.json();
-            setAllReviews(publishedReviews);
+            const data = await reviewsRes.json();
+            setAllReviews(data.reviews || []);
           }
         } catch (e) {
           console.error("Failed to load published reviews", e);
         }
 
-        // Load all users for admin (with auth if available)
-        try {
-          const authHeaders = await getAuthHeadersLocal();
-          if (authHeaders.Authorization && isAdmin(savedUser)) {
-            const usersRes = await fetch(`${API_URL}/api/users`, { headers: authHeaders });
-            if (usersRes.ok) {
-              const usersList = await usersRes.json();
-              setUsers(usersList);
-            }
-            // Fetch style guides for admin
-            fetchStyleGuides();
-          }
-        } catch (e) {
-          console.error("Failed to load users", e);
+        // Only fetch admin data if we are an admin
+        if (isAdmin(savedUser)) {
+          fetchStyleGuides();
+          // We'll fetch users/reviews when the admin view is actually entered
         }
       } catch (e) {
         console.error("Failed to initialize app data", e);
@@ -541,11 +570,10 @@ function AppContent() {
       
       fetchCreditStatus();
       
-      const usersRes = await fetch(`${API_URL}/api/users`, { headers });
-      if (usersRes.ok) {
-        const usersList = await safeJson(usersRes);
-        setUsers(usersList);
-        setAllReviews(usersList.flatMap(u => u.history || []));
+      // If we are in admin view, also refresh admin data
+      if (view === 'admin') {
+        fetchAdminUsers(adminUsers.offset, adminUsers.limit);
+        fetchAdminReviews(adminReviews.offset, adminReviews.limit);
       }
     } catch (e) {
       console.error('Failed to refresh user data:', e);
@@ -556,26 +584,7 @@ function AppContent() {
     setCurrentUser(user);
     saveSessionLocal(user);
     
-    // Fetch users with auth header if admin
-    try {
-      const headers = user.session?.access_token 
-        ? { 'Authorization': `Bearer ${user.session.access_token}` }
-        : {};
-      const res = await fetch(`${API_URL}/api/users`, { headers });
-      if (res.ok) {
-        const list = await safeJson(res);
-        setUsers(list);
-        setAllReviews(list.flatMap(u => u.history || []));
-      } else {
-        const errorData = await safeJson(res).catch(() => ({}));
-        console.error('Failed to load users:', res.status, errorData);
-      }
-    } catch (e) {
-      console.error('Failed to load users:', e);
-    }
-    
     // Only navigate to landing if we're still on the auth view
-    // This prevents overwriting navigation that happened during the async fetch
     if (view === 'auth') {
       navigate('landing');
     }
@@ -840,15 +849,10 @@ function AppContent() {
         plan: updatedUser.isSubscribed ? 'pro' : 'free'
       }));
 
-      // Refresh users list ONLY if admin
-      if (isAdmin(currentUser)) {
-        const authHeaders = await getAuthHeadersLocal();
-        const usersRes = await fetch(`${API_URL}/api/users`, { headers: authHeaders });
-        if (usersRes.ok) {
-          const usersList = await usersRes.json();
-          setUsers(usersList);
-          setAllReviews(usersList.flatMap(u => u.history || []));
-        }
+      // Refresh admin data ONLY if currently in admin view
+      if (isAdmin(currentUser) && view === 'admin') {
+        fetchAdminUsers(adminUsers.offset, adminUsers.limit);
+        fetchAdminReviews(adminReviews.offset, adminReviews.limit);
       }
 
       navigate('review', reviewForStorage.id);
@@ -871,8 +875,9 @@ function AppContent() {
 
       if (errorMessage.includes('413')) {
         showNotification("The file or data is too large for the studio to process. Try using a smaller audio file or lower resolution images.", "error");
-      } else if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
-        showNotification("We've hit our daily processing limit. Please try again tomorrow.", "warning");
+      } else if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED') || (error as any).type === 'QUOTA') {
+        const instruction = (error as any).instruction || "Please try again tomorrow.";
+        showNotification(`AI Limit Reached: ${errorMessage}. ${instruction}`, "warning");
       } else {
         showNotification(`Studio Error: ${errorMessage || 'Verify your file and try again.'}`, "error");
       }
@@ -945,10 +950,10 @@ function AppContent() {
 
         // Refresh public reviews
         try {
-          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews`);
+          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
           if (reviewsRes.ok) {
-            const publishedReviews = await reviewsRes.json();
-            setAllReviews(publishedReviews);
+            const data = await reviewsRes.json();
+            setAllReviews(data.reviews || []);
           }
         } catch (e) {
           console.error("Failed to refresh published reviews", e);
@@ -1001,13 +1006,9 @@ function AppContent() {
         }
         setCurrentReview(updatedReview);
 
-        if (isAdmin(currentUser)) {
-          const usersRes = await fetch(`${API_URL}/api/users`, { headers });
-          if (usersRes.ok) {
-            const usersList = await usersRes.json();
-            setUsers(usersList);
-            setAllReviews(usersList.flatMap(u => u.history || []));
-          }
+        if (isAdmin(currentUser) && view === 'admin') {
+          fetchAdminUsers(adminUsers.offset, adminUsers.limit);
+          fetchAdminReviews(adminReviews.offset, adminReviews.limit);
         }
       } else {
         const errorData = await res.json().catch(() => ({}));
@@ -1095,24 +1096,19 @@ function AppContent() {
     if (res.ok) {
       // Refresh public reviews
       try {
-        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews`);
+        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
         if (reviewsRes.ok) {
-          const publishedReviews = await reviewsRes.json();
-          setAllReviews(publishedReviews);
+          const data = await reviewsRes.json();
+          setAllReviews(data.reviews || []);
         }
       } catch (e) {
         console.error("Failed to refresh published reviews", e);
       }
 
-      // Fetch users with auth headers
-      try {
-        const usersRes = await fetch(`${API_URL}/api/users`, { headers });
-        if (usersRes.ok) {
-          const usersList = await usersRes.json();
-          setUsers(usersList);
-        }
-      } catch (fetchError) {
-        console.error('Error refreshing users after review update:', fetchError);
+      // Refresh admin data if in admin view
+      if (isAdmin(currentUser) && view === 'admin') {
+        fetchAdminUsers(adminUsers.offset, adminUsers.limit);
+        fetchAdminReviews(adminReviews.offset, adminReviews.limit);
       }
     } else {
       const error = await res.json().catch(() => ({ detail: 'Failed to update review' }));
@@ -1191,6 +1187,10 @@ function AppContent() {
               styleGuides={styleGuides}
               creditStatus={creditStatus}
               targetPodcastId={targetPodcastId}
+              adminUsers={adminUsers}
+              adminReviews={adminReviews}
+              fetchAdminUsers={fetchAdminUsers}
+              fetchAdminReviews={fetchAdminReviews}
               setUsers={setUsers}
               setAllReviews={setAllReviews}
               setTargetPodcastId={setTargetPodcastId}

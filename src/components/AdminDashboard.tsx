@@ -9,9 +9,18 @@ const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEN
 
 interface AdminDashboardProps {
   users?: any[];
+  totalUsers?: number;
+  usersLimit?: number;
+  usersOffset?: number;
+  fetchUsers?: (offset: number, limit: number, search?: string) => void;
+  reviews?: any[];
+  totalReviews?: number;
+  reviewsLimit?: number;
+  reviewsOffset?: number;
+  fetchReviews?: (offset: number, limit: number) => void;
   onUpdateUser?: (user: any) => void;
   onDeleteUser?: (id: string) => void;
-  onUpdateReview?: (userId: string, review: any) => void;
+  onUpdateReview?: (review: any, userId: string) => void;
   onDeleteReview?: (reviewId: string) => void;
   styleGuides?: any[];
   onAddStyleGuide?: (guide: any) => void;
@@ -22,6 +31,15 @@ interface AdminDashboardProps {
 
 const AdminDashboard = ({ 
   users = [], 
+  totalUsers = 0,
+  usersLimit = 20,
+  usersOffset = 0,
+  fetchUsers,
+  reviews = [],
+  totalReviews = 0,
+  reviewsLimit = 20,
+  reviewsOffset = 0,
+  fetchReviews,
   onUpdateUser, 
   onDeleteUser, 
   onUpdateReview, 
@@ -66,7 +84,7 @@ const AdminDashboard = ({
   // Loading states for buttons
   const [savingUser, setSavingUser] = useState(false);
   const [addingCredits, setAddingCredits] = useState(false);
-  const [earnings, setEarnings] = useState({ purchases: [], totalEarnings: 0 });
+  const [earnings, setEarnings] = useState({ purchases: [], totalEarnings: 0, totalCount: 0, limit: 50, offset: 0 });
   const [loadingEarnings, setLoadingEarnings] = useState(false);
   const [publishingReview, setPublishingReview] = useState(null);
   const [deletingReview, setDeletingReview] = useState(null);
@@ -79,33 +97,44 @@ const AdminDashboard = ({
 
   // Defensive check for users
   const safeUsers = Array.isArray(users) ? users : [];
+  const safeReviews = Array.isArray(reviews) ? reviews : [];
 
-  const allReviews = safeUsers.flatMap(u => (u.history || []).map(r => ({ ...r, userId: u.id, userName: u.name, userEmail: u.email })));
-  
+  // Stats
+  const totalCreditsInSystem = safeUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
+  const publishedReviewsCount = totalReviews; // Using totalReviews from props as an estimate for published reviews count if needed, or just total
+  const totalEarnings = earnings.totalEarnings;
+
   // Get all reviews that have podcasts
-  const podcastReviews = allReviews.filter(r => r.hasPodcast || r.podcastAudioPath);
+  const podcastReviews = safeReviews.filter(r => r.hasPodcast || r.podcastAudioPath);
   
-  const filteredUsers = safeUsers.filter(u => 
-    u.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    u.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const filteredReviews = allReviews.filter(r => 
-    r.songTitle?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    r.artistName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.userName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const filteredPodcasts = podcastReviews.filter(r =>
     r.songTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.artistName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.userName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Stats
-  const totalCreditsInSystem = safeUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
-  const publishedReviews = allReviews.filter(r => r.isPublished).length;
-  const totalEarnings = earnings.totalEarnings;
+  // Search handling
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'users' && fetchUsers) {
+        fetchUsers(0, usersLimit, searchTerm);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, activeTab]);
+
+  const handlePageChange = (tab: 'users' | 'reviews' | 'earnings', direction: 'next' | 'prev') => {
+    if (tab === 'users' && fetchUsers) {
+      const newOffset = direction === 'next' ? usersOffset + usersLimit : Math.max(0, usersOffset - usersLimit);
+      fetchUsers(newOffset, usersLimit, searchTerm);
+    } else if (tab === 'reviews' && fetchReviews) {
+      const newOffset = direction === 'next' ? reviewsOffset + reviewsLimit : Math.max(0, reviewsOffset - reviewsLimit);
+      fetchReviews(newOffset, reviewsLimit);
+    } else if (tab === 'earnings') {
+      const newOffset = direction === 'next' ? earnings.offset + earnings.limit : Math.max(0, earnings.offset - earnings.limit);
+      fetchEarnings(newOffset, earnings.limit);
+    }
+  };
 
   const handleEditUser = (user) => {
     setEditingUser({ 
@@ -257,11 +286,11 @@ const AdminDashboard = ({
     }
   };
 
-  const fetchEarnings = async () => {
+  const fetchEarnings = async (offset = 0, limit = 50) => {
     setLoadingEarnings(true);
     try {
       const headers = await getAuthHeaders();
-      const res = await fetch(`${API_URL}/api/admin/earnings`, {
+      const res = await fetch(`${API_URL}/api/admin/earnings?offset=${offset}&limit=${limit}`, {
         headers
       });
       if (res.ok) {
@@ -405,11 +434,11 @@ const AdminDashboard = ({
         <div className="flex flex-wrap items-center gap-3">
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Total Users</p>
-            <p className="text-2xl font-black text-white">{safeUsers.length}</p>
+            <p className="text-2xl font-black text-white">{totalUsers}</p>
           </div>
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Reviews</p>
-            <p className="text-2xl font-black text-white">{allReviews.length}</p>
+            <p className="text-2xl font-black text-white">{totalReviews}</p>
           </div>
           <div className="bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20">
             <p className="text-[10px] font-black uppercase text-amber-500">Credits Pool</p>
@@ -488,7 +517,7 @@ const AdminDashboard = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map(user => {
+                {safeUsers.map(user => {
                   return (
                     <tr key={user.id} className={`border-t border-slate-800 hover:bg-slate-900/50 ${user.is_disabled ? 'opacity-50' : ''}`}>
                       <td className="px-6 py-4">
@@ -513,7 +542,7 @@ const AdminDashboard = ({
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-slate-400">{user.history?.length || 0}</span>
+                        <span className="text-slate-400">{user.reviewCount || 0}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
@@ -589,6 +618,29 @@ const AdminDashboard = ({
                 })}
               </tbody>
             </table>
+          </div>
+          
+          {/* Pagination Controls */}
+          <div className="bg-slate-900 px-6 py-4 flex items-center justify-between border-t border-slate-800">
+            <p className="text-xs text-slate-500">
+              Showing <span className="font-bold text-white">{usersOffset + 1}</span> to <span className="font-bold text-white">{Math.min(usersOffset + usersLimit, totalUsers)}</span> of <span className="font-bold text-white">{totalUsers}</span> users
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handlePageChange('users', 'prev')}
+                disabled={usersOffset === 0}
+                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => handlePageChange('users', 'next')}
+                disabled={usersOffset + usersLimit >= totalUsers}
+                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -723,68 +775,93 @@ const AdminDashboard = ({
 
       {/* REVIEWS TAB */}
       {activeTab === 'reviews' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredReviews.length > 0 ? filteredReviews.map(review => (
-            <div key={review.id} className="glass rounded-2xl overflow-hidden border border-slate-800 hover:border-slate-700 transition-colors">
-              <div className="h-32 relative">
-                <img src={review.imageUrl} className="w-full h-full object-cover" alt={review.songTitle} />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
-                <div className="absolute top-2 right-2">
-                  <span className={`px-2 py-1 rounded text-[10px] font-bold ${review.isPublished ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
-                    {review.isPublished ? 'Published' : 'Draft'}
-                  </span>
-                </div>
-              </div>
-              <div className="p-4">
-                <h4 className="font-bold text-white">{review.songTitle}</h4>
-                <p className="text-xs text-slate-500 mb-2">{review.artistName}</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500 text-[10px] font-black">
-                    {review.userName?.charAt(0).toUpperCase() || '?'}
-                  </div>
-                  <span className="text-[10px] text-slate-400">{review.userName}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-emerald-500 font-black">{review.rating}/10</span>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => handleEditReview(review, review.userId)}
-                      className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-blue-400 hover:bg-slate-700 transition-colors"
-                      data-testid={`edit-review-btn-${review.id}`}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      onClick={() => handleTogglePublish(review, review.userId)}
-                      disabled={publishingReview === review.id}
-                      className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-1"
-                      data-testid={`toggle-publish-review-${review.id}`}
-                    >
-                      {publishingReview === review.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : null}
-                      {review.isPublished ? 'Unpublish' : 'Publish'}
-                    </button>
-                    <button 
-                      onClick={() => setConfirmDeleteReview(review.id)}
-                      disabled={deletingReview === review.id}
-                      className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 flex items-center gap-1"
-                      data-testid={`delete-review-btn-${review.id}`}
-                    >
-                      {deletingReview === review.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : null}
-                      Delete
-                    </button>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {safeReviews.length > 0 ? safeReviews.map(review => (
+              <div key={review.id} className="glass rounded-2xl overflow-hidden border border-slate-800 hover:border-slate-700 transition-colors">
+                <div className="h-32 relative">
+                  <img src={review.imageUrl} className="w-full h-full object-cover" alt={review.songTitle} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+                  <div className="absolute top-2 right-2">
+                    <span className={`px-2 py-1 rounded text-[10px] font-bold ${review.isPublished ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
+                      {review.isPublished ? 'Published' : 'Draft'}
+                    </span>
                   </div>
                 </div>
+                <div className="p-4">
+                  <h4 className="font-bold text-white">{review.songTitle}</h4>
+                  <p className="text-xs text-slate-500 mb-2">{review.artistName}</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 bg-emerald-500/20 rounded-full flex items-center justify-center text-emerald-500 text-[10px] font-black">
+                      {review.userName?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <span className="text-[10px] text-slate-400">{review.userName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-emerald-500 font-black">{review.rating}/10</span>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => handleEditReview(review, review.userId)}
+                        className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-blue-400 hover:bg-slate-700 transition-colors"
+                        data-testid={`edit-review-btn-${review.id}`}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleTogglePublish(review, review.userId)}
+                        disabled={publishingReview === review.id}
+                        className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        data-testid={`toggle-publish-review-${review.id}`}
+                      >
+                        {publishingReview === review.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : null}
+                        {review.isPublished ? 'Unpublish' : 'Publish'}
+                      </button>
+                      <button 
+                        onClick={() => setConfirmDeleteReview(review.id)}
+                        disabled={deletingReview === review.id}
+                        className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 flex items-center gap-1"
+                        data-testid={`delete-review-btn-${review.id}`}
+                      >
+                        {deletingReview === review.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : null}
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
+            )) : (
+              <div className="col-span-full text-center py-12">
+                <p className="text-slate-500">No reviews found</p>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="bg-slate-900 px-6 py-4 flex items-center justify-between border border-slate-800 rounded-2xl">
+            <p className="text-xs text-slate-500">
+              Showing <span className="font-bold text-white">{reviewsOffset + 1}</span> to <span className="font-bold text-white">{Math.min(reviewsOffset + reviewsLimit, totalReviews)}</span> of <span className="font-bold text-white">{totalReviews}</span> reviews
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handlePageChange('reviews', 'prev')}
+                disabled={reviewsOffset === 0}
+                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => handlePageChange('reviews', 'next')}
+                disabled={reviewsOffset + reviewsLimit >= totalReviews}
+                className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              >
+                Next
+              </button>
             </div>
-          )) : (
-            <div className="col-span-full text-center py-12">
-              <p className="text-slate-500">No reviews found</p>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -995,6 +1072,29 @@ const AdminDashboard = ({
                   )}
                 </tbody>
               </table>
+            </div>
+            
+            {/* Pagination Controls */}
+            <div className="bg-slate-900 px-6 py-4 flex items-center justify-between border-t border-slate-800">
+              <p className="text-xs text-slate-500">
+                Showing <span className="font-bold text-white">{earnings.offset + 1}</span> to <span className="font-bold text-white">{Math.min(earnings.offset + earnings.limit, earnings.totalCount)}</span> of <span className="font-bold text-white">{earnings.totalCount}</span> purchases
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange('earnings', 'prev')}
+                  disabled={earnings.offset === 0}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => handlePageChange('earnings', 'next')}
+                  disabled={earnings.offset + earnings.limit >= earnings.totalCount}
+                  className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
         </div>

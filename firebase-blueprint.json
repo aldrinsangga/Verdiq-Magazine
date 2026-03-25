@@ -136,6 +136,16 @@
         "tags": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["id", "title", "audioUrl", "playCount", "createdAt"]
+    },
+    "GlobalStats": {
+      "title": "Global Stats",
+      "description": "Aggregated statistics for the platform",
+      "type": "object",
+      "properties": {
+        "totalEarnings": { "type": "number" },
+        "totalUsers": { "type": "integer" },
+        "totalReviews": { "type": "integer" }
+      }
     }
   },
   "firestore": {
@@ -150,6 +160,10 @@
     "/purchases/{purchaseId}": {
       "schema": "Purchase",
       "description": "Global purchase records for earnings tracking"
+    },
+    "/stats/{statId}": {
+      "schema": "GlobalStats",
+      "description": "Global statistics and counters"
     },
     "/styleGuides/{guideId}": {
       "schema": "StyleGuide",

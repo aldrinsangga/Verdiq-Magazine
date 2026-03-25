@@ -57,19 +57,22 @@ const checkQuota = async () => {
       return { success: true };
     }
 
-    // Use credits/check as the preflight check
-    const res = await fetch(`${API_URL}/api/credits/check`, {
+    // Use ai/preflight as the preflight check
+    const res = await fetch(`${API_URL}/api/ai/preflight`, {
       method: 'POST',
       headers: {
         ...headers,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ action: 'review' })
+      }
     });
     
     if (res.status === 429) {
       const data = await res.json();
-      throw new Error(data.message + (data.instruction ? " " + data.instruction : ""));
+      const error = new Error(data.message || "AI Quota Exceeded");
+      (error as any).type = 'QUOTA';
+      (error as any).quotaType = data.type;
+      (error as any).instruction = data.instruction;
+      throw error;
     }
     
     if (!res.ok) {
