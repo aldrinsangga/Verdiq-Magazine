@@ -91,7 +91,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
 
       const taskInterval = setInterval(() => {
         setLoadingTaskIndex(prev => Math.min(prev + 1, loadingTasks.length - 1));
-      }, 30000);
+      }, 20000);
 
       return () => {
         clearInterval(interval);

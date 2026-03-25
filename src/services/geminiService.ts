@@ -119,9 +119,9 @@ async function generateWithRetryAndFallback(
           console.log(`[Gemini] Retrying model ${model} in ${Math.round(delay)}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         } else {
-          // If it's a 400 Bad Request or other non-retryable error, throw immediately
-          console.error(`[Gemini] Non-retryable error with model ${model}:`, errorMessage);
-          throw error;
+          // For 403 (Permission Denied) or 404 (Not Found), we should try the next model
+          console.warn(`[Gemini] Non-retryable error with model ${model}:`, errorMessage, `. Moving to next fallback if available.`);
+          break; // Break the while loop, go to the next model
         }
       }
     }
@@ -449,8 +449,8 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     try {
       const imgResponse = await generateWithRetryAndFallback(
         ai,
-        "gemini-3.1-flash-image-preview", // Primary model
-        ["gemini-2.5-flash-image"], // Fallback
+        "gemini-2.5-flash-image", // Primary model
+        [], // Fallback
         {
           contents: {
             parts: [
