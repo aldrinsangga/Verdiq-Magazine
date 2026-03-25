@@ -744,7 +744,21 @@ function AppContent() {
         }
       } catch (err) {
         console.error("Podcast generation failed", err);
-        podcastError = err.message || 'Podcast generation failed';
+        let pErr = '';
+        if (err instanceof Error) {
+          pErr = err.message;
+        } else if (typeof err === 'object' && err !== null) {
+          if ('error' in err && typeof (err as any).error === 'object' && (err as any).error !== null && 'message' in (err as any).error) {
+            pErr = String((err as any).error.message);
+          } else if ('message' in err) {
+            pErr = String((err as any).message);
+          } else {
+            pErr = JSON.stringify(err);
+          }
+        } else {
+          pErr = String(err);
+        }
+        podcastError = pErr || 'Podcast generation failed';
       }
 
       if (analysisCancelledRef.current) return;
@@ -833,13 +847,27 @@ function AppContent() {
       navigate('review', reviewForStorage.id);
     } catch (error) {
       console.error(error);
-      const errorMessage = error.message || '';
+      let errorMessage = '';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        if ('error' in error && typeof (error as any).error === 'object' && (error as any).error !== null && 'message' in (error as any).error) {
+          errorMessage = String((error as any).error.message);
+        } else if ('message' in error) {
+          errorMessage = String((error as any).message);
+        } else {
+          errorMessage = JSON.stringify(error);
+        }
+      } else {
+        errorMessage = String(error);
+      }
+
       if (errorMessage.includes('413')) {
         showNotification("The file or data is too large for the studio to process. Try using a smaller audio file or lower resolution images.", "error");
-      } else if (errorMessage.includes('quota')) {
+      } else if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
         showNotification("We've hit our daily processing limit. Please try again tomorrow.", "warning");
       } else {
-        showNotification(`Studio Error: ${error.message || 'Verify your file and try again.'}`, "error");
+        showNotification(`Studio Error: ${errorMessage || 'Verify your file and try again.'}`, "error");
       }
     } finally {
       setLoading(false);

@@ -111,7 +111,7 @@ const globalLimiter = rateLimit({
 
 const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // Limit AI generation to 10 per hour per IP
+  max: 50, // Limit AI generation to 50 per hour per IP
   standardHeaders: true,
   legacyHeaders: false,
   validate: { trustProxy: false },

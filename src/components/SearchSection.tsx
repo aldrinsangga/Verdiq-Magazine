@@ -28,6 +28,19 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
   const artistPhotoInputRef = useRef(null);
 
   const [progress, setProgress] = useState(0);
+  const [loadingTaskIndex, setLoadingTaskIndex] = useState(0);
+
+  const loadingTasks = [
+    "Scanning the track..",
+    "Analyzing spectral feature..",
+    "Writing editorial draft..",
+    "Treating cover art..",
+    "Writing podcast script..",
+    "Processing podcast..",
+    "Rendering the episode..",
+    "Saving to studio..",
+    "Finalizing.."
+  ];
 
   // Storage Image URLs
   const [editorialUrl, setEditorialUrl] = useState("https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1200");
@@ -66,6 +79,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
   useEffect(() => {
     if (isLoading) {
       setProgress(0);
+      setLoadingTaskIndex(0);
       const interval = setInterval(() => {
         setProgress(prev => {
           if (prev >= 99) return 99;
@@ -74,9 +88,18 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
           return Math.min(prev + increment, 99);
         });
       }, 150);
-      return () => clearInterval(interval);
+
+      const taskInterval = setInterval(() => {
+        setLoadingTaskIndex(prev => Math.min(prev + 1, loadingTasks.length - 1));
+      }, 30000);
+
+      return () => {
+        clearInterval(interval);
+        clearInterval(taskInterval);
+      };
     } else {
       setProgress(0);
+      setLoadingTaskIndex(0);
     }
   }, [isLoading]);
 
@@ -410,7 +433,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  <span className="text-slate-950 font-black uppercase tracking-widest">{status || 'Initializing Studio...'}</span>
+                  <span className="text-slate-950 font-black uppercase tracking-widest">{loadingTasks[loadingTaskIndex]}</span>
                 </span>
               ) : (
                 <span>Run Analysis</span>
@@ -467,33 +490,17 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                   <div className="flex justify-between items-end">
                     <div className="flex flex-col">
                       <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-1">Studio Status</span>
-                      <span className="text-sm font-black text-emerald-400 uppercase tracking-tight">{status || 'Initializing...'}</span>
+                      <span className="text-sm font-black text-emerald-400 uppercase tracking-tight">Processing...</span>
                     </div>
                     <span className="text-xl font-black text-emerald-500 font-mono">{Math.floor(progress)}%</span>
                   </div>
-                  <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700/50 p-0.5">
+                  <div className="h-4 w-full bg-slate-800 rounded-full overflow-hidden border border-slate-700/50 p-0.5">
                     <div 
                       className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out shadow-[0_0_15px_rgba(16,185,129,0.5)]"
                       style={{ width: `${progress}%` }}
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 italic mt-1">This may take up to 5 minutes. Please do not close this window.</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: 'Spectral Analysis', min: 0 },
-                    { label: 'Editorial Review', min: 25 },
-                    { label: 'Cover Art Treatment', min: 50 },
-                    { label: 'Podcast Session', min: 75 },
-                  ].map((task, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full transition-colors duration-500 ${progress > task.min ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-slate-800'}`} />
-                      <span className={`text-[9px] font-black uppercase tracking-tighter transition-colors duration-500 ${progress > task.min ? 'text-slate-300' : 'text-slate-600'}`}>
-                        {task.label}
-                      </span>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}

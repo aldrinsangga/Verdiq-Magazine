@@ -3,7 +3,6 @@ import React from 'react';
 const Waveform = () => {
   return (
     <div className="w-full h-24 flex items-center justify-center px-12 overflow-hidden relative group">
-      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 via-transparent to-emerald-500/5" />
       <div className="flex items-center gap-1 h-16 relative z-10">
         {[...Array(60)].map((_, i) => (
           <div 

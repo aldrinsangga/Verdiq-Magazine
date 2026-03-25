@@ -83,6 +83,53 @@ const checkQuota = async () => {
   }
 };
 
+async function generateWithRetryAndFallback(
+  ai: GoogleGenAI,
+  primaryModel: string,
+  fallbackModels: string[],
+  params: any,
+  maxRetries = 3
+) {
+  const modelsToTry = [primaryModel, ...fallbackModels];
+  let lastError: any = null;
+  
+  for (const model of modelsToTry) {
+    let retries = 0;
+    while (retries < maxRetries) {
+      try {
+        console.log(`[Gemini] Attempting generation with model: ${model} (Attempt ${retries + 1}/${maxRetries})`);
+        return await ai.models.generateContent({
+          ...params,
+          model: model
+        });
+      } catch (error: any) {
+        lastError = error;
+        const errorMessage = error?.message || String(error);
+        const isQuotaOrRateLimit = errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED');
+        const isServerError = errorMessage.includes('500') || errorMessage.includes('503') || errorMessage.includes('502');
+        
+        if (isQuotaOrRateLimit || isServerError) {
+          retries++;
+          if (retries >= maxRetries) {
+            console.warn(`[Gemini] Model ${model} failed after ${maxRetries} retries. Moving to next fallback if available.`);
+            break; // Break the while loop, go to the next model in the for loop
+          }
+          // Exponential backoff: 1s, 2s, 4s...
+          const delay = Math.pow(2, retries - 1) * 1000 + Math.random() * 1000;
+          console.log(`[Gemini] Retrying model ${model} in ${Math.round(delay)}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          // If it's a 400 Bad Request or other non-retryable error, throw immediately
+          console.error(`[Gemini] Non-retryable error with model ${model}:`, errorMessage);
+          throw error;
+        }
+      }
+    }
+  }
+  console.error("[Gemini] All models and retries failed.");
+  throw lastError || new Error("All models and retries failed due to quota or server errors.");
+}
+
 // Review schema for structured output
 const REVIEW_SCHEMA = {
   type: Type.OBJECT,
@@ -367,25 +414,29 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     Output must be valid JSON matching the schema.
   `;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
-    contents: {
-      parts: [
-        { text: prompt },
-        {
-          inlineData: {
-            data: audioBase64,
-            mimeType: audioMimeType
+  const response = await generateWithRetryAndFallback(
+    ai,
+    "gemini-3.1-pro-preview", // Primary model
+    ["gemini-3-flash-preview", "gemini-flash-latest"], // Fallbacks
+    {
+      contents: {
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              data: audioBase64,
+              mimeType: audioMimeType
+            }
           }
-        }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: REVIEW_SCHEMA as any,
-      tools: [{ googleSearch: {} }]
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: REVIEW_SCHEMA as any,
+        tools: [{ googleSearch: {} }]
+      }
     }
-  });
+  );
 
   const review = JSON.parse(response.text || "{}");
   
@@ -396,20 +447,24 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
   let artistPhotoUrl = null;
   if (artistPhotoBase64 && artistPhotoMimeType) {
     try {
-      const imgResponse = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                data: artistPhotoBase64,
-                mimeType: artistPhotoMimeType
-              }
-            },
-            { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
-          ]
+      const imgResponse = await generateWithRetryAndFallback(
+        ai,
+        "gemini-3.1-flash-image-preview", // Primary model
+        ["gemini-2.5-flash-image"], // Fallback
+        {
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  data: artistPhotoBase64,
+                  mimeType: artistPhotoMimeType
+                }
+              },
+              { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
+            ]
+          }
         }
-      });
+      );
       
       for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
@@ -529,28 +584,36 @@ export const generatePodcast = async (review: any, originalAudioBase64?: string)
     Format: Wolf: [Dialogue], Sloane: [Dialogue].
   `;
 
-  const scriptResponse = await ai.models.generateContent({
-    model: "gemini-flash-latest",
-    contents: scriptPrompt
-  });
+  const scriptResponse = await generateWithRetryAndFallback(
+    ai,
+    "gemini-3.1-pro-preview", // Primary model
+    ["gemini-3-flash-preview", "gemini-flash-latest"], // Fallbacks
+    {
+      contents: scriptPrompt
+    }
+  );
 
   const script = scriptResponse.text || "";
 
-  const audioResponse = await ai.models.generateContent({
-    model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: script }] }],
-    config: {
-      responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        multiSpeakerVoiceConfig: {
-          speakerVoiceConfigs: [
-            { speaker: "Wolf", voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } } },
-            { speaker: "Sloane", voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
-          ]
+  const audioResponse = await generateWithRetryAndFallback(
+    ai,
+    "gemini-2.5-flash-preview-tts", // Primary model
+    [], // No fallback for TTS currently
+    {
+      contents: [{ parts: [{ text: script }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          multiSpeakerVoiceConfig: {
+            speakerVoiceConfigs: [
+              { speaker: "Wolf", voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } } },
+              { speaker: "Sloane", voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
+            ]
+          }
         }
       }
     }
-  });
+  );
 
   const pcmData = audioResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   if (!pcmData) throw new Error("No audio generated");
