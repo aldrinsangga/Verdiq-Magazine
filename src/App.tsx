@@ -1132,13 +1132,10 @@ function AppContent() {
           history: prev.history.filter(r => r.id !== reviewId)
         }));
       }
-      // Refresh users list for admin
-      if (isAdmin(currentUser)) {
-        const usersRes = await fetch(`${API_URL}/api/users`, { headers });
-        if (usersRes.ok) {
-          const usersList = await usersRes.json();
-          setUsers(usersList);
-        }
+      // Refresh admin data if in admin view
+      if (isAdmin(currentUser) && view === 'admin') {
+        fetchAdminUsers(adminUsers.offset, adminUsers.limit);
+        fetchAdminReviews(adminReviews.offset, adminReviews.limit);
       }
     } else {
       const error = await res.json().catch(() => ({ detail: 'Failed to delete review' }));

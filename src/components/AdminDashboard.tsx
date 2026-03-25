@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Reply } from 'lucide-react';
+import { Loader2, Reply, BarChart3, Activity, Users, CreditCard, FileText, Settings, Search, Trash2, Edit2, Plus, Check, X, Shield, ShieldAlert, Ban, Unlock, Download, ExternalLink, Filter, Calendar } from 'lucide-react';
 import { getAuthHeaders } from '../authClient';
 import { useNotification } from './NotificationContext';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar, 
+  Legend,
+  AreaChart,
+  Area
+} from 'recharts';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -95,14 +109,69 @@ const AdminDashboard = ({
   const [confirmDeleteTicket, setConfirmDeleteTicket] = useState(null);
   const [confirmDeleteStyleGuide, setConfirmDeleteStyleGuide] = useState(null);
 
+  const [adminStats, setAdminStats] = useState({
+    totalUsers: 0,
+    totalReviews: 0,
+    publishedReviews: 0,
+    totalEarnings: 0,
+    totalCredits: 0
+  });
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [usageData, setUsageData] = useState([]);
+  const [loadingUsage, setLoadingUsage] = useState(false);
+  const [usageDays, setUsageDays] = useState(7);
+
+  const fetchUsageData = async (days = 7) => {
+    setLoadingUsage(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/usage?days=${days}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setUsageData(data);
+      }
+    } catch (error) {
+      console.error('Error fetching usage data:', error);
+    } finally {
+      setLoadingUsage(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    setLoadingStats(true);
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_URL}/api/admin/stats`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminStats(data);
+      }
+    } catch (error) {
+      console.error('Error fetching admin stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+    fetchUsageData(usageDays);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'usage') {
+      fetchUsageData(usageDays);
+    }
+  }, [activeTab, usageDays]);
+
   // Defensive check for users
   const safeUsers = Array.isArray(users) ? users : [];
   const safeReviews = Array.isArray(reviews) ? reviews : [];
 
   // Stats
-  const totalCreditsInSystem = safeUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
-  const publishedReviewsCount = totalReviews; // Using totalReviews from props as an estimate for published reviews count if needed, or just total
-  const totalEarnings = earnings.totalEarnings;
+  const totalCreditsInSystem = adminStats.totalCredits || safeUsers.reduce((sum, u) => sum + (u.credits || 0), 0);
+  const publishedReviewsCount = adminStats.publishedReviews || totalReviews;
+  const totalEarnings = adminStats.totalEarnings || earnings.totalEarnings;
 
   // Get all reviews that have podcasts
   const podcastReviews = safeReviews.filter(r => r.hasPodcast || r.podcastAudioPath);
@@ -456,6 +525,7 @@ const AdminDashboard = ({
         {[
           { id: 'users', label: 'Users', icon: '👥' },
           { id: 'reviews', label: 'Reviews', icon: '📝' },
+          { id: 'usage', label: 'Usage', icon: '📊' },
           { id: 'podcasts', label: 'Podcasts', icon: '🎙️' },
           { id: 'earnings', label: 'Earnings', icon: '💰' },
           { id: 'style', label: 'Style Guides', icon: '🎨' },
@@ -482,6 +552,217 @@ const AdminDashboard = ({
           </button>
         )}
       </div>
+
+      {/* USAGE TAB */}
+      {activeTab === 'usage' && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-white">Usage Monitoring</h2>
+              <p className="text-slate-500">Track system activity and resource consumption</p>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900 rounded-xl border border-slate-800 p-1 shadow-sm">
+              {[7, 14, 30].map(days => (
+                <button
+                  key={days}
+                  onClick={() => setUsageDays(days)}
+                  className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                    usageDays === days 
+                      ? 'bg-emerald-500 text-slate-950 shadow-sm' 
+                      : 'text-slate-500 hover:bg-slate-800'
+                  }`}
+                >
+                  {days}d
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {loadingUsage ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* AI Generations Chart */}
+              <div className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                    <Activity className="text-emerald-500" size={18} />
+                    AI Generations
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Daily Total</span>
+                </div>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={usageData}>
+                      <defs>
+                        <linearGradient id="colorAi" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} 
+                        dy={10}
+                        tickFormatter={(str) => {
+                          const date = new Date(str);
+                          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        }}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: '1px solid #1e293b', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }}
+                        itemStyle={{ color: '#10b981', fontWeight: 900, fontSize: '12px' }}
+                        labelStyle={{ color: '#fff', fontWeight: 900, marginBottom: '4px' }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="aiGenerations" 
+                        stroke="#10b981" 
+                        strokeWidth={4}
+                        fillOpacity={1} 
+                        fill="url(#colorAi)" 
+                        name="Generations"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Credit Consumption Chart */}
+              <div className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                    <CreditCard className="text-blue-500" size={18} />
+                    Credit Consumption
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Daily Burn</span>
+                </div>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={usageData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} 
+                        dy={10}
+                        tickFormatter={(str) => {
+                          const date = new Date(str);
+                          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        }}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: '1px solid #1e293b', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }}
+                        itemStyle={{ color: '#3b82f6', fontWeight: 900, fontSize: '12px' }}
+                        labelStyle={{ color: '#fff', fontWeight: 900, marginBottom: '4px' }}
+                      />
+                      <Bar 
+                        dataKey="creditsConsumed" 
+                        fill="#3b82f6" 
+                        radius={[8, 8, 0, 0]} 
+                        name="Credits"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Active Users Chart */}
+              <div className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                    <Users className="text-purple-500" size={18} />
+                    Active Users
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Daily DAU</span>
+                </div>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={usageData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} 
+                        dy={10}
+                        tickFormatter={(str) => {
+                          const date = new Date(str);
+                          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        }}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: '1px solid #1e293b', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }}
+                        itemStyle={{ color: '#a855f7', fontWeight: 900, fontSize: '12px' }}
+                        labelStyle={{ color: '#fff', fontWeight: 900, marginBottom: '4px' }}
+                      />
+                      <Line 
+                        type="stepAfter" 
+                        dataKey="activeUsers" 
+                        stroke="#a855f7" 
+                        strokeWidth={4}
+                        dot={{ r: 6, fill: '#a855f7', strokeWidth: 3, stroke: '#0f172a' }}
+                        activeDot={{ r: 8, strokeWidth: 0 }}
+                        name="Users"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* New Content Chart */}
+              <div className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-sm backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                    <FileText className="text-orange-500" size={18} />
+                    New Reviews
+                  </h3>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Daily Velocity</span>
+                </div>
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={usageData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                      <XAxis 
+                        dataKey="date" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} 
+                        dy={10}
+                        tickFormatter={(str) => {
+                          const date = new Date(str);
+                          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                        }}
+                      />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b', fontWeight: 900}} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '16px', border: '1px solid #1e293b', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }}
+                        itemStyle={{ color: '#f97316', fontWeight: 900, fontSize: '12px' }}
+                        labelStyle={{ color: '#fff', fontWeight: 900, marginBottom: '4px' }}
+                      />
+                      <Bar 
+                        dataKey="newReviews" 
+                        fill="#f97316" 
+                        radius={[8, 8, 0, 0]} 
+                        name="Reviews"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search */}
       {activeTab !== 'user-detail' && (

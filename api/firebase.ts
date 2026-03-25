@@ -2,7 +2,7 @@ import { initializeApp as initializeAdminApp, getApps as getAdminApps, getApp as
 import admin from 'firebase-admin';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
-import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore, FieldValue as AdminFieldValue, AggregateField } from 'firebase-admin/firestore';
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { getStorage, ref, uploadString, getDownloadURL } from 'firebase/storage';
@@ -282,6 +282,16 @@ export const db: any = {
             console.warn(`[Firebase] Admin SDK count() failed, falling back to full get()...`);
             const snapshot = await q.get();
             return snapshot.size;
+          }
+        },
+        sum: async (field: string) => {
+          try {
+            const snapshot = await q.aggregate({ total: AggregateField.sum(field) }).get();
+            return snapshot.data().total;
+          } catch (e: any) {
+            console.warn(`[Firebase] Admin SDK sum() failed for ${field}, falling back to full get()...`);
+            const snapshot = await q.get();
+            return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
           }
         },
         get: async () => {
