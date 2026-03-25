@@ -685,6 +685,18 @@ app.put("/api/users/:id", async (req, res) => {
 
 app.delete("/api/users/:id", isAdmin, async (req, res) => {
   const { id } = req.params;
+  
+  // Delete all reviews associated with this user
+  const reviewsSnapshot = await db.collection('reviews').where('userId', '==', id).get();
+  if (!reviewsSnapshot.empty) {
+    const batch = db.batch();
+    reviewsSnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+  }
+  
+  // Delete the user document
   await db.collection('users').doc(id).delete();
   res.json({ success: true });
 });
@@ -1289,7 +1301,12 @@ app.post("/api/reviews",
       
       // Save review to separate collection
       const reviewId = review.id || Math.random().toString(36).substring(2, 11);
-      const reviewToSave: any = { ...review, id: reviewId, userId };
+      const reviewToSave: any = { 
+        ...review, 
+        id: reviewId, 
+        userId,
+        isPublished: false // Always save as draft initially
+      };
 
       // Check if user is a "free user who never purchased credits"
       const purchases = user?.purchases || [];
@@ -1389,7 +1406,16 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     // Determine credit cost
     let cost = 0;
     const isNowPublishing = review.isPublished && !currentReviewData?.isPublished;
-    const isEditing = !isNowPublishing; // If not publishing now, it's an edit
+    
+    // Check if content actually changed to avoid charging for unpublish/delete
+    const isContentChanged = 
+      review.reviewBody !== currentReviewData?.reviewBody ||
+      review.artistName !== currentReviewData?.artistName ||
+      review.trackTitle !== currentReviewData?.trackTitle ||
+      review.rating !== currentReviewData?.rating ||
+      JSON.stringify(review.tags || []) !== JSON.stringify(currentReviewData?.tags || []);
+      
+    const isEditing = !isNowPublishing && isContentChanged;
 
     if (!isAdminUser) {
       if (isNowPublishing) {
@@ -1414,8 +1440,8 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     
     // If publishing, remove temporary status
     if (reviewToUpdate.isPublished) {
-      delete reviewToUpdate.isTemporary;
-      delete reviewToUpdate.expiresAt;
+      reviewToUpdate.isTemporary = FieldValue.delete();
+      reviewToUpdate.expiresAt = FieldValue.delete();
     }
     
     // Handle large audio data - upload to storage
@@ -1510,10 +1536,11 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
 app.delete("/api/reviews/:id", requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = (req as any).user?.uid;
+    const authUser = (req as any).user;
+    const userId = authUser?.uid;
     const userDoc = await db.collection('users').doc(userId).get();
     const user = userDoc.data();
-    const isAdminUser = isAdminEmail(user?.email) || user?.role === 'admin';
+    const isAdminUser = isAdminEmail(user?.email) || user?.role === 'admin' || isAdminEmail(authUser?.email);
 
     const reviewDoc = await db.collection('reviews').doc(id).get();
     if (!reviewDoc.exists) {

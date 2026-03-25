@@ -710,13 +710,13 @@ function AppContent() {
 
       if (analysisCancelledRef.current) return;
 
-      setStatus("Writing editorial draft...");
+      setStatus("Writing editorial draft & synthesizing voices...");
       
       // Get auth headers for API calls
       const authHeaders = await getAuthHeadersLocal();
       
-      // Call the analyze service directly on frontend
-      const review = await analyzeTrack({
+      // Call the analyze service and podcast generation directly on frontend in parallel
+      const reviewPromise = analyzeTrack({
         trackName: data.trackName,
         artistName: data.artistName,
         audioBase64: audioBase64,
@@ -730,19 +730,11 @@ function AppContent() {
         preset: data.stylePreset || 'dark'
       });
 
-      if (analysisCancelledRef.current) return;
-      
-      // Generate podcast audio directly on frontend
-      let podcastAudio = null;
-      let podcastError = null;
-      try {
-        setStatus("Synthesizing session voices...");
-        const podcastData = await generatePodcast(review, audioBase64 as string);
-        podcastAudio = podcastData.audio;
-        if (!podcastAudio) {
-          podcastError = 'Podcast audio was empty';
-        }
-      } catch (err) {
+      const podcastPromise = generatePodcast(
+        data.trackName, 
+        data.artistName, 
+        audioBase64 as string
+      ).catch(err => {
         console.error("Podcast generation failed", err);
         let pErr = '';
         if (err instanceof Error) {
@@ -758,10 +750,24 @@ function AppContent() {
         } else {
           pErr = String(err);
         }
-        podcastError = pErr || 'Podcast generation failed';
-      }
+        return { error: pErr || 'Podcast generation failed' };
+      });
+
+      const [review, podcastResult] = await Promise.all([reviewPromise, podcastPromise]);
 
       if (analysisCancelledRef.current) return;
+      
+      let podcastAudio = null;
+      let podcastError = null;
+      
+      if (podcastResult && 'error' in podcastResult) {
+        podcastError = podcastResult.error;
+      } else if (podcastResult && 'audio' in podcastResult) {
+        podcastAudio = podcastResult.audio;
+        if (!podcastAudio) {
+          podcastError = 'Podcast audio was empty';
+        }
+      }
 
       // If podcast generation failed, show error and ask user to retry
       if (!podcastAudio || podcastError) {
@@ -816,6 +822,7 @@ function AppContent() {
       // Note: songAudio is intentionally omitted here as per user request to delete it
       const fullReview = { 
         ...reviewForStorage, 
+        ...(refreshedReview || {}),
         podcastAudio, 
         podcastAudioUrl: refreshedReview?.podcastAudioUrl || refreshedReview?.podcastAudio,
       };
@@ -906,6 +913,8 @@ function AppContent() {
       }
 
       const updatedReview = { ...review, isPublished: true };
+      delete updatedReview.isTemporary;
+      delete updatedReview.expiresAt;
       
       const headers = await getAuthHeadersLocal();
       const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
@@ -1065,16 +1074,14 @@ function AppContent() {
       showNotification("Cannot terminate active session.", "warning");
       return;
     }
-    if (window.confirm("Permanently terminate this artist account? All studio history will be lost.")) {
-      const headers = await getAuthHeadersLocal();
-      const res = await fetch(`${API_URL}/api/users/${userId}`, { 
-        method: 'DELETE',
-        headers 
-      });
-      if (res.ok) {
-        setUsers(prev => prev.filter(u => u.id !== userId));
-        setAllReviews(prev => prev.filter(r => r.userId !== userId));
-      }
+    const headers = await getAuthHeadersLocal();
+    const res = await fetch(`${API_URL}/api/users/${userId}`, { 
+      method: 'DELETE',
+      headers 
+    });
+    if (res.ok) {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      setAllReviews(prev => prev.filter(r => r.userId !== userId));
     }
   };
 

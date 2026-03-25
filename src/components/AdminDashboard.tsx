@@ -72,6 +72,10 @@ const AdminDashboard = ({
   const [deletingReview, setDeletingReview] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
   const [togglingStatus, setTogglingStatus] = useState(null);
+  const [confirmDeleteReview, setConfirmDeleteReview] = useState(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState(null);
+  const [confirmDeleteTicket, setConfirmDeleteTicket] = useState(null);
+  const [confirmDeleteStyleGuide, setConfirmDeleteStyleGuide] = useState(null);
 
   // Defensive check for users
   const safeUsers = Array.isArray(users) ? users : [];
@@ -216,7 +220,7 @@ const AdminDashboard = ({
   };
 
   const handleDeleteTicket = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this ticket?')) return;
+    setConfirmDeleteTicket(null);
     try {
       const headers = await getAuthHeaders();
       const res = await fetch(`${API_URL}/api/admin/support/${id}`, {
@@ -287,9 +291,7 @@ const AdminDashboard = ({
   };
 
   const handleDeleteReview = async (reviewId) => {
-    if (!window.confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
-      return;
-    }
+    setConfirmDeleteReview(null);
     setDeletingReview(reviewId);
     try {
       await onDeleteReview(reviewId);
@@ -319,9 +321,7 @@ const AdminDashboard = ({
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
+    setConfirmDeleteUser(null);
     setDeletingUser(userId);
     try {
       await onDeleteUser(userId);
@@ -382,7 +382,7 @@ const AdminDashboard = ({
   };
 
   const handleDeleteStyleGuide = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this style guide?')) return;
+    setConfirmDeleteStyleGuide(null);
     setDeletingStyle(id);
     try {
       await onDeleteStyleGuide(id);
@@ -568,7 +568,7 @@ const AdminDashboard = ({
                             )}
                           </button>
                           <button 
-                            onClick={() => handleDeleteUser(user.id)} 
+                            onClick={() => setConfirmDeleteUser(user.id)} 
                             disabled={deletingUser === user.id}
                             className="p-2 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
                             title="Delete User"
@@ -766,7 +766,7 @@ const AdminDashboard = ({
                       {review.isPublished ? 'Unpublish' : 'Publish'}
                     </button>
                     <button 
-                      onClick={() => handleDeleteReview(review.id)}
+                      onClick={() => setConfirmDeleteReview(review.id)}
                       disabled={deletingReview === review.id}
                       className="text-xs px-3 py-1 rounded-lg bg-slate-800 text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 flex items-center gap-1"
                       data-testid={`delete-review-btn-${review.id}`}
@@ -1034,7 +1034,7 @@ const AdminDashboard = ({
                       </svg>
                     </button>
                     <button 
-                      onClick={() => handleDeleteStyleGuide(guide.id)} 
+                      onClick={() => setConfirmDeleteStyleGuide(guide.id)} 
                       disabled={deletingStyle === guide.id}
                       className="text-slate-500 hover:text-red-500 transition-colors disabled:opacity-50"
                     >
@@ -1185,7 +1185,7 @@ const AdminDashboard = ({
                         )}
                         {ticket.status === 'deleted' && (
                           <button 
-                            onClick={() => handleDeleteTicket(ticket.id)}
+                            onClick={() => setConfirmDeleteTicket(ticket.id)}
                             className="px-3 py-1.5 rounded-xl bg-red-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-600 transition-all"
                           >
                             Perm Delete
@@ -1568,6 +1568,102 @@ const AdminDashboard = ({
                 ) : (
                   'Save Changes'
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE REVIEW MODAL */}
+      {confirmDeleteReview && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setConfirmDeleteReview(null)}>
+          <div className="bg-slate-900 p-8 rounded-3xl max-w-md w-full border border-slate-800" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4 text-red-500">Delete Review</h3>
+            <p className="text-slate-300 mb-8">Are you sure you want to delete this review? This action cannot be undone.</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setConfirmDeleteReview(null)} 
+                className="flex-1 bg-slate-800 py-3 rounded-xl font-bold hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleDeleteReview(confirmDeleteReview)} 
+                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE USER MODAL */}
+      {confirmDeleteUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setConfirmDeleteUser(null)}>
+          <div className="bg-slate-900 p-8 rounded-3xl max-w-md w-full border border-slate-800" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4 text-red-500">Delete User</h3>
+            <p className="text-slate-300 mb-8">Are you sure you want to delete this user? This action cannot be undone and will delete all their reviews.</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setConfirmDeleteUser(null)} 
+                className="flex-1 bg-slate-800 py-3 rounded-xl font-bold hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleDeleteUser(confirmDeleteUser)} 
+                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE TICKET MODAL */}
+      {confirmDeleteTicket && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setConfirmDeleteTicket(null)}>
+          <div className="bg-slate-900 p-8 rounded-3xl max-w-md w-full border border-slate-800" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4 text-red-500">Delete Ticket</h3>
+            <p className="text-slate-300 mb-8">Are you sure you want to delete this ticket? This action cannot be undone.</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setConfirmDeleteTicket(null)} 
+                className="flex-1 bg-slate-800 py-3 rounded-xl font-bold hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleDeleteTicket(confirmDeleteTicket)} 
+                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE STYLE GUIDE MODAL */}
+      {confirmDeleteStyleGuide && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setConfirmDeleteStyleGuide(null)}>
+          <div className="bg-slate-900 p-8 rounded-3xl max-w-md w-full border border-slate-800" onClick={e => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4 text-red-500">Delete Style Guide</h3>
+            <p className="text-slate-300 mb-8">Are you sure you want to delete this style guide? This action cannot be undone.</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setConfirmDeleteStyleGuide(null)} 
+                className="flex-1 bg-slate-800 py-3 rounded-xl font-bold hover:bg-slate-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => handleDeleteStyleGuide(confirmDeleteStyleGuide)} 
+                className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold hover:bg-red-600 transition-colors"
+              >
+                Delete
               </button>
             </div>
           </div>

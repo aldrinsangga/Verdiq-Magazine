@@ -196,14 +196,6 @@ const ReviewDisplay = ({
       await html2pdf().from(printRef.current).set(opt).save();
     } catch (error) {
       console.error('PDF Download Error:', error);
-      if (confirm('PDF generation failed. Use browser print instead?')) {
-        try {
-          window.print();
-        } catch (e) {
-          console.error('Print failed:', e);
-          alert('Browser print is not available in this environment.');
-        }
-      }
     } finally {
       setIsDownloadingPDF(false);
     }
@@ -255,7 +247,7 @@ const ReviewDisplay = ({
 
   return (
     <div className="relative w-full overflow-x-hidden" data-testid="review-display">
-      {review.isTemporary && (
+      {review.isTemporary && !review.isPublished && (
         <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-3 px-4 md:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">

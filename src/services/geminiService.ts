@@ -414,7 +414,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     Output must be valid JSON matching the schema.
   `;
 
-  const response = await generateWithRetryAndFallback(
+  const reviewPromise = generateWithRetryAndFallback(
     ai,
     "gemini-3.1-pro-preview", // Primary model
     ["gemini-3-flash-preview", "gemini-flash-latest"], // Fallbacks
@@ -438,46 +438,45 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
     }
   );
 
+  let artistPhotoPromise = Promise.resolve(null);
+  if (artistPhotoBase64 && artistPhotoMimeType) {
+    artistPhotoPromise = generateWithRetryAndFallback(
+      ai,
+      "gemini-2.5-flash-image", // Primary model
+      [], // Fallback
+      {
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                data: artistPhotoBase64,
+                mimeType: artistPhotoMimeType
+              }
+            },
+            { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
+          ]
+        }
+      }
+    ).then(imgResponse => {
+      for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+      return null;
+    }).catch(e => {
+      console.error("Artist photo transformation failed", e);
+      // Fallback to original artist photo if AI fails
+      return `data:${artistPhotoMimeType};base64,${artistPhotoBase64}`;
+    });
+  }
+
+  const [response, artistPhotoUrl] = await Promise.all([reviewPromise, artistPhotoPromise]);
+
   const review = JSON.parse(response.text || "{}");
   
   // Cover Art (at top of review) - use original if provided
   let imageUrl = imageBase64 ? `data:${imageMimeType};base64,${imageBase64}` : `https://picsum.photos/seed/${artistName}-${trackName}/800/800`;
-  
-  // Artist Photo transformation (optional) - targets the artist photo
-  let artistPhotoUrl = null;
-  if (artistPhotoBase64 && artistPhotoMimeType) {
-    try {
-      const imgResponse = await generateWithRetryAndFallback(
-        ai,
-        "gemini-2.5-flash-image", // Primary model
-        [], // Fallback
-        {
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  data: artistPhotoBase64,
-                  mimeType: artistPhotoMimeType
-                }
-              },
-              { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
-            ]
-          }
-        }
-      );
-      
-      for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          artistPhotoUrl = `data:image/png;base64,${part.inlineData.data}`;
-          break;
-        }
-      }
-    } catch (e) {
-      console.error("Artist photo transformation failed", e);
-      // Fallback to original artist photo if AI fails
-      artistPhotoUrl = `data:${artistPhotoMimeType};base64,${artistPhotoBase64}`;
-    }
-  }
 
   return { 
     ...review, 
@@ -571,7 +570,7 @@ const encodeWAV = (buffer: AudioBuffer): string => {
   return btoa(binary);
 };
 
-export const generatePodcast = async (review: any, originalAudioBase64?: string) => {
+export const generatePodcast = async (trackName: string, artistName: string, originalAudioBase64?: string) => {
   // Check Quota
   await checkQuota();
   
@@ -579,7 +578,7 @@ export const generatePodcast = async (review: any, originalAudioBase64?: string)
   
   const scriptPrompt = `
     Create a RAW, conversational, high-energy dialogue script for a music podcast session.
-    Track: "${review.songTitle}" by ${review.artistName}.
+    Track: "${trackName}" by ${artistName}.
     Characters: Wolf (energetic male) and Sloane (analytical female).
     Format: Wolf: [Dialogue], Sloane: [Dialogue].
   `;
