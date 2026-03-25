@@ -162,6 +162,7 @@ export interface UserAccount {
   password?: string; 
   role: 'admin' | 'user';
   mfaEnabled?: boolean;
+  isSubscribed?: boolean;
 }
 
 export interface SupportMessage {

@@ -296,26 +296,28 @@ const getFullUser = async (userId: string) => {
       
       for (const doc of reviewsSnapshot.docs) {
         const review = doc.data() as Review;
+        
+        // Check for expired temporary reviews
         if (review.isTemporary && review.expiresAt) {
           const expiresAt = new Date(review.expiresAt);
-          if (now > expiresAt) {
+          if (now > expiresAt && !review.isPublished) {
+            console.log(`[getFullUser] Deleting expired temporary review: ${doc.id}`);
             expiredReviewIds.push(doc.id);
-            continue;
+            continue; // Skip adding to valid reviews
           }
         }
+        
         validReviews.push(review);
+      }
+      
+      // Delete expired reviews in background
+      if (expiredReviewIds.length > 0) {
+        Promise.all(expiredReviewIds.map(id => db.collection('reviews').doc(id).delete()))
+          .catch(err => console.error("[getFullUser] Error deleting expired reviews:", err));
       }
       
       // Sort in memory
       validReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
-      // Delete expired reviews in background
-      if (expiredReviewIds.length > 0) {
-        console.log(`[getFullUser] Deleting ${expiredReviewIds.length} expired reviews for user ${userId}`);
-        const batch = db.batch();
-        expiredReviewIds.forEach(id => batch.delete(db.collection('reviews').doc(id)));
-        batch.commit().catch(e => console.error(`[getFullUser] Failed to delete expired reviews:`, e));
-      }
       
       history = validReviews;
 
@@ -1307,19 +1309,15 @@ app.post("/api/reviews",
         userId,
         isPublished: false // Always save as draft initially
       };
-
-      // Check if user is a "free user who never purchased credits"
-      const purchases = user?.purchases || [];
-      const hasPurchased = purchases.length > 0;
       
-      if (!hasPurchased && user?.role !== 'admin') {
+      // Set temporary status for free users (not subscribed)
+      if (!user.isSubscribed) {
         reviewToSave.isTemporary = true;
-        const expirationTime = new Date();
-        expirationTime.setHours(expirationTime.getHours() + 24);
-        reviewToSave.expiresAt = expirationTime.toISOString();
-        console.log(`[Review] Setting temporary status for free user ${userId}. Expires at: ${reviewToSave.expiresAt}`);
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+        reviewToSave.expiresAt = expiresAt.toISOString();
       }
-      
+
       // Handle large audio data - upload to storage
       if (review.podcastAudio && review.podcastAudio.length > 1000) {
         const url = await uploadToStorage(review.podcastAudio, `podcasts/${reviewId}.wav`, 'audio/wav');
@@ -1513,16 +1511,6 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
     const doc = await db.collection('reviews').doc(id).get();
     if (doc.exists) {
       const review = doc.data() as Review;
-      
-      // Check if temporary review is expired
-      if (review.isTemporary && review.expiresAt) {
-        const expiresAt = new Date(review.expiresAt);
-        if (new Date() > expiresAt) {
-          console.log(`[PublicReview] Review ${id} is expired. Deleting...`);
-          await db.collection('reviews').doc(id).delete();
-          return res.status(404).json({ message: "Review has expired" });
-        }
-      }
       
       res.json(review);
     } else {

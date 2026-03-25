@@ -913,8 +913,6 @@ function AppContent() {
       }
 
       const updatedReview = { ...review, isPublished: true };
-      delete updatedReview.isTemporary;
-      delete updatedReview.expiresAt;
       
       const headers = await getAuthHeadersLocal();
       const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
@@ -975,12 +973,6 @@ function AppContent() {
     if (!currentUser) return;
 
     try {
-      // Check credits before editing
-      const canProceed = await checkCreditsForAction('edit');
-      if (!canProceed) {
-        return; // Modal will be shown automatically
-      }
-
       const headers = await getAuthHeadersLocal();
       const res = await fetch(`${API_URL}/api/reviews/${updatedReview.id}`, {
         method: 'PUT',
@@ -1020,6 +1012,13 @@ function AppContent() {
       } else {
         const errorData = await res.json().catch(() => ({}));
         if (res.status === 402) {
+          setCreditModalConfig({
+            action: 'edit',
+            required: errorData.required || 3,
+            reason: 'insufficient_credits',
+            message: errorData.message || 'Editing a review requires 3 credits.',
+            isFreeUser: !currentUser?.isSubscribed
+          });
           setShowCreditModal(true);
         } else {
           showNotification(`Failed to save changes: ${errorData.message || 'Server error'}`, 'error');

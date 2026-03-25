@@ -239,6 +239,7 @@ const ReviewDisplay = ({
   const podcastSource = getPodcastSource();
   const hasPodcastData = !!podcastSource;
   const shouldShowPodcastSection = hasPodcastData || review.hasPodcast;
+  const showTemporaryBanner = review.isTemporary && !isSubscribed && !review.isPublished;
   const paragraphs = useMemo(() => {
     return review.reviewBody 
       ? review.reviewBody.replace(/\\n/g, '\n').split(/\n+/).filter((p: string) => p.trim()) 
@@ -247,23 +248,10 @@ const ReviewDisplay = ({
 
   return (
     <div className="relative w-full overflow-x-hidden" data-testid="review-display">
-      {review.isTemporary && !review.isPublished && (
-        <div className="bg-emerald-500/10 border-b border-emerald-500/20 py-3 px-4 md:px-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-              <Clock className="w-4 h-4 text-emerald-500" />
-            </div>
-            <p className="text-sm text-slate-300">
-              <span className="text-emerald-500 font-bold uppercase tracking-wider text-[10px] mr-2">Temporary Review</span>
-              This review was generated using free credits and will expire in 24 hours. 
-              <button 
-                onClick={() => onUpgrade?.()}
-                className="ml-2 text-emerald-400 hover:text-emerald-300 underline font-medium"
-              >
-                Purchase credits to make it permanent.
-              </button>
-            </p>
-          </div>
+      {showTemporaryBanner && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 py-2 px-4 flex items-center justify-center gap-2 text-amber-500 text-xs font-medium">
+          <Clock size={14} />
+          <span>This is a temporary review. It will expire in 24 hours unless published to the magazine.</span>
         </div>
       )}
       <ReviewModals 
