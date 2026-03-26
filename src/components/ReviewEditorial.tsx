@@ -109,7 +109,7 @@ const ReviewEditorial: React.FC<ReviewEditorialProps> = ({
                             <svg className="w-3 h-3 text-slate-950" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                           </div>
                           <h3 className="text-sm font-black uppercase tracking-widest text-emerald-500">
-                            The Verdiq Session
+                            The Verdiq Sessions
                           </h3>
                         </div>
                         {hasPodcastData ? (

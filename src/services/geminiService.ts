@@ -10,10 +10,24 @@ const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEN
 let runtimeApiKey: string | null = null;
 
 const getAI = async () => {
-  if (runtimeApiKey) return new GoogleGenAI({ apiKey: runtimeApiKey });
-
-  // 1. Try build-time injected key
-  let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  // 1. Prioritize user-selected API key (usually the paid one)
+  // In AI Studio Build, the selected key is injected into process.env.API_KEY
+  let apiKey = (typeof process !== 'undefined' ? process.env.API_KEY : null) || 
+               (import.meta.env.VITE_API_KEY) || 
+               (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : null);
+  
+  // Check for selected API key from AI Studio dialog
+  if (typeof window !== 'undefined' && (window as any).aistudio?.hasSelectedApiKey) {
+    try {
+      const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+      if (hasKey) {
+        // The platform automatically injects the selected key into process.env.API_KEY
+        apiKey = (typeof process !== 'undefined' ? process.env.API_KEY : apiKey) || apiKey;
+      }
+    } catch (e) {
+      console.warn("[Auth] Failed to check for selected API key", e);
+    }
+  }
   
   // 2. If missing, try to fetch from server (runtime environment)
   if (!apiKey) {
@@ -30,8 +44,6 @@ const getAI = async () => {
 
   if (!apiKey) {
     console.error("GEMINI_API_KEY is not defined in the environment.");
-  } else {
-    runtimeApiKey = apiKey;
   }
   
   return new GoogleGenAI({ apiKey: apiKey || "" });
@@ -597,6 +609,8 @@ const encodeWAV = (buffer: AudioBuffer): string => {
   return btoa(binary);
 };
 
+import { getPodcastJingle, saveJingleToCache } from './jingleService';
+
 export const generatePodcast = async (trackName: string, artistName: string, originalAudioBase64?: string) => {
   // Check Quota
   await checkQuota();
@@ -608,6 +622,14 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
     Track: "${trackName}" by ${artistName}.
     Characters: Wolf (energetic male) and Sloane (analytical female).
     Format: Wolf: [Dialogue], Sloane: [Dialogue].
+    
+    MANDATORY START: The podcast MUST always start with Wolf saying: "Welcome back to the session. Today we're checking out ${trackName} by ${artistName}."
+    
+    Forbid AI Words: forbid ai from using overused "AI-isms" like sonic, landscape, journey, intricate, tapestry, testament, unfold, vibrant, seamless, meticulous, elevate, dynamic, captivating, immersive, nuanced, and evocative.
+    Forbidden AI Phrases: block common AI sentence structures such as "They're not just X, they're Y" or "It's more than just a track."
+    
+    IMPORTANT: Do NOT include any intro or outro music descriptions or host introductions like "Welcome to the Verdiq Sessions" (this is handled by the jingle). 
+    After Wolf's mandatory opening line, proceed directly with the conversational analysis.
   `;
 
   const scriptResponse = await generateWithRetryAndFallback(
@@ -644,117 +666,136 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
   const pcmData = audioResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
   if (!pcmData) throw new Error("No audio generated");
 
-  // If original audio is provided, mix it as background music
-  if (originalAudioBase64) {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Convert raw PCM from Gemini (24kHz, 16-bit) to Float32 for AudioBuffer
-      const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
-      const floatData = new Float32Array(pcmBuffer.length / 2);
-      const dataView = new DataView(pcmBuffer.buffer);
-      for (let i = 0; i < floatData.length; i++) {
-        floatData[i] = dataView.getInt16(i * 2, true) / 32768;
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    
+    // 1. Get Jingle
+    const jingleBuffer = await getPodcastJingle(audioContext);
+    saveJingleToCache(jingleBuffer); // Ensure it's cached
+
+    // 2. Prepare Podcast Voice Buffer
+    const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
+    const floatData = new Float32Array(pcmBuffer.length / 2);
+    const dataView = new DataView(pcmBuffer.buffer);
+    for (let i = 0; i < floatData.length; i++) {
+      floatData[i] = dataView.getInt16(i * 2, true) / 32768;
+    }
+    const podcastVoiceBuffer = audioContext.createBuffer(1, floatData.length, 24000);
+    podcastVoiceBuffer.getChannelData(0).set(floatData);
+
+    // 3. Prepare Background Music (if provided)
+    let songBuffer: AudioBuffer | null = null;
+    if (originalAudioBase64) {
+      try {
+        songBuffer = await decodeAudio(originalAudioBase64, audioContext);
+      } catch (e) {
+        console.error("Failed to decode song buffer", e);
       }
-      
-      const podcastBuffer = audioContext.createBuffer(1, floatData.length, 24000);
-      podcastBuffer.getChannelData(0).set(floatData);
-      
-      // Decode original audio
-      const songBuffer = await decodeAudio(originalAudioBase64, audioContext);
-      
-      // Mix using OfflineAudioContext
-      const offlineCtx = new OfflineAudioContext(1, podcastBuffer.length, podcastBuffer.sampleRate);
-      
-      const podcastSource = offlineCtx.createBufferSource();
-      podcastSource.buffer = podcastBuffer;
-      podcastSource.connect(offlineCtx.destination);
-      
+    }
+
+    // 4. Calculate Total Duration
+    // Jingle (Intro) + Podcast + Jingle (Outro)
+    // We'll add a small gap (0.5s) between jingle and podcast
+    const gap = 0.5;
+    const introDuration = jingleBuffer.duration;
+    const podcastDuration = podcastVoiceBuffer.duration;
+    const outroDuration = jingleBuffer.duration;
+    const totalDuration = introDuration + gap + podcastDuration + gap + outroDuration;
+
+    // 5. Mix using OfflineAudioContext
+    const offlineCtx = new OfflineAudioContext(1, totalDuration * audioContext.sampleRate, audioContext.sampleRate);
+
+    // Intro Jingle
+    const introSource = offlineCtx.createBufferSource();
+    introSource.buffer = jingleBuffer;
+    introSource.connect(offlineCtx.destination);
+    introSource.start(0);
+
+    // Podcast Voice
+    const voiceSource = offlineCtx.createBufferSource();
+    voiceSource.buffer = podcastVoiceBuffer;
+    voiceSource.connect(offlineCtx.destination);
+    voiceSource.start(introDuration + gap);
+
+    // Outro Jingle
+    const outroSource = offlineCtx.createBufferSource();
+    outroSource.buffer = jingleBuffer;
+    outroSource.connect(offlineCtx.destination);
+    outroSource.start(introDuration + gap + podcastDuration + gap);
+
+    // Background Music (only during the podcast part, maybe fading in/out)
+    if (songBuffer) {
       const songSource = offlineCtx.createBufferSource();
       songSource.buffer = songBuffer;
+      songSource.loop = true;
       
-      const gainNode = offlineCtx.createGain();
-      gainNode.gain.value = 0.12; // Subtle background music
+      const songGain = offlineCtx.createGain();
+      songGain.gain.setValueAtTime(0, 0);
+      // Fade in background music when podcast starts
+      songGain.gain.linearRampToValueAtTime(0.12, introDuration + gap + 1);
+      // Fade out background music when podcast ends
+      songGain.gain.linearRampToValueAtTime(0.12, introDuration + gap + podcastDuration - 1);
+      songGain.gain.linearRampToValueAtTime(0, introDuration + gap + podcastDuration);
       
-      songSource.connect(gainNode);
-      gainNode.connect(offlineCtx.destination);
-      
-      podcastSource.start(0);
-      songSource.start(0);
-      songSource.loop = true; // Loop the song clip if it's shorter than the podcast
-      
-      const renderedBuffer = await offlineCtx.startRendering();
-      const mixedAudioBase64 = encodeWAV(renderedBuffer);
-      
-      return { audio: mixedAudioBase64, script };
-    } catch (err) {
-      console.error("Audio mixing failed, falling back to raw TTS", err);
+      songSource.connect(songGain);
+      songGain.connect(offlineCtx.destination);
+      songSource.start(introDuration + gap);
+      songSource.stop(introDuration + gap + podcastDuration);
     }
-  }
 
-  // Fallback to standard WAV encoding if mixing fails or no original audio
-  const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
-  const sampleRate = 24000;
+    const renderedBuffer = await offlineCtx.startRendering();
+    const finalAudioBase64 = encodeWAV(renderedBuffer);
+    
+    return { audio: finalAudioBase64, script };
+  } catch (err) {
+    console.error("Audio processing failed, falling back to raw TTS", err);
+    // Fallback logic (similar to original)
+    const pcmBuffer = Uint8Array.from(atob(pcmData), c => c.charCodeAt(0));
+    const finalAudioBase64 = encodeWAVFromPCM(pcmBuffer, 24000);
+    return { audio: finalAudioBase64, script };
+  }
+};
+
+// Helper for fallback
+const encodeWAVFromPCM = (pcmBuffer: Uint8Array, sampleRate: number): string => {
   const numChannels = 1;
   const bitsPerSample = 16;
-  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-  const blockAlign = numChannels * bitsPerSample / 8;
   const dataSize = pcmBuffer.length;
-  
   const wavHeader = new ArrayBuffer(44);
   const view = new DataView(wavHeader);
-  
-  // RIFF identifier
   view.setUint8(0, 'R'.charCodeAt(0));
   view.setUint8(1, 'I'.charCodeAt(0));
   view.setUint8(2, 'F'.charCodeAt(0));
   view.setUint8(3, 'F'.charCodeAt(0));
-  // file length
   view.setUint32(4, 36 + dataSize, true);
-  // WAVE identifier
   view.setUint8(8, 'W'.charCodeAt(0));
   view.setUint8(9, 'A'.charCodeAt(0));
   view.setUint8(10, 'V'.charCodeAt(0));
   view.setUint8(11, 'E'.charCodeAt(0));
-  // fmt chunk identifier
   view.setUint8(12, 'f'.charCodeAt(0));
   view.setUint8(13, 'm'.charCodeAt(0));
   view.setUint8(14, 't'.charCodeAt(0));
   view.setUint8(15, ' '.charCodeAt(0));
-  // format chunk length
   view.setUint32(16, 16, true);
-  // sample format (raw)
   view.setUint16(20, 1, true);
-  // channel count
   view.setUint16(22, numChannels, true);
-  // sample rate
   view.setUint32(24, sampleRate, true);
-  // byte rate (sample rate * block align)
-  view.setUint32(28, byteRate, true);
-  // block align (channel count * bytes per sample)
-  view.setUint16(32, blockAlign, true);
-  // bits per sample
+  view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+  view.setUint16(32, numChannels * bitsPerSample / 8, true);
   view.setUint16(34, bitsPerSample, true);
-  // data chunk identifier
   view.setUint8(36, 'd'.charCodeAt(0));
   view.setUint8(37, 'a'.charCodeAt(0));
   view.setUint8(38, 't'.charCodeAt(0));
   view.setUint8(39, 'a'.charCodeAt(0));
-  // data chunk length
   view.setUint32(40, dataSize, true);
-  
   const wavBuffer = new Uint8Array(44 + dataSize);
   wavBuffer.set(new Uint8Array(wavHeader), 0);
   wavBuffer.set(pcmBuffer, 44);
-  
-  // Convert to base64 safely
   let binary = '';
   const CHUNK_SIZE = 0x8000;
   for (let i = 0; i < wavBuffer.length; i += CHUNK_SIZE) {
     const chunk = wavBuffer.subarray(i, i + CHUNK_SIZE);
     binary += String.fromCharCode.apply(null, chunk as any);
   }
-  const audioBase64 = btoa(binary);
-
-  return { audio: audioBase64, script };
+  return btoa(binary);
 };

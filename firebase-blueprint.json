@@ -137,6 +137,19 @@
       },
       "required": ["id", "title", "audioUrl", "playCount", "createdAt"]
     },
+    "AppAsset": {
+      "title": "App Asset",
+      "description": "Global application assets like jingles or logos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "data": { "type": "string", "description": "Base64 encoded data" },
+        "mimeType": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "data", "mimeType", "updatedAt"]
+    },
     "GlobalStats": {
       "title": "Global Stats",
       "description": "Aggregated statistics for the platform",
@@ -176,6 +189,10 @@
     "/podcasts/{episodeId}": {
       "schema": "PodcastEpisode",
       "description": "Podcast episodes"
+    },
+    "/assets/{assetId}": {
+      "schema": "AppAsset",
+      "description": "Global application assets"
     },
     "/support_tickets/{ticketId}": {
       "schema": "SupportTicket",

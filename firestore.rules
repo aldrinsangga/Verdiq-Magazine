@@ -95,6 +95,12 @@ service cloud.firestore {
       allow write: if isAdmin() || isServer();
     }
     
+    // Assets Collection
+    match /assets/{assetId} {
+      allow read: if true; // Publicly readable
+      allow write: if isAuthenticated(); // Allow authenticated users to save global assets (like the jingle)
+    }
+    
     // Health Check
     match /health_check/{docId} {
       allow read, write: if isAuthenticated();
