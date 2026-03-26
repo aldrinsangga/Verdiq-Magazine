@@ -165,7 +165,7 @@ async function startServer() {
 
     app.get("*", (req, res) => {
       // Don't serve index.html for missing images, assets, or source files
-      if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff2?|ttf|otf)$/)) {
+      if (req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff2?|ttf|otf|ts|tsx|map)$/)) {
         console.warn(`[Static] Asset not found: ${req.path}`);
         return res.status(404).send("Not found");
       }

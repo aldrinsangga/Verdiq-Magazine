@@ -118,6 +118,7 @@ const AdminDashboard = ({
   });
   const [loadingStats, setLoadingStats] = useState(false);
   const [usageData, setUsageData] = useState([]);
+  const [topUsers, setTopUsers] = useState<any[]>([]);
   const [loadingUsage, setLoadingUsage] = useState(false);
   const [usageDays, setUsageDays] = useState(7);
 
@@ -128,7 +129,8 @@ const AdminDashboard = ({
       const res = await fetch(`${API_URL}/api/admin/usage?days=${days}`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setUsageData(data);
+        setUsageData(data.chartData || []);
+        setTopUsers(data.topUsers || []);
       }
     } catch (error) {
       console.error('Error fetching usage data:', error);
@@ -758,6 +760,48 @@ const AdminDashboard = ({
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Top Token Users */}
+          {!loadingUsage && topUsers.length > 0 && (
+            <div className="mt-8 bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-sm backdrop-blur-sm">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
+                  <Activity className="text-emerald-500" size={18} />
+                  Top AI Token Consumers
+                </h3>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Highest Usage</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800">
+                      <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">User</th>
+                      <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500">Email</th>
+                      <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Total Tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topUsers.map((user, idx) => (
+                      <tr key={user.id} className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 font-bold text-xs">
+                              {idx + 1}
+                            </div>
+                            <span className="font-bold text-white">{user.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-slate-400 text-sm">{user.email}</td>
+                        <td className="py-4 px-4 text-right font-mono text-emerald-400 font-bold">
+                          {user.totalTokens.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

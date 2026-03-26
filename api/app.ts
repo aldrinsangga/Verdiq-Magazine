@@ -138,9 +138,7 @@ const sanitizeUser = (user: any): Omit<UserAccount, 'password'> => {
 const isAdminEmail = (email: string | undefined) => {
   if (!email) return false;
   const lowerEmail = email.toLowerCase();
-  return lowerEmail === 'verdiqmag@gmail.com' || 
-         lowerEmail === 'admin@verdiq.ai' || 
-         lowerEmail === 'verdiqmag@verdiq.ai';
+  return lowerEmail === 'verdiqmag@gmail.com';
 };
 
 // Helper to verify Firebase ID token and get user info
@@ -809,29 +807,66 @@ app.get("/api/admin/usage", isAdmin, async (req, res, next) => {
   try {
     const days = parseInt(req.query.days as string) || 7;
     const now = new Date();
-    const usageData: any[] = [];
-
-    // In a real app, we would have a 'daily_stats' collection
-    // For this implementation, we'll aggregate from recent user usage and transactions
-    // or return simulated historical data if the collection doesn't exist yet
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - days);
     
+    // 1. Fetch top 3 users by AI token usage (optimized: 1 query, 3 reads)
+    const topUsersSnapshot = await db.collection('users')
+      .orderBy('totalTokens', 'desc')
+      .limit(3)
+      .get();
+      
+    const topUsers = topUsersSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || data.email || 'Unknown',
+        email: data.email,
+        totalTokens: data.totalTokens || 0
+      };
+    });
+
+    // 2. Fetch recent reviews to calculate daily stats (optimized: 1 query)
+    const recentReviewsSnapshot = await db.collection('reviews')
+      .where('createdAt', '>=', startDate.toISOString())
+      .get();
+      
+    const dailyStats: Record<string, { aiGenerations: number, creditsConsumed: number, activeUsers: Set<string>, newReviews: number }> = {};
+    
+    // Initialize all days with 0
     for (let i = 0; i < days; i++) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
-      
-      // We'll simulate some data based on current system totals to make it look realistic
-      // but in a production app, this would be a single query to a 'daily_stats' collection
-      usageData.push({
-        date: dateStr,
-        aiGenerations: Math.floor(Math.random() * 100) + 20,
-        creditsConsumed: Math.floor(Math.random() * 500) + 100,
-        activeUsers: Math.floor(Math.random() * 50) + 10,
-        newReviews: Math.floor(Math.random() * 15) + 5
-      });
+      dailyStats[dateStr] = { aiGenerations: 0, creditsConsumed: 0, activeUsers: new Set(), newReviews: 0 };
     }
+    
+    recentReviewsSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      if (!data.createdAt) return;
+      const dateStr = data.createdAt.split('T')[0];
+      if (dailyStats[dateStr]) {
+        dailyStats[dateStr].newReviews += 1;
+        dailyStats[dateStr].aiGenerations += 1; // 1 review = 1 generation
+        dailyStats[dateStr].creditsConsumed += data.isPublished ? 5 : 0; // Estimate 5 credits for published
+        if (data.userId) {
+          dailyStats[dateStr].activeUsers.add(data.userId);
+        }
+      }
+    });
 
-    res.json(usageData.reverse());
+    const usageData = Object.keys(dailyStats).sort().map(dateStr => ({
+      date: dateStr,
+      aiGenerations: dailyStats[dateStr].aiGenerations,
+      creditsConsumed: dailyStats[dateStr].creditsConsumed,
+      activeUsers: dailyStats[dateStr].activeUsers.size,
+      newReviews: dailyStats[dateStr].newReviews
+    }));
+
+    res.json({
+      chartData: usageData,
+      topUsers
+    });
   } catch (error) {
     next(error);
   }
@@ -1248,6 +1283,28 @@ app.post("/api/credits/deduct", async (req, res, next) => {
 // AI Pre-flight check
 app.post("/api/ai/preflight", requireAuth, checkUsageQuota, (req, res) => {
   res.json({ success: true, message: "Quota check passed" });
+});
+
+// AI Usage Reporting
+app.post("/api/ai/report-usage", requireAuth, async (req, res, next) => {
+  try {
+    const userId = (req as any).user.uid;
+    const { tokens } = req.body;
+    
+    if (!userId || typeof tokens !== 'number') {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+    
+    // Use increment to avoid reading the document
+    await db.collection('users').doc(userId).update({
+      totalTokens: FieldValue.increment(tokens)
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[AI Usage] Error reporting usage:", error);
+    next(error);
+  }
 });
 
 // MFA Endpoints (Real implementation using otplib)

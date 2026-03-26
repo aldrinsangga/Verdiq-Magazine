@@ -314,9 +314,7 @@ export const isAdmin = (user: any) => {
   if (!user) return false;
   
   const adminEmails = [
-    'verdiqmag@gmail.com',
-    'admin@verdiq.ai',
-    'verdiqmag@verdiq.ai'
+    'verdiqmag@gmail.com'
   ];
   
   const email = (user.email || auth.currentUser?.email || '').toLowerCase();

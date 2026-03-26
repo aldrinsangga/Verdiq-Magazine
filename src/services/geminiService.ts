@@ -86,6 +86,22 @@ const checkQuota = async () => {
   }
 };
 
+async function reportUsage(tokens: number) {
+  try {
+    const headers = await getAuthHeaders();
+    await fetch(`${API_URL}/api/ai/report-usage`, {
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ tokens })
+    });
+  } catch (e) {
+    console.error("[Usage] Failed to report token usage:", e);
+  }
+}
+
 async function generateWithRetryAndFallback(
   ai: GoogleGenAI,
   primaryModel: string,
@@ -101,10 +117,18 @@ async function generateWithRetryAndFallback(
     while (retries < maxRetries) {
       try {
         console.log(`[Gemini] Attempting generation with model: ${model} (Attempt ${retries + 1}/${maxRetries})`);
-        return await ai.models.generateContent({
+        const response = await ai.models.generateContent({
           ...params,
           model: model
         });
+        
+        // Report token usage
+        const tokens = response.usageMetadata?.totalTokenCount;
+        if (tokens) {
+          reportUsage(tokens);
+        }
+        
+        return response;
       } catch (error: any) {
         lastError = error;
         const errorMessage = error?.message || String(error);

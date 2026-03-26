@@ -207,6 +207,14 @@ const createClientDbWrapper = (dbInstance: any) => ({
       where: (field: string, op: any, value: any) => builder(query(q, where(field, op, value))),
       orderBy: (field: string, direction: 'asc' | 'desc' = 'asc') => builder(query(q, orderBy(field, direction))),
       limit: (n: number) => builder(query(q, limit(n))),
+      count: async () => {
+        const snapshot = await getDocs(q);
+        return snapshot.size;
+      },
+      sum: async (field: string) => {
+        const snapshot = await getDocs(q);
+        return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+      },
       get: async () => {
         const snapshot = await getDocs(q);
         return {
@@ -241,6 +249,14 @@ const createClientDbWrapper = (dbInstance: any) => ({
           size: snapshot.size,
           docs: snapshot.docs.map((d: any) => ({ id: d.id, data: () => d.data() }))
         };
+      },
+      count: async () => {
+        const snapshot = await getDocs(colRef);
+        return snapshot.size;
+      },
+      sum: async (field: string) => {
+        const snapshot = await getDocs(colRef);
+        return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
       },
       where: (field: string, op: any, value: any) => builder(query(colRef, where(field, op, value))),
       orderBy: (field: string, direction: 'asc' | 'desc' = 'asc') => builder(query(colRef, orderBy(field, direction))),
@@ -279,9 +295,42 @@ export const db: any = {
             const snapshot = await q.count().get();
             return snapshot.data().count;
           } catch (e: any) {
+            if (isPermissionError(e)) {
+              console.warn(`[Firebase] Admin SDK Permission Denied for ${path} count, falling back to Client SDK...`);
+              // Reconstruct query on client wrapper
+              let clientQ: any = clientDbWrapper.collection(path);
+              for (const p of queryParams) {
+                if (p.type === 'where') clientQ = clientQ.where(p.field, p.op, p.value);
+                if (p.type === 'orderBy') clientQ = clientQ.orderBy(p.field, p.direction);
+                if (p.type === 'limit') clientQ = clientQ.limit(p.value);
+              }
+              // Client SDK doesn't have count(), so we get all and use size
+              try {
+                const snapshot = await clientQ.get();
+                return snapshot.size;
+              } catch (clientErr: any) {
+                console.error(`[Firebase] Client SDK fallback for count() also failed:`, clientErr.message);
+                throw clientErr;
+              }
+            }
             console.warn(`[Firebase] Admin SDK count() failed, falling back to full get()...`);
-            const snapshot = await q.get();
-            return snapshot.size;
+            try {
+              const snapshot = await q.get();
+              return snapshot.size;
+            } catch (getErr: any) {
+              if (isPermissionError(getErr)) {
+                console.warn(`[Firebase] Admin SDK Permission Denied for ${path} fallback get, falling back to Client SDK...`);
+                let clientQ: any = clientDbWrapper.collection(path);
+                for (const p of queryParams) {
+                  if (p.type === 'where') clientQ = clientQ.where(p.field, p.op, p.value);
+                  if (p.type === 'orderBy') clientQ = clientQ.orderBy(p.field, p.direction);
+                  if (p.type === 'limit') clientQ = clientQ.limit(p.value);
+                }
+                const snapshot = await clientQ.get();
+                return snapshot.size;
+              }
+              throw getErr;
+            }
           }
         },
         sum: async (field: string) => {
@@ -289,9 +338,42 @@ export const db: any = {
             const snapshot = await q.aggregate({ total: AggregateField.sum(field) }).get();
             return snapshot.data().total;
           } catch (e: any) {
+            if (isPermissionError(e)) {
+              console.warn(`[Firebase] Admin SDK Permission Denied for ${path} sum, falling back to Client SDK...`);
+              // Reconstruct query on client wrapper
+              let clientQ: any = clientDbWrapper.collection(path);
+              for (const p of queryParams) {
+                if (p.type === 'where') clientQ = clientQ.where(p.field, p.op, p.value);
+                if (p.type === 'orderBy') clientQ = clientQ.orderBy(p.field, p.direction);
+                if (p.type === 'limit') clientQ = clientQ.limit(p.value);
+              }
+              // Client SDK doesn't have sum(), so we get all and reduce
+              try {
+                const snapshot = await clientQ.get();
+                return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+              } catch (clientErr: any) {
+                console.error(`[Firebase] Client SDK fallback for sum() also failed:`, clientErr.message);
+                throw clientErr;
+              }
+            }
             console.warn(`[Firebase] Admin SDK sum() failed for ${field}, falling back to full get()...`);
-            const snapshot = await q.get();
-            return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+            try {
+              const snapshot = await q.get();
+              return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+            } catch (getErr: any) {
+              if (isPermissionError(getErr)) {
+                console.warn(`[Firebase] Admin SDK Permission Denied for ${path} fallback get (sum), falling back to Client SDK...`);
+                let clientQ: any = clientDbWrapper.collection(path);
+                for (const p of queryParams) {
+                  if (p.type === 'where') clientQ = clientQ.where(p.field, p.op, p.value);
+                  if (p.type === 'orderBy') clientQ = clientQ.orderBy(p.field, p.direction);
+                  if (p.type === 'limit') clientQ = clientQ.limit(p.value);
+                }
+                const snapshot = await clientQ.get();
+                return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+              }
+              throw getErr;
+            }
           }
         },
         get: async () => {
@@ -378,7 +460,65 @@ export const db: any = {
         orderBy: (field: string, direction: 'asc' | 'desc' = 'asc') => 
           adminBuilder(adminCol.orderBy(field, direction), [{ type: 'orderBy', field, direction }]),
         limit: (n: number) => 
-          adminBuilder(adminCol.limit(n), [{ type: 'limit', value: n }])
+          adminBuilder(adminCol.limit(n), [{ type: 'limit', value: n }]),
+        offset: (n: number) => 
+          adminBuilder(adminCol.offset(n), [{ type: 'offset', value: n }]),
+        count: async () => {
+          try {
+            const snapshot = await adminCol.count().get();
+            return snapshot.data().count;
+          } catch (e: any) {
+            if (isPermissionError(e)) {
+              console.warn(`[Firebase] Admin SDK Permission Denied for ${path} count, falling back to Client SDK...`);
+              try {
+                const snapshot = await clientDbWrapper.collection(path).get();
+                return snapshot.size;
+              } catch (clientErr: any) {
+                console.error(`[Firebase] Client SDK fallback for count() also failed:`, clientErr.message);
+                throw clientErr;
+              }
+            }
+            console.warn(`[Firebase] Admin SDK count() failed, falling back to full get()...`);
+            try {
+              const snapshot = await adminCol.get();
+              return snapshot.size;
+            } catch (getErr: any) {
+              if (isPermissionError(getErr)) {
+                const snapshot = await clientDbWrapper.collection(path).get();
+                return snapshot.size;
+              }
+              throw getErr;
+            }
+          }
+        },
+        sum: async (field: string) => {
+          try {
+            const snapshot = await adminCol.aggregate({ total: AggregateField.sum(field) }).get();
+            return snapshot.data().total;
+          } catch (e: any) {
+            if (isPermissionError(e)) {
+              console.warn(`[Firebase] Admin SDK Permission Denied for ${path} sum, falling back to Client SDK...`);
+              try {
+                const snapshot = await clientDbWrapper.collection(path).get();
+                return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+              } catch (clientErr: any) {
+                console.error(`[Firebase] Client SDK fallback for sum() also failed:`, clientErr.message);
+                throw clientErr;
+              }
+            }
+            console.warn(`[Firebase] Admin SDK sum() failed for ${field}, falling back to full get()...`);
+            try {
+              const snapshot = await adminCol.get();
+              return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+            } catch (getErr: any) {
+              if (isPermissionError(getErr)) {
+                const snapshot = await clientDbWrapper.collection(path).get();
+                return snapshot.docs.reduce((sum: number, doc: any) => sum + (doc.data()[field] || 0), 0);
+              }
+              throw getErr;
+            }
+          }
+        }
       };
     }
     
@@ -396,17 +536,18 @@ const signInServer = async () => {
     const serverUsers = [
       { email: "server-internal-v2@verdiq.ai", pass: "server-internal-password-2026" },
       { email: "server-internal@verdiq.ai", pass: "server-internal-password-2026" },
-      { email: "admin@verdiq.ai", pass: "admin-password-2026" },
       { email: "verdiqmag@gmail.com", pass: "admin-password-2026" } // Fallback
     ];
 
     for (const user of serverUsers) {
       try {
+        console.log(`[Firebase] Attempting server sign-in for ${user.email}...`);
         await signInWithEmailAndPassword(auth, user.email, user.pass);
         console.log(`[Firebase] Server session established for ${user.email}`);
         return;
       } catch (e: any) {
-        if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
+        console.warn(`[Firebase] Sign-in failed for ${user.email}: ${e.code || e.message}`);
+        if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential' || e.code === 'auth/invalid-login-credentials') {
           // If adminAuth is available, we could try to create the user
           if (adminAuth) {
             try {
@@ -424,7 +565,6 @@ const signInServer = async () => {
             }
           }
         }
-        console.warn(`[Firebase] Failed to sign in as ${user.email}: ${e.message}`);
       }
     }
     
