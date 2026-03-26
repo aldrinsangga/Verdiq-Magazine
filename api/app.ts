@@ -876,10 +876,35 @@ app.get("/api/admin/usage", isAdmin, async (req, res, next) => {
 app.get("/api/admin/stats", isAdmin, async (req, res, next) => {
   try {
     // Use Firestore aggregation queries for efficiency (much cheaper than fetching all docs)
-    const usersCount = await db.collection('users').count();
-    const reviewsCount = await db.collection('reviews').count();
-    const publishedReviewsCount = await db.collection('reviews').where('isPublished', '==', true).count();
-    const totalCredits = await db.collection('users').sum('credits');
+    let usersCount = 0;
+    let reviewsCount = 0;
+    let publishedReviewsCount = 0;
+    let totalCredits = 0;
+    let debugInfo: any = {};
+
+    try {
+      usersCount = await db.collection('users').count();
+    } catch (e: any) {
+      debugInfo.usersCountError = e.message;
+    }
+
+    try {
+      reviewsCount = await db.collection('reviews').count();
+    } catch (e: any) {
+      debugInfo.reviewsCountError = e.message;
+    }
+
+    try {
+      publishedReviewsCount = await db.collection('reviews').where('isPublished', '==', true).count();
+    } catch (e: any) {
+      debugInfo.publishedReviewsCountError = e.message;
+    }
+
+    try {
+      totalCredits = await db.collection('users').sum('credits');
+    } catch (e: any) {
+      debugInfo.totalCreditsError = e.message;
+    }
     
     const statsDoc = await db.collection('stats').doc('global').get();
     const stats = statsDoc.data() || {};
@@ -889,7 +914,8 @@ app.get("/api/admin/stats", isAdmin, async (req, res, next) => {
       totalReviews: reviewsCount,
       publishedReviews: publishedReviewsCount,
       totalEarnings: stats.totalEarnings || 0,
-      totalCredits: totalCredits
+      totalCredits: totalCredits,
+      debugInfo
     });
   } catch (error) {
     next(error);

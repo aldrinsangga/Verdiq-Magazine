@@ -96,8 +96,8 @@ function AppContent() {
   const [currentAudioFile, setCurrentAudioFile] = useState(null);
   
   const [users, setUsers] = useState([]);
-  const [adminUsers, setAdminUsers] = useState({ users: [], total: 0, limit: 20, offset: 0 });
-  const [adminReviews, setAdminReviews] = useState({ reviews: [], total: 0, limit: 20, offset: 0 });
+  const [adminUsers, setAdminUsers] = useState({ users: [], totalCount: 0, limit: 20, offset: 0 });
+  const [adminReviews, setAdminReviews] = useState({ reviews: [], totalCount: 0, limit: 20, offset: 0 });
   const [currentUser, setCurrentUser] = useState(null);
   const [allReviews, setAllReviews] = useState([]);
   const [styleGuides, setStyleGuides] = useState([]);

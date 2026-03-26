@@ -505,11 +505,11 @@ const AdminDashboard = ({
         <div className="flex flex-wrap items-center gap-3">
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Total Users</p>
-            <p className="text-2xl font-black text-white">{totalUsers}</p>
+            <p className="text-2xl font-black text-white">{adminStats.totalUsers || totalUsers}</p>
           </div>
           <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-700">
             <p className="text-[10px] font-black uppercase text-slate-500">Reviews</p>
-            <p className="text-2xl font-black text-white">{totalReviews}</p>
+            <p className="text-2xl font-black text-white">{adminStats.totalReviews || totalReviews}</p>
           </div>
           <div className="bg-amber-500/10 px-4 py-2 rounded-xl border border-amber-500/20">
             <p className="text-[10px] font-black uppercase text-amber-500">Credits Pool</p>

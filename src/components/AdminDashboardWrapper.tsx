@@ -8,8 +8,8 @@ const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEN
 
 interface AdminDashboardWrapperProps {
   currentUser: any;
-  adminUsers: { users: any[], total: number, limit: number, offset: number };
-  adminReviews: { reviews: any[], total: number, limit: number, offset: number };
+  adminUsers: { users: any[], total?: number, totalCount?: number, limit: number, offset: number };
+  adminReviews: { reviews: any[], total?: number, totalCount?: number, limit: number, offset: number };
   fetchAdminUsers: (offset: number, limit: number, search?: string) => Promise<void>;
   fetchAdminReviews: (offset: number, limit: number) => Promise<void>;
   setUsers: (users: any[]) => void;
@@ -47,12 +47,12 @@ const AdminDashboardWrapper: React.FC<AdminDashboardWrapperProps> = ({
   return (
     <AdminDashboard 
       users={adminUsers.users}
-      totalUsers={adminUsers.total}
+      totalUsers={adminUsers.totalCount || adminUsers.total || 0}
       usersLimit={adminUsers.limit}
       usersOffset={adminUsers.offset}
       fetchUsers={fetchAdminUsers}
       reviews={adminReviews.reviews}
-      totalReviews={adminReviews.total}
+      totalReviews={adminReviews.totalCount || adminReviews.total || 0}
       reviewsLimit={adminReviews.limit}
       reviewsOffset={adminReviews.offset}
       fetchReviews={fetchAdminReviews}
