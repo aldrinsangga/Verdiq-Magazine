@@ -3,6 +3,8 @@ import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MainContent from './components/MainContent';
 import SEO from './components/SEO';
+import { SessionHeartbeat } from './components/SessionHeartbeat';
+import { smartFetch } from './lib/apiUtils';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { analyzeTrack, generatePodcast } from './services/geminiService';
@@ -967,55 +969,50 @@ function AppContent() {
   const handleUpdateReview = async (updatedReview) => {
     if (!currentUser) return;
 
+    // Optimistic Update
+    const previousReview = currentReview;
+    const previousHistory = currentUser.history;
+    
+    setCurrentReview(updatedReview);
+    if (currentUser?.history) {
+      setCurrentUser(prev => ({
+        ...prev,
+        history: prev.history.map(r => r.id === updatedReview.id ? updatedReview : r)
+      }));
+    }
+
     try {
       const headers = await getAuthHeadersLocal();
-      const res = await fetch(`${API_URL}/api/reviews/${updatedReview.id}`, {
+      const data = await smartFetch(`${API_URL}/api/reviews/${updatedReview.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...headers },
         body: JSON.stringify({ userId: updatedReview.userId || currentUser?.id, review: updatedReview })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        // Update credits from the response
-        if (data.remaining !== undefined) {
-          setCreditStatus(prev => ({
-            ...prev,
-            credits: data.remaining,
-          }));
-        }
+      // Update credits from the response
+      if (data.remaining !== undefined) {
+        setCreditStatus(prev => ({
+          ...prev,
+          credits: data.remaining,
+        }));
+      }
 
-        // Fetch updated user data (the PUT returns the review, not user)
-        if (currentUser?.id) {
-          const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
-          if (userRes.ok) {
-            const freshUser = await userRes.json();
-            setCurrentUser(freshUser);
-            saveSessionLocal(freshUser);
-          }
-        }
-        setCurrentReview(updatedReview);
+      // Fetch updated user data (the PUT returns the review, not user)
+      if (currentUser?.id) {
+        const freshUser = await smartFetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
+        setCurrentUser(freshUser);
+        saveSessionLocal(freshUser);
+      }
 
-        if (isAdmin(currentUser) && view === 'admin') {
-          fetchAdminUsers(adminUsers.offset, adminUsers.limit);
-          fetchAdminReviews(adminReviews.offset, adminReviews.limit);
-        }
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        if (res.status === 402) {
-          setCreditModalConfig({
-            action: 'edit',
-            required: errorData.required || 3,
-            reason: 'insufficient_credits',
-            message: errorData.message || 'Editing a review requires 3 credits.',
-            isFreeUser: !currentUser?.isSubscribed
-          });
-          setShowCreditModal(true);
-        } else {
-          showNotification(`Failed to save changes: ${errorData.message || 'Server error'}`, 'error');
-        }
+      if (isAdmin(currentUser) && view === 'admin') {
+        fetchAdminUsers(adminUsers.offset, adminUsers.limit);
+        fetchAdminReviews(adminReviews.offset, adminReviews.limit);
       }
     } catch (error) {
+      // Rollback on failure
+      setCurrentReview(previousReview);
+      setCurrentUser(prev => ({ ...prev, history: previousHistory }));
+      
       console.error('handleUpdateReview error:', error);
       showNotification('An unexpected error occurred while saving changes. Please try again.', 'error');
     }
@@ -1136,6 +1133,7 @@ function AppContent() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950 font-sans overflow-x-hidden">
       <SEO view={view} currentReview={currentReview} allReviews={allReviews} />
+      <SessionHeartbeat onSessionExpired={handleLogout} />
       <Navigation 
         view={view}
         currentUser={currentUser}
@@ -1231,6 +1229,17 @@ function AppContent() {
 }
 
 function App() {
+  // Register Service Worker for PWA
+  useEffect(() => {
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => {
+          console.error('[PWA] Service Worker registration failed:', err);
+        });
+      });
+    }
+  }, []);
+
   return (
     <ErrorBoundary>
       <NotificationProvider>

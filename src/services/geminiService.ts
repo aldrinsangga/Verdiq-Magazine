@@ -492,7 +492,7 @@ export const analyzeTrack = async ({ trackName, artistName, audioBase64, audioMi
                 mimeType: artistPhotoMimeType
               }
             },
-            { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font in the background or overlaying the image. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
+            { text: `Transform this artist photo into a magazine-style portrait. Add the word "VERDIQ" in a big, bold, high-contrast font. If there is a clear subject (like a person or artist), place the word "VERDIQ" behind them as a backdrop. If there is no clear subject, make the word "VERDIQ" blend perfectly with the image as a professional editorial overlay. DO NOT add any other text, titles, subtitles, or artist names. ONLY the word "VERDIQ". Use a professional editorial aesthetic. Preset: ${preset || 'dark'}` }
           ]
         }
       }
@@ -629,10 +629,12 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
     
     MANDATORY START: The podcast MUST always start with Wolf saying: "Welcome back to the session. Today we're checking out ${trackName} by ${artistName}."
     
-    RANDOM INTRO: Immediately after the mandatory start, Wolf should share something random and different every time—a very short story, a weird fact, or a quick observation about his day. He should be animated and high-energy here. 
-    - Add some chuckles and giggles if the random story is funny.
-    - Add some reactions that fit with the short story that is being told (e.g., Wolf laughing at his own joke, Sloane reacting with "No way!" or "That's wild").
-    - Sloane should react naturally to this, and she should INTERRUPT Wolf once during his story with a quick comment or a laugh.
+    RANDOM INTRO: Immediately after the mandatory start, Wolf should share something random and different every time. 
+    Topics can include: a very short story, a weird fact, a quick observation about his day, a compliment to Sloane, asking about the weather, what she had for breakfast, or something random about the studio (e.g., "Sloane, did you see the new monitors?" or "Man, this coffee is hitting different today").
+    He should be animated and high-energy here. 
+    - Add some chuckles and giggles if the random banter is funny.
+    - Add some reactions that fit with the topic being discussed (e.g., Wolf laughing at his own joke, Sloane reacting with "No way!" or "That's wild").
+    - Sloane should react naturally to this, and she should INTERRUPT Wolf once during this intro with a quick comment or a laugh.
     This segment should be brief but engaging.
     
     TRANSITION: Ensure a smooth, conversational transition from the random intro into the actual analysis of "${trackName}".

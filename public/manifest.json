@@ -1,0 +1,23 @@
+{
+  "name": "Verdiq Magazine",
+  "short_name": "Verdiq",
+  "description": "The future of music critic. Upload your track for instant magazine-style review, podcast feature, and technical music audit.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#10b981",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -12,9 +12,14 @@ import QRCode from 'qrcode';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
+import NodeCache from "node-cache";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Server-side cache to reduce Firestore reads (Quota protection)
+const serverCache = new NodeCache({ stdTTL: 300, checkperiod: 60 }); // 5 minutes default TTL
+
 let firebaseConfig: any = {};
 try {
   firebaseConfig = JSON.parse(fs.readFileSync(join(__dirname, '../firebase-applet-config.json'), 'utf-8'));
@@ -200,8 +205,8 @@ const checkUsageQuota = async (req: express.Request, res: express.Response, next
     const thisMonth = now.toISOString().slice(0, 7); // YYYY-MM
     
     const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    const userData = userDoc.data();
+    // Use getFullUser which is cached
+    const userData = await getFullUser(userId) as any;
 
     if (!userData) {
       console.warn(`[Quota] User ${userId} not found in database during quota check`);
@@ -275,26 +280,44 @@ const getUserIdFromAuth = async (authHeader: string | undefined) => {
   return auth?.uid;
 };
 
+// Helper to get user document with caching
+const getUser = async (userId: string) => {
+  try {
+    const cacheKey = `user_doc_${userId}`;
+    const cachedUser = serverCache.get<any>(cacheKey);
+    if (cachedUser) {
+      console.log(`[getUser] Cache HIT for user: ${userId}`);
+      return cachedUser;
+    }
+
+    console.log(`[getUser] Cache MISS for user: ${userId}. Fetching from Firestore.`);
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) return null;
+    
+    const userData = userDoc.data();
+    serverCache.set(cacheKey, userData, 900); // Cache for 15 minutes
+    return userData;
+  } catch (error) {
+    console.error(`[getUser] Error fetching user ${userId}:`, error);
+    return null;
+  }
+};
+
 // Helper to sanitize user and include history
 const getFullUser = async (userId: string) => {
   try {
-    console.log(`[getFullUser] Fetching user: ${userId}`);
-    let userDoc;
-    try {
-      userDoc = await db.collection('users').doc(userId).get();
-    } catch (dbErr: any) {
-      console.error(`[getFullUser] Firestore error fetching user ${userId}:`, dbErr.message);
-      // If we can't even get the user doc due to permissions, we'll return null 
-      // and let the caller decide if they want to return a basic profile
-      return null;
+    // Check cache first
+    const cacheKey = `user_full_${userId}`;
+    const cachedUser = serverCache.get<any>(cacheKey);
+    if (cachedUser) {
+      console.log(`[getFullUser] Cache HIT for user: ${userId}`);
+      return cachedUser;
     }
 
-    if (!userDoc.exists) {
-      console.log(`[getFullUser] User ${userId} not found in database`);
-      return null;
-    }
+    console.log(`[getFullUser] Cache MISS for user: ${userId}. Fetching from Firestore.`);
+    const user = await getUser(userId);
+    if (!user) return null;
     
-    const user = userDoc.data();
     console.log(`[getFullUser] Fetching reviews and purchases for user: ${userId}`);
     
     let history = [];
@@ -359,7 +382,12 @@ const getFullUser = async (userId: string) => {
       console.warn(`[getFullUser] Could not fetch data for user ${userId}:`, err.message);
     }
 
-    return sanitizeUser({ ...user, history, purchases, invoices });
+    const fullUser = sanitizeUser({ ...user, history, purchases, invoices });
+    
+    // Cache the result for 15 minutes
+    serverCache.set(cacheKey, fullUser, 900);
+    
+    return fullUser;
   } catch (error: any) {
     console.error(`[getFullUser] Critical error fetching user ${userId}:`, error);
     return null;
@@ -385,10 +413,16 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
       return next();
     }
 
+    // Check cache for admin status
+    const adminCacheKey = `is_admin_${userId}`;
+    if (serverCache.get(adminCacheKey)) {
+      console.log(`[isAdmin] Cache HIT for user: ${userId}`);
+      return next();
+    }
+
     // 2. Try database check
     try {
-      const userDoc = await db.collection('users').doc(userId).get();
-      const user = userDoc.data();
+      const user = await getUser(userId);
       
       const effectiveEmail = user?.email || userEmail;
       const isSuperAdmin = isAdminEmail(effectiveEmail);
@@ -396,6 +430,7 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
 
       if (isSuperAdmin || hasAdminRole) {
         console.log(`[isAdmin] Access GRANTED for ${effectiveEmail || userId} (SuperAdmin: ${isSuperAdmin}, HasRole: ${hasAdminRole})`);
+        serverCache.set(adminCacheKey, true, 1800); // Cache for 30 minutes
         return next();
       }
     } catch (dbError: any) {
@@ -725,8 +760,7 @@ app.get("/api/users/:id", async (req, res, next) => {
     const userId = auth?.uid;
     const userEmail = auth?.email;
     
-    const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
-    const requestingUser = requestingUserDoc?.data();
+    const requestingUser = userId ? await getUser(userId) : null;
     const isSuperAdmin = isAdminEmail(userEmail) || (requestingUser && isAdminEmail(requestingUser.email));
     const isAdminUser = isSuperAdmin || (requestingUser && requestingUser.role === 'admin');
     
@@ -734,7 +768,7 @@ app.get("/api/users/:id", async (req, res, next) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const fullUser = await getFullUser(id);
+    const fullUser = await getFullUser(id) as any;
     if (fullUser) {
       // Auto-upgrade admin emails if they are not already admins
       const effectiveEmail = fullUser.email || (id === userId ? userEmail : null);
@@ -776,8 +810,7 @@ app.put("/api/users/:id", async (req, res) => {
   const userId = auth?.uid;
   const userEmail = auth?.email;
   
-  const requestingUserDoc = userId ? await db.collection('users').doc(userId).get() : null;
-  const requestingUser = requestingUserDoc?.data();
+  const requestingUser = userId ? await getUser(userId) : null;
   const isAdminUser = isAdminEmail(requestingUser?.email) || isAdminEmail(userEmail) || requestingUser?.role === 'admin';
 
   if (id !== userId && !isAdminUser) {
@@ -794,21 +827,37 @@ app.put("/api/users/:id", async (req, res) => {
 
   // Track credit changes if admin updates them
   if (update.credits !== undefined) {
-    const oldUser = await db.collection('users').doc(id).get();
-    const oldCredits = oldUser.data()?.credits || 0;
+    const oldUser = await getUser(id);
+    const oldCredits = oldUser?.credits || 0;
     const diff = update.credits - oldCredits;
     if (diff !== 0) await updateGlobalCredits(diff);
   }
 
-  await db.collection('users').doc(id).update(update);
-  const fullUser = await getFullUser(id);
-  res.json(fullUser);
+  try {
+    await db.collection('users').doc(id).update(update);
+    
+    // Invalidate cache
+    serverCache.del(`user_full_${id}`);
+    
+    const fullUser = await getFullUser(id);
+    res.json(fullUser);
+  } catch (error) {
+    console.error(`[PUT /api/users/${id}] Error:`, error);
+    res.status(500).json({ message: "Failed to update user" });
+  }
 });
 
 // Admin Usage Stats
 app.get("/api/admin/usage", isAdmin, async (req, res, next) => {
   try {
     const days = parseInt(req.query.days as string) || 7;
+    const cacheKey = `admin_usage_${days}`;
+    const cachedData = serverCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[adminUsage] Cache HIT for days: ${days}`);
+      return res.json(cachedData);
+    }
+
     const now = new Date();
     const startDate = new Date(now);
     startDate.setDate(startDate.getDate() - days);
@@ -866,10 +915,13 @@ app.get("/api/admin/usage", isAdmin, async (req, res, next) => {
       newReviews: dailyStats[dateStr].newReviews
     }));
 
-    res.json({
+    const result = {
       chartData: usageData,
       topUsers
-    });
+    };
+    
+    serverCache.set(cacheKey, result, 600); // Cache for 10 minutes
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -878,6 +930,13 @@ app.get("/api/admin/usage", isAdmin, async (req, res, next) => {
 // Admin Stats
 app.get("/api/admin/stats", isAdmin, async (req, res, next) => {
   try {
+    const cacheKey = 'admin_stats_global';
+    const cachedData = serverCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[adminStats] Cache HIT`);
+      return res.json(cachedData);
+    }
+
     // Use Firestore aggregation queries for efficiency (much cheaper than fetching all docs)
     let usersCount = 0;
     let reviewsCount = 0;
@@ -912,14 +971,17 @@ app.get("/api/admin/stats", isAdmin, async (req, res, next) => {
     const statsDoc = await db.collection('stats').doc('global').get();
     const stats = statsDoc.data() || {};
 
-    res.json({
+    const result = {
       totalUsers: usersCount,
       totalReviews: reviewsCount,
       publishedReviews: publishedReviewsCount,
       totalEarnings: stats.totalEarnings || 0,
       totalCredits: totalCredits,
       debugInfo
-    });
+    };
+
+    serverCache.set(cacheKey, result, 60); // Cache for 1 minute
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -959,12 +1021,18 @@ app.get("/api/credits/status", async (req, res) => {
   const userId = (await getUserFromAuth(req.headers.authorization))?.uid;
   if (!userId) return res.status(401).json({ message: "Unauthorized" });
   
-  const userDoc = await db.collection('users').doc(userId).get();
-  const user = userDoc.data();
+  const cacheKey = `credits_status_${userId}`;
+  const cachedData = serverCache.get(cacheKey);
+  if (cachedData) {
+    console.log(`[creditsStatus] Cache HIT for user: ${userId}`);
+    return res.json(cachedData);
+  }
+
+  const user = await getUser(userId);
   
   if (!user) return res.status(404).json({ message: "User not found" });
   
-  res.json({ 
+  const result = { 
     credits: user.credits,
     isSubscribed: !!user.isSubscribed,
     features: user.isSubscribed ? {
@@ -978,7 +1046,10 @@ app.get("/api/credits/status", async (req, res) => {
       edit_reviews: false,
       priority_support: false
     }
-  });
+  };
+
+  serverCache.set(cacheKey, result, 600); // Cache for 10 minutes
+  res.json(result);
 });
 
 // PayPal Order Creation
@@ -1293,13 +1364,18 @@ app.post("/api/credits/deduct", async (req, res, next) => {
     const cost = action === 'publish' ? 5 : (action === 'edit' ? 3 : 10);
     
     const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    const user = userDoc.data();
+    const user = await getUser(userId);
     
     if (user) {
       const newCredits = Math.max(0, user.credits - cost);
       await userRef.update({ credits: newCredits });
       await updateGlobalCredits(-cost);
+      
+      // Invalidate caches
+      serverCache.del(`user_doc_${userId}`);
+      serverCache.del(`user_full_${userId}`);
+      serverCache.del(`credits_status_${userId}`);
+      
       res.json({ success: true, deducted: cost, remaining: newCredits });
     } else {
       res.status(404).json({ message: "User not found" });
@@ -1343,8 +1419,7 @@ app.get("/api/auth/mfa/status", requireAuth, async (req, res, next) => {
     console.log(`[MFA Status] Checking status for user: ${userId}`);
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
+    const user = await getUser(userId);
     
     console.log(`[MFA Status] User ${userId} mfaEnabled: ${user?.mfaEnabled || false}`);
     res.json({ mfa_enabled: user?.mfaEnabled || false });
@@ -1358,8 +1433,7 @@ app.post("/api/auth/mfa/setup", requireAuth, async (req, res, next) => {
   try {
     const userId = (req as any).user.uid;
     console.log(`[MFA] Starting setup for user: ${userId}`);
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
+    const user = await getUser(userId);
     
     if (!user) {
       console.error(`[MFA] User ${userId} not found in database`);
@@ -1422,8 +1496,7 @@ app.post("/api/auth/mfa/verify-setup", requireAuth, async (req, res, next) => {
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
     
     const { code } = req.body;
-    const userDoc = await db.collection('users').doc(userId).get();
-    const user = userDoc.data();
+    const user = await getUser(userId);
 
     if (!user || !user.tempMfaSecret) {
       console.error(`[MFA] Setup not initiated for ${userId}`);
@@ -1759,17 +1832,27 @@ app.get("/api/public/published-reviews", async (req, res, next) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
     
+    const cacheKey = `public_reviews_${limit}_${offset}`;
+    const cachedData = serverCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[publicReviews] Cache HIT for limit: ${limit}, offset: ${offset}`);
+      return res.json(cachedData);
+    }
+
     const query = db.collection('reviews').where('isPublished', '==', true).orderBy('createdAt', 'desc');
     const totalCount = await query.count();
     const snapshot = await query.offset(offset).limit(limit).get();
     const reviews = snapshot.docs.map(doc => doc.data());
     
-    res.json({
+    const result = {
       reviews,
       totalCount,
       limit,
       offset
-    });
+    };
+
+    serverCache.set(cacheKey, result, 1800); // Cache for 30 minutes
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -1778,10 +1861,17 @@ app.get("/api/public/published-reviews", async (req, res, next) => {
 app.get("/api/public/reviews/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
+    const cacheKey = `public_review_single_${id}`;
+    const cachedData = serverCache.get(cacheKey);
+    if (cachedData) {
+      console.log(`[publicReviewSingle] Cache HIT for id: ${id}`);
+      return res.json(cachedData);
+    }
+
     const doc = await db.collection('reviews').doc(id).get();
     if (doc.exists) {
       const review = doc.data() as Review;
-      
+      serverCache.set(cacheKey, review, 3600); // Cache for 60 minutes
       res.json(review);
     } else {
       res.status(404).json({ message: "Review not found" });
@@ -2185,6 +2275,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     path: req.path,
     timestamp
   };
+
+  // Specific handling for Firestore Quota Exceeded
+  if (err?.message?.includes('Quota limit exceeded') || err?.code === 8 || err?.code === 'resource-exhausted') {
+    return res.status(503).json({
+      error: "QUOTA_EXCEEDED",
+      message: "The application is currently experiencing high traffic and has reached its temporary database limit. Please try again in a few hours.",
+      instruction: "This is a temporary limit that resets daily. We apologize for the inconvenience."
+    });
+  }
 
   if (err?.code === 7 || (err?.message && String(err.message).includes('PERMISSION_DENIED'))) {
     return res.status(403).json({

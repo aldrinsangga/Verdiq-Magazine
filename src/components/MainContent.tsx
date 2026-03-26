@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { auth, isAdmin } from '../authClient';
+import { MagazineSkeleton, StudioSkeleton, PodcastSkeleton, Skeleton } from './Skeleton';
 
 // Lazy load components for better initial load performance
 const SearchSection = lazy(() => import('./SearchSection'));
@@ -102,13 +103,26 @@ const MainContent: React.FC<MainContentProps> = ({
 }) => {
   const isUnverified = currentUser && auth.currentUser && !auth.currentUser.emailVerified;
 
-  return (
-    <main className="pt-24 pb-16">
-      <Suspense fallback={
+  const getFallback = () => {
+    switch (view) {
+      case 'magazine': return <div className="p-8 max-w-[1440px] mx-auto"><MagazineSkeleton /></div>;
+      case 'dashboard': return <div className="p-8 max-w-[1440px] mx-auto"><StudioSkeleton /></div>;
+      case 'podcasts': return <div className="p-8 max-w-[1440px] mx-auto"><PodcastSkeleton /></div>;
+      case 'review': return <div className="p-8 max-w-[1440px] mx-auto"><Skeleton className="h-[800px] rounded-[40px]" /></div>;
+      case 'pricing': return <div className="p-8 max-w-[1440px] mx-auto"><Skeleton className="h-[600px] rounded-[40px]" /></div>;
+      case 'account': return <div className="p-8 max-w-[1440px] mx-auto"><Skeleton className="h-[500px] rounded-[40px]" /></div>;
+      case 'admin': return <div className="p-8 max-w-[1440px] mx-auto"><Skeleton className="h-[800px] rounded-[40px]" /></div>;
+      default: return (
         <div className="flex items-center justify-center min-h-[40vh]">
           <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
         </div>
-      }>
+      );
+    }
+  };
+
+  return (
+    <main className="pt-24 pb-16">
+      <Suspense fallback={getFallback()}>
         {isUnverified && view !== 'magazine' && view !== 'podcasts' && view !== 'privacy' && view !== 'terms' && view !== 'faq' && view !== 'contact' && (
           <VerificationRequired email={auth.currentUser?.email || ''} onLogout={handleLogout} />
         )}

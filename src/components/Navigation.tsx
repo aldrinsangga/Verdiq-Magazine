@@ -21,6 +21,17 @@ const Navigation: React.FC<NavigationProps> = ({
   navigate,
   handleLogout
 }) => {
+  // Pre-fetch lazy loaded components on hover
+  const prefetch = (component: string) => {
+    switch (component) {
+      case 'magazine': import('./Magazine'); break;
+      case 'podcasts': import('./Podcasts'); break;
+      case 'dashboard': import('./Dashboard'); break;
+      case 'pricing': import('./Pricing'); break;
+      case 'auth': import('./Auth'); break;
+    }
+  };
+
   return (
     <nav className="fixed top-0 w-full z-50 glass border-b border-slate-800/50" data-testid="main-nav">
       <div className="max-w-[1440px] mx-auto px-8 h-24 flex items-center justify-between">
@@ -30,6 +41,7 @@ const Navigation: React.FC<NavigationProps> = ({
             e.preventDefault();
             navigate('landing');
           }} 
+          onMouseEnter={() => prefetch('landing')}
           className="text-2xl font-black cursor-pointer tracking-tighter flex items-center gap-3 group border-none bg-transparent" 
           data-testid="logo"
         >
@@ -47,6 +59,7 @@ const Navigation: React.FC<NavigationProps> = ({
               e.preventDefault();
               navigate('landing');
             }} 
+            onMouseEnter={() => prefetch('landing')}
             className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'landing' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
             data-testid="nav-submit"
           >
@@ -58,6 +71,7 @@ const Navigation: React.FC<NavigationProps> = ({
               e.preventDefault();
               navigate('magazine');
             }} 
+            onMouseEnter={() => prefetch('magazine')}
             className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'magazine' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
             data-testid="nav-magazine"
           >
@@ -69,6 +83,7 @@ const Navigation: React.FC<NavigationProps> = ({
               e.preventDefault();
               navigate('podcasts');
             }} 
+            onMouseEnter={() => prefetch('podcasts')}
             className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'podcasts' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
             data-testid="nav-podcasts"
           >
@@ -80,6 +95,7 @@ const Navigation: React.FC<NavigationProps> = ({
               e.preventDefault();
               navigate('dashboard');
             }} 
+            onMouseEnter={() => prefetch('dashboard')}
             className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all ${view === 'dashboard' ? 'text-emerald-400' : 'text-slate-500 hover:text-slate-300'} border-none bg-transparent`} 
             data-testid="nav-dashboard"
           >

@@ -31,6 +31,7 @@
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "node-cache": "^5.1.2",
     "otplib": "^13.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
