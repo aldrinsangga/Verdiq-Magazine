@@ -29,8 +29,8 @@ interface MainContentProps {
   styleGuides: any[];
   creditStatus: any;
   targetPodcastId: string | null;
-  adminUsers: { users: any[], total: number, limit: number, offset: number };
-  adminReviews: { reviews: any[], total: number, limit: number, offset: number };
+  adminUsers: { users: any[], total?: number, totalCount?: number, limit: number, offset: number };
+  adminReviews: { reviews: any[], total?: number, totalCount?: number, limit: number, offset: number };
   setUsers: (users: any[]) => void;
   setAllReviews: (reviews: any[]) => void;
   setTargetPodcastId: (id: string | null) => void;

@@ -125,7 +125,10 @@ app.use("/api/podcasts/generate", aiLimiter);
 // Request logging middleware
 app.use((req, res, next) => {
   const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - IP: ${ip}`);
+  const start = Date.now();
+  res.on('finish', () => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - Status: ${res.statusCode} - IP: ${ip} - ${Date.now() - start}ms`);
+  });
   next();
 });
 
