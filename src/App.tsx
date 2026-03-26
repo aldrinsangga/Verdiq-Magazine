@@ -875,9 +875,12 @@ function AppContent() {
 
       if (errorMessage.includes('413')) {
         showNotification("The file or data is too large for the studio to process. Try using a smaller audio file or lower resolution images.", "error");
-      } else if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED') || (error as any).type === 'QUOTA') {
-        const instruction = (error as any).instruction || "Please try again tomorrow.";
-        showNotification(`AI Limit Reached: ${errorMessage}. ${instruction}`, "warning");
+      } else if (errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED') || (error as any).type === 'QUOTA' || errorMessage.includes('Podcast generation failed') || errorMessage.includes('Analysis failed')) {
+        // Custom user-friendly message for AI limits or general generation failures
+        showNotification(
+          "We hit our analysis limit for today.\n\nTo keep reviews and podcast quality high, we cap how many generations we run each day. Please try again in a few hours.\n\nYour credits remain intact. Your account is safe.", 
+          "warning"
+        );
       } else {
         showNotification(`Studio Error: ${errorMessage || 'Verify your file and try again.'}`, "error");
       }

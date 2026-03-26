@@ -166,7 +166,7 @@ async function generateWithRetryAndFallback(
     }
   }
   console.error("[Gemini] All models and retries failed.");
-  throw lastError || new Error("All models and retries failed due to quota or server errors.");
+  throw lastError || new Error("Analysis failed due to quota or server errors.");
 }
 
 // Review schema for structured output
