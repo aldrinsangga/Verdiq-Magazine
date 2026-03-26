@@ -617,19 +617,33 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
   
   const ai = await getAI();
   
-  const scriptPrompt = `
+    const scriptPrompt = `
     Create a RAW, conversational, high-energy dialogue script for a music podcast session.
     Track: "${trackName}" by ${artistName}.
-    Characters: Wolf (energetic male) and Sloane (analytical female).
+    Characters: 
+    - Wolf: High-energy, charismatic hype-man. He's edgy, uses natural slang, and is genuinely obsessed with the music. He should NEVER sound formal or serious.
+    - Sloane: Analytical, cool, and grounded. She provides the technical and musical depth to balance Wolf's explosive energy.
     Format: Wolf: [Dialogue], Sloane: [Dialogue].
     
+    TONE: Unfiltered, authentic, and raw. Like two music-obsessed friends in a late-night studio session.
+    
     MANDATORY START: The podcast MUST always start with Wolf saying: "Welcome back to the session. Today we're checking out ${trackName} by ${artistName}."
+    
+    RANDOM INTRO: Immediately after the mandatory start, Wolf should share something random and different every time—a very short story, a weird fact, or a quick observation about his day. He should be animated and high-energy here. 
+    - Add some chuckles and giggles if the random story is funny.
+    - Add some reactions that fit with the short story that is being told (e.g., Wolf laughing at his own joke, Sloane reacting with "No way!" or "That's wild").
+    - Sloane should react naturally to this, and she should INTERRUPT Wolf once during his story with a quick comment or a laugh.
+    This segment should be brief but engaging.
+    
+    TRANSITION: Ensure a smooth, conversational transition from the random intro into the actual analysis of "${trackName}".
+    
+    LENGTH: The script MUST be long enough for at least a 3-minute podcast (approximately 500-600 words of dialogue).
     
     Forbid AI Words: forbid ai from using overused "AI-isms" like sonic, landscape, journey, intricate, tapestry, testament, unfold, vibrant, seamless, meticulous, elevate, dynamic, captivating, immersive, nuanced, and evocative.
     Forbidden AI Phrases: block common AI sentence structures such as "They're not just X, they're Y" or "It's more than just a track."
     
     IMPORTANT: Do NOT include any intro or outro music descriptions or host introductions like "Welcome to the Verdiq Sessions" (this is handled by the jingle). 
-    After Wolf's mandatory opening line, proceed directly with the conversational analysis.
+    After Wolf's mandatory opening line and the random intro, proceed with the conversational analysis.
   `;
 
   const scriptResponse = await generateWithRetryAndFallback(
@@ -695,15 +709,20 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
 
     // 4. Calculate Total Duration
     // Jingle (Intro) + Podcast + Jingle (Outro)
-    // We'll add a small gap (0.5s) between jingle and podcast
-    const gap = 0.5;
+    // We'll remove the gap and add an overlap to account for silent tails in the jingle
+    const introOverlap = 2.8; // Overlap with intro jingle tail (user reported ~3s gap)
+    const outroOverlap = 1.0; // Small overlap with outro jingle start
+    
     const introDuration = jingleBuffer.duration;
     const podcastDuration = podcastVoiceBuffer.duration;
     const outroDuration = jingleBuffer.duration;
-    const totalDuration = introDuration + gap + podcastDuration + gap + outroDuration;
+    
+    const voiceStartTime = Math.max(0, introDuration - introOverlap);
+    const outroStartTime = voiceStartTime + podcastDuration - outroOverlap;
+    const totalDuration = outroStartTime + outroDuration;
 
     // 5. Mix using OfflineAudioContext
-    const offlineCtx = new OfflineAudioContext(1, totalDuration * audioContext.sampleRate, audioContext.sampleRate);
+    const offlineCtx = new OfflineAudioContext(1, Math.ceil(totalDuration * audioContext.sampleRate), audioContext.sampleRate);
 
     // Intro Jingle
     const introSource = offlineCtx.createBufferSource();
@@ -715,13 +734,13 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
     const voiceSource = offlineCtx.createBufferSource();
     voiceSource.buffer = podcastVoiceBuffer;
     voiceSource.connect(offlineCtx.destination);
-    voiceSource.start(introDuration + gap);
+    voiceSource.start(voiceStartTime);
 
     // Outro Jingle
     const outroSource = offlineCtx.createBufferSource();
     outroSource.buffer = jingleBuffer;
     outroSource.connect(offlineCtx.destination);
-    outroSource.start(introDuration + gap + podcastDuration + gap);
+    outroSource.start(outroStartTime);
 
     // Background Music (only during the podcast part, maybe fading in/out)
     if (songBuffer) {
@@ -732,15 +751,15 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
       const songGain = offlineCtx.createGain();
       songGain.gain.setValueAtTime(0, 0);
       // Fade in background music when podcast starts
-      songGain.gain.linearRampToValueAtTime(0.12, introDuration + gap + 1);
+      songGain.gain.linearRampToValueAtTime(0.12, voiceStartTime + 1);
       // Fade out background music when podcast ends
-      songGain.gain.linearRampToValueAtTime(0.12, introDuration + gap + podcastDuration - 1);
-      songGain.gain.linearRampToValueAtTime(0, introDuration + gap + podcastDuration);
+      songGain.gain.linearRampToValueAtTime(0.12, voiceStartTime + podcastDuration - 1);
+      songGain.gain.linearRampToValueAtTime(0, voiceStartTime + podcastDuration);
       
       songSource.connect(songGain);
       songGain.connect(offlineCtx.destination);
-      songSource.start(introDuration + gap);
-      songSource.stop(introDuration + gap + podcastDuration);
+      songSource.start(voiceStartTime);
+      songSource.stop(voiceStartTime + podcastDuration);
     }
 
     const renderedBuffer = await offlineCtx.startRendering();
