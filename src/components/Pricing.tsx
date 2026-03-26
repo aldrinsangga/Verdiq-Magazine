@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PayPalButtons } from "@paypal/react-paypal-js";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { getAuthHeaders } from '../authClient';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
@@ -92,12 +92,18 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
   ];
 
   return (
-    <div className="max-w-[1440px] mx-auto px-8 py-20" data-testid="pricing-section">
-      {error && (
-        <div className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
-          <p className="text-red-400">{error}</p>
-        </div>
-      )}
+    <PayPalScriptProvider 
+      options={{ 
+        clientId: paypalClientId,
+        currency: "USD",
+        intent: "capture"
+      }}>
+      <div className="max-w-[1440px] mx-auto px-8 py-20" data-testid="pricing-section">
+        {error && (
+          <div className="max-w-md mx-auto mb-8 bg-red-500/10 border border-red-500/20 rounded-2xl p-4 text-center">
+            <p className="text-red-400">{error}</p>
+          </div>
+        )}
 
       {loading === 'executing' && (
         <div className="max-w-md mx-auto mb-8 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center">
@@ -243,7 +249,8 @@ const Pricing = ({ onUpgrade, currentUser, paypalClientId }) => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PayPalScriptProvider>
   );
 };
 

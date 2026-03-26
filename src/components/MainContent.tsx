@@ -1,21 +1,23 @@
-import React from 'react';
-import SearchSection from './SearchSection';
-import Auth from './Auth';
-import ReviewDisplay from './ReviewDisplay';
-import Dashboard from './Dashboard';
-import Magazine from './Magazine';
-import Podcasts from './Podcasts';
-import Pricing from './Pricing';
-import AccountSettings from './AccountSettings';
-import AdminDashboardWrapper from './AdminDashboardWrapper';
-import PrivacyPolicy from './PrivacyPolicy';
-import TermsAndConditions from './TermsAndConditions';
-import FAQ from './FAQ';
-import ContactUs from './ContactUs';
-import SubmissionGuide from './SubmissionGuide';
-import ReferralDashboard from './ReferralDashboard';
-import VerificationRequired from './VerificationRequired';
+import React, { Suspense, lazy } from 'react';
 import { auth, isAdmin } from '../authClient';
+
+// Lazy load components for better initial load performance
+const SearchSection = lazy(() => import('./SearchSection'));
+const Auth = lazy(() => import('./Auth'));
+const ReviewDisplay = lazy(() => import('./ReviewDisplay'));
+const Dashboard = lazy(() => import('./Dashboard'));
+const Magazine = lazy(() => import('./Magazine'));
+const Podcasts = lazy(() => import('./Podcasts'));
+const Pricing = lazy(() => import('./Pricing'));
+const AccountSettings = lazy(() => import('./AccountSettings'));
+const AdminDashboardWrapper = lazy(() => import('./AdminDashboardWrapper'));
+const PrivacyPolicy = lazy(() => import('./PrivacyPolicy'));
+const TermsAndConditions = lazy(() => import('./TermsAndConditions'));
+const FAQ = lazy(() => import('./FAQ'));
+const ContactUs = lazy(() => import('./ContactUs'));
+const SubmissionGuide = lazy(() => import('./SubmissionGuide'));
+const ReferralDashboard = lazy(() => import('./ReferralDashboard'));
+const VerificationRequired = lazy(() => import('./VerificationRequired'));
 
 interface MainContentProps {
   view: string;
@@ -102,133 +104,139 @@ const MainContent: React.FC<MainContentProps> = ({
 
   return (
     <main className="pt-24 pb-16">
-      {isUnverified && view !== 'magazine' && view !== 'podcasts' && view !== 'privacy' && view !== 'terms' && view !== 'faq' && view !== 'contact' && (
-        <VerificationRequired email={auth.currentUser?.email || ''} onLogout={handleLogout} />
-      )}
-      {!isUnverified && view === 'landing' && (
-        <SearchSection 
-          onAnalyze={handleAnalyze} 
-          onCancel={handleCancelAnalysis}
-          isLoading={loading} 
-          credits={currentUser?.credits || 0} 
-          status={status} 
-          isSubscribed={currentUser?.isSubscribed || false} 
-          onNavigate={navigate}
-        />
-      )}
-      {view === 'auth' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} />}
-      {view === 'signup' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} initialMode="signup" />}
-      {!isUnverified && view === 'review' && currentReview && (
-        <ReviewDisplay 
-          review={currentReview} 
-          currentUser={currentUser}
-          viewOnly={currentReview.viewOnly}
-          onUpgrade={() => navigate('pricing')} 
-          onSave={handleUpdateReview} 
-          onPublish={handlePublish}
-          onBack={() => navigate('magazine')}
-          onViewPodcast={() => {
-            setTargetPodcastId(currentReview.id);
-            navigate('podcasts');
-          }}
-          onSelectReview={async (r) => {
-            const fullReview = await fetchReviewWithAudio(r.id);
-            navigateToReview(fullReview || r, true);
-          }}
-          allReviews={allReviews}
-          canPublish={creditStatus?.features?.publish_magazine || false}
-          audioFile={currentAudioFile}
-          isSubscribed={creditStatus?.isSubscribed || currentUser?.isSubscribed || false}
-          features={creditStatus?.features || {}}
-          onNavigate={navigate}
-        />
-      )}
-      {!isUnverified && view === 'dashboard' && currentUser && (
-        <Dashboard 
-          reviews={currentUser.history || []} 
-          onUpdateReview={handleUpdateReview}
-          onNavigate={navigate}
-          onSelect={async (r) => { 
-            console.log('Dashboard: Selecting review:', r.id);
-            const fullReview = await fetchReviewWithAudio(r.id);
-            if (fullReview) {
-              console.log('Dashboard: Got full review with URLs');
-              navigateToReview(fullReview, false);
-            } else {
-              console.warn('Dashboard: Failed to get full review, using cached data');
-              navigateToReview(r, false);
-            }
-          }} 
-        />
-      )}
-      {view === 'magazine' && (
-        <Magazine 
-          reviews={allReviews} 
-          onSelect={async (r) => { 
-            const fullReview = await fetchReviewWithAudio(r.id);
-            navigateToReview(fullReview || r, true);
-          }} 
-          onNavigate={navigate}
-        />
-      )}
-      {view === 'podcasts' && (
-        <Podcasts 
-          reviews={allReviews} 
-          onSelectReview={async (r) => { 
-            const fullReview = await fetchReviewWithAudio(r.id);
-            navigateToReview(fullReview || r, false);
-          }} 
-          initialPodcastId={targetPodcastId}
-          fetchReviewWithAudio={fetchReviewWithAudio}
-        />
-      )}
-      {view === 'pricing' && (
-        <Pricing 
-          currentUser={currentUser}
-          paypalClientId={paypalClientId}
-          onUpgrade={async (data) => { 
-            if (!currentUser) { navigate('auth'); return; }
-            // Refresh user data from backend to get latest credits and purchases
-            await refreshUserData();
-            navigate('landing'); 
-          }} 
-        />
-      )}
-      {!isUnverified && view === 'account' && currentUser && (
-        <AccountSettings 
-          user={currentUser} 
-          session={currentUser?.session}
-          onUpdate={handleUpdateProfile} 
-          initialTab={accountTab}
-        />
-      )}
-      {!isUnverified && view === 'admin' && isAdmin(currentUser) && (
-        <AdminDashboardWrapper 
-          currentUser={currentUser}
-          adminUsers={adminUsers}
-          adminReviews={adminReviews}
-          fetchAdminUsers={fetchAdminUsers}
-          fetchAdminReviews={fetchAdminReviews}
-          setUsers={setUsers}
-          setAllReviews={setAllReviews}
-          onUpdateUser={handleUpdateProfile} 
-          onDeleteUser={handleDeleteUser}
-          onUpdateReview={handleAdminUpdateReview}
-          onDeleteReview={handleDeleteReview}
-          styleGuides={styleGuides}
-          onAddStyleGuide={handleAddStyleGuide}
-          onUpdateStyleGuide={handleUpdateStyleGuide}
-          onDeleteStyleGuide={handleDeleteStyleGuide}
-        />
-      )}
-      {view === 'privacy' && <PrivacyPolicy />}
-      {view === 'terms' && <TermsAndConditions />}
-      {view === 'faq' && <FAQ onContactSupport={onContactSupport} />}
-      {view === 'contact' && <ContactUs />}
-      {view === 'guide' && <SubmissionGuide onNavigate={navigate} />}
-      {!isUnverified && view === 'referrals' && currentUser && (
-        <ReferralDashboard currentUser={currentUser} onNavigate={navigate} />
-      )}
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-[40vh]">
+          <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+        </div>
+      }>
+        {isUnverified && view !== 'magazine' && view !== 'podcasts' && view !== 'privacy' && view !== 'terms' && view !== 'faq' && view !== 'contact' && (
+          <VerificationRequired email={auth.currentUser?.email || ''} onLogout={handleLogout} />
+        )}
+        {!isUnverified && view === 'landing' && (
+          <SearchSection 
+            onAnalyze={handleAnalyze} 
+            onCancel={handleCancelAnalysis}
+            isLoading={loading} 
+            credits={currentUser?.credits || 0} 
+            status={status} 
+            isSubscribed={currentUser?.isSubscribed || false} 
+            onNavigate={navigate}
+          />
+        )}
+        {view === 'auth' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} />}
+        {view === 'signup' && <Auth onLogin={handleLogin} onClose={() => navigate('landing')} initialMode="signup" />}
+        {!isUnverified && view === 'review' && currentReview && (
+          <ReviewDisplay 
+            review={currentReview} 
+            currentUser={currentUser}
+            viewOnly={currentReview.viewOnly}
+            onUpgrade={() => navigate('pricing')} 
+            onSave={handleUpdateReview} 
+            onPublish={handlePublish}
+            onBack={() => navigate('magazine')}
+            onViewPodcast={() => {
+              setTargetPodcastId(currentReview.id);
+              navigate('podcasts');
+            }}
+            onSelectReview={async (r) => {
+              const fullReview = await fetchReviewWithAudio(r.id);
+              navigateToReview(fullReview || r, true);
+            }}
+            allReviews={allReviews}
+            canPublish={creditStatus?.features?.publish_magazine || false}
+            audioFile={currentAudioFile}
+            isSubscribed={creditStatus?.isSubscribed || currentUser?.isSubscribed || false}
+            features={creditStatus?.features || {}}
+            onNavigate={navigate}
+          />
+        )}
+        {!isUnverified && view === 'dashboard' && currentUser && (
+          <Dashboard 
+            reviews={currentUser.history || []} 
+            onUpdateReview={handleUpdateReview}
+            onNavigate={navigate}
+            onSelect={async (r) => { 
+              console.log('Dashboard: Selecting review:', r.id);
+              const fullReview = await fetchReviewWithAudio(r.id);
+              if (fullReview) {
+                console.log('Dashboard: Got full review with URLs');
+                navigateToReview(fullReview, false);
+              } else {
+                console.warn('Dashboard: Failed to get full review, using cached data');
+                navigateToReview(r, false);
+              }
+            }} 
+          />
+        )}
+        {view === 'magazine' && (
+          <Magazine 
+            reviews={allReviews} 
+            onSelect={async (r) => { 
+              const fullReview = await fetchReviewWithAudio(r.id);
+              navigateToReview(fullReview || r, true);
+            }} 
+            onNavigate={navigate}
+          />
+        )}
+        {view === 'podcasts' && (
+          <Podcasts 
+            reviews={allReviews} 
+            onSelectReview={async (r) => { 
+              const fullReview = await fetchReviewWithAudio(r.id);
+              navigateToReview(fullReview || r, false);
+            }} 
+            initialPodcastId={targetPodcastId}
+            fetchReviewWithAudio={fetchReviewWithAudio}
+          />
+        )}
+        {view === 'pricing' && (
+          <Pricing 
+            currentUser={currentUser}
+            paypalClientId={paypalClientId}
+            onUpgrade={async (data) => { 
+              if (!currentUser) { navigate('auth'); return; }
+              // Refresh user data from backend to get latest credits and purchases
+              await refreshUserData();
+              navigate('landing'); 
+            }} 
+          />
+        )}
+        {!isUnverified && view === 'account' && currentUser && (
+          <AccountSettings 
+            user={currentUser} 
+            session={currentUser?.session}
+            onUpdate={handleUpdateProfile} 
+            initialTab={accountTab}
+          />
+        )}
+        {!isUnverified && view === 'admin' && isAdmin(currentUser) && (
+          <AdminDashboardWrapper 
+            currentUser={currentUser}
+            adminUsers={adminUsers}
+            adminReviews={adminReviews}
+            fetchAdminUsers={fetchAdminUsers}
+            fetchAdminReviews={fetchAdminReviews}
+            setUsers={setUsers}
+            setAllReviews={setAllReviews}
+            onUpdateUser={handleUpdateProfile} 
+            onDeleteUser={handleDeleteUser}
+            onUpdateReview={handleAdminUpdateReview}
+            onDeleteReview={handleDeleteReview}
+            styleGuides={styleGuides}
+            onAddStyleGuide={handleAddStyleGuide}
+            onUpdateStyleGuide={handleUpdateStyleGuide}
+            onDeleteStyleGuide={handleDeleteStyleGuide}
+          />
+        )}
+        {view === 'privacy' && <PrivacyPolicy />}
+        {view === 'terms' && <TermsAndConditions />}
+        {view === 'faq' && <FAQ onContactSupport={onContactSupport} />}
+        {view === 'contact' && <ContactUs />}
+        {view === 'guide' && <SubmissionGuide onNavigate={navigate} />}
+        {!isUnverified && view === 'referrals' && currentUser && (
+          <ReferralDashboard currentUser={currentUser} onNavigate={navigate} />
+        )}
+      </Suspense>
     </main>
   );
 };

@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MainContent from './components/MainContent';
-import SupportWidget from './components/SupportWidget';
 import SEO from './components/SEO';
-import InsufficientCreditsModal from './components/InsufficientCreditsModal';
-import ErrorBoundary from './components/ErrorBoundary';
-import Notification, { NotificationType } from './components/Notification';
-import { NotificationProvider, useNotification } from './components/NotificationContext';
 import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { analyzeTrack, generatePodcast } from './services/geminiService';
 import { UserAccount } from '../types';
-import { PayPalScriptProvider } from "@paypal/react-paypal-js";
+
+import { NotificationProvider, useNotification } from './components/NotificationContext';
+
+// Lazy load non-critical components
+const SupportWidget = lazy(() => import('./components/SupportWidget'));
+const InsufficientCreditsModal = lazy(() => import('./components/InsufficientCreditsModal'));
+const ErrorBoundary = lazy(() => import('./components/ErrorBoundary'));
 
 let API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -477,23 +478,15 @@ function AppContent() {
 
     const init = async () => {
       try {
-        // Fetch config
-        try {
-          const configRes = await fetch(`${API_URL}/api/config`);
-          if (configRes.ok) {
-            const config = await configRes.json();
-            if (config.paypalClientId) {
-              setPaypalClientId(config.paypalClientId);
-            }
-          }
-        } catch (e) {
-          console.error("Failed to fetch config", e);
-        }
-
-        // Handle URL routing for shareable review links
+        // Handle URL routing for shareable review links first to determine initial view
         const path = window.location.pathname;
         const reviewMatch = path.match(/^\/review\/([a-zA-Z0-9-]+)$/);
         
+        // Start non-blocking parallel fetches
+        const configPromise = fetch(`${API_URL}/api/config`).then(res => res.ok ? res.json() : null).catch(() => null);
+        const userPromise = getCurrentUser().catch(() => null);
+        const reviewsPromise = fetch(`${API_URL}/api/public/published-reviews?limit=100`).then(res => res.ok ? res.json() : null).catch(() => null);
+
         if (reviewMatch) {
           const reviewId = reviewMatch[1];
           // Fetch the public review
@@ -504,7 +497,6 @@ function AppContent() {
               setCurrentReview({ ...reviewData, viewOnly: true });
               navigate('review', reviewId);
             } else {
-              // Review not found, redirect to magazine
               navigate('magazine');
               window.history.replaceState({}, '', '/');
             }
@@ -514,7 +506,6 @@ function AppContent() {
             window.history.replaceState({}, '', '/');
           }
         } else {
-          // Handle URL parameters for deep linking
           const params = new URLSearchParams(window.location.search);
           const urlView = params.get('view');
           if (urlView && ['landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 'guide', 'account'].includes(urlView)) {
@@ -522,34 +513,30 @@ function AppContent() {
           }
         }
 
-        // Check for existing session in localStorage
-        const savedUser = await getCurrentUser() as UserAccount | null;
+        // Wait for essential data
+        const [config, savedUser, reviewsData] = await Promise.all([configPromise, userPromise, reviewsPromise]);
+
+        if (config && config.paypalClientId) {
+          setPaypalClientId(config.paypalClientId);
+        }
+
         if (savedUser) {
           setCurrentUser(savedUser);
           saveSessionLocal(savedUser);
-          // Fetch credit status after login
           fetchCreditStatus();
-        }
-        setIsInitializing(false);
-
-        // Load published reviews for magazine/podcasts
-        try {
-          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
-          if (reviewsRes.ok) {
-            const data = await reviewsRes.json();
-            setAllReviews(data.reviews || []);
+          if (isAdmin(savedUser)) {
+            fetchStyleGuides();
           }
-        } catch (e) {
-          console.error("Failed to load published reviews", e);
         }
 
-        // Only fetch admin data if we are an admin
-        if (isAdmin(savedUser)) {
-          fetchStyleGuides();
-          // We'll fetch users/reviews when the admin view is actually entered
+        if (reviewsData) {
+          setAllReviews(reviewsData.reviews || []);
         }
+
+        setIsInitializing(false);
       } catch (e) {
         console.error("Failed to initialize app data", e);
+        setIsInitializing(false);
       }
     };
     
@@ -1167,82 +1154,78 @@ function AppContent() {
           </div>
         </div>
       ) : (
-        <PayPalScriptProvider 
-          key={paypalClientId}
-          options={{ 
-            clientId: paypalClientId,
-            currency: "USD",
-            intent: "capture"
-          }}>
-          <div className="flex-grow">
-            <MainContent 
-              view={view}
-              loading={loading}
-              status={status}
-              currentUser={currentUser}
-              currentReview={currentReview}
-              currentAudioFile={currentAudioFile}
-              allReviews={allReviews}
-              users={users}
-              styleGuides={styleGuides}
-              creditStatus={creditStatus}
-              targetPodcastId={targetPodcastId}
-              adminUsers={adminUsers}
-              adminReviews={adminReviews}
-              fetchAdminUsers={fetchAdminUsers}
-              fetchAdminReviews={fetchAdminReviews}
-              setUsers={setUsers}
-              setAllReviews={setAllReviews}
-              setTargetPodcastId={setTargetPodcastId}
-              paypalClientId={paypalClientId}
-              handleAnalyze={handleAnalyze}
-              handleLogin={handleLogin}
-              handleUpdateReview={handleUpdateReview}
-              handlePublish={handlePublish}
-              handleUpdateProfile={handleUpdateProfile}
-              handleDeleteUser={handleDeleteUser}
-              handleAdminUpdateReview={handleAdminUpdateReview}
-              handleDeleteReview={handleDeleteReview}
-              handleAddStyleGuide={handleAddStyleGuide}
-              handleUpdateStyleGuide={handleUpdateStyleGuide}
-              handleDeleteStyleGuide={handleDeleteStyleGuide}
-              handleLogout={handleLogout}
-              handleCancelAnalysis={handleCancelAnalysis}
-              refreshUserData={refreshUserData}
-              accountTab={accountTab}
-              fetchReviewWithAudio={fetchReviewWithAudio}
-              navigateToReview={navigateToReview}
-              navigate={navigate}
-              onContactSupport={handleContactSupport}
-            />
-          </div>
-        </PayPalScriptProvider>
+        <div className="flex-grow">
+          <MainContent 
+            view={view}
+            loading={loading}
+            status={status}
+            currentUser={currentUser}
+            currentReview={currentReview}
+            currentAudioFile={currentAudioFile}
+            allReviews={allReviews}
+            users={users}
+            styleGuides={styleGuides}
+            creditStatus={creditStatus}
+            targetPodcastId={targetPodcastId}
+            adminUsers={adminUsers}
+            adminReviews={adminReviews}
+            fetchAdminUsers={fetchAdminUsers}
+            fetchAdminReviews={fetchAdminReviews}
+            setUsers={setUsers}
+            setAllReviews={setAllReviews}
+            setTargetPodcastId={setTargetPodcastId}
+            paypalClientId={paypalClientId}
+            handleAnalyze={handleAnalyze}
+            handleLogin={handleLogin}
+            handleUpdateReview={handleUpdateReview}
+            handlePublish={handlePublish}
+            handleUpdateProfile={handleUpdateProfile}
+            handleDeleteUser={handleDeleteUser}
+            handleAdminUpdateReview={handleAdminUpdateReview}
+            handleDeleteReview={handleDeleteReview}
+            handleAddStyleGuide={handleAddStyleGuide}
+            handleUpdateStyleGuide={handleUpdateStyleGuide}
+            handleDeleteStyleGuide={handleDeleteStyleGuide}
+            handleLogout={handleLogout}
+            handleCancelAnalysis={handleCancelAnalysis}
+            refreshUserData={refreshUserData}
+            accountTab={accountTab}
+            fetchReviewWithAudio={fetchReviewWithAudio}
+            navigateToReview={navigateToReview}
+            navigate={navigate}
+            onContactSupport={handleContactSupport}
+          />
+        </div>
       )}
 
       <Footer navigate={navigate} />
 
       {/* Support Widget */}
-      {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing' || supportOpen) && (
-        <SupportWidget 
-          currentUser={currentUser} 
-          isOpen={supportOpen}
-          setIsOpen={setSupportOpen}
-          view={supportView}
-          setView={setSupportView}
-        />
-      )}
+      <Suspense fallback={null}>
+        {currentUser && (view === 'dashboard' || view === 'podcasts' || view === 'magazine' || view === 'account' || view === 'guide' || view === 'pricing' || supportOpen) && (
+          <SupportWidget 
+            currentUser={currentUser} 
+            isOpen={supportOpen}
+            setIsOpen={setSupportOpen}
+            view={supportView}
+            setView={setSupportView}
+          />
+        )}
+      </Suspense>
 
       {/* Insufficient Credits Modal */}
-      <InsufficientCreditsModal
-        isOpen={showCreditModal}
-        onClose={() => setShowCreditModal(false)}
-        onBuyCredits={() => { setShowCreditModal(false); navigate('pricing'); }}
-        onUpgrade={() => { setShowCreditModal(false); navigate('pricing'); }}
-        currentCredits={creditStatus?.credits || 0}
-        requiredCredits={creditModalConfig.required}
-        action={creditModalConfig.action}
-        isFreeUser={creditModalConfig.isFreeUser}
-      />
+      <Suspense fallback={null}>
+        <InsufficientCreditsModal
+          isOpen={showCreditModal}
+          onClose={() => setShowCreditModal(false)}
+          onBuyCredits={() => { setShowCreditModal(false); navigate('pricing'); }}
+          onUpgrade={() => { setShowCreditModal(false); navigate('pricing'); }}
+          currentCredits={creditStatus?.credits || 0}
+          requiredCredits={creditModalConfig.required}
+          action={creditModalConfig.action}
+          isFreeUser={creditModalConfig.isFreeUser}
+        />
+      </Suspense>
     </div>
   );
 }
