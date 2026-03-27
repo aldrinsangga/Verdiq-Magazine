@@ -111,7 +111,7 @@ const SEO: React.FC<SEOProps> = ({ view, currentReview, allReviews = [] }) => {
 
     if (view === 'review' && currentReview) {
       const artist = currentReview.artistName || 'Unknown Artist';
-      const track = currentReview.trackName || 'Untitled Track';
+      const track = currentReview.songTitle || 'Untitled Track';
       
       structuredData["@type"] = "Review";
       structuredData["itemReviewed"] = {

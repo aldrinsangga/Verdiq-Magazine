@@ -5,7 +5,7 @@ import MainContent from './components/MainContent';
 import SEO from './components/SEO';
 import { SessionHeartbeat } from './components/SessionHeartbeat';
 import { smartFetch } from './lib/apiUtils';
-import { getSession, getAuthHeaders, saveSession, clearSession, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
+import { getSession, getAuthHeaders, saveSession, logout, getCurrentUser, auth, safeJson, isAdmin } from './authClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { analyzeTrack, generatePodcast } from './services/geminiService';
 import { UserAccount } from '../types';
@@ -173,23 +173,25 @@ function AppContent() {
     isFreeUser?: boolean;
   }>({ action: null, required: 0 });
 
-  const navigate = (v, reviewId = null) => {
+  const navigate = (v, reviewId = null, overrideUser = undefined) => {
     // Close mobile menu if open
     setMobileMenuOpen(false);
     
-    if ((v === 'dashboard' || v === 'account') && !currentUser) {
+    const activeUser = overrideUser !== undefined ? overrideUser : currentUser;
+    
+    if ((v === 'dashboard' || v === 'account') && !activeUser) {
       setView('auth');
       updateUrlForView('auth');
       window.scrollTo(0, 0);
       return;
     }
-    if (v === 'signup' && currentUser) {
+    if ((v === 'signup' || v === 'auth') && activeUser) {
       setView('dashboard');
       updateUrlForView('dashboard');
       window.scrollTo(0, 0);
       return;
     }
-    if (v === 'admin' && !isAdmin(currentUser)) {
+    if (v === 'admin' && !isAdmin(activeUser)) {
       setView('landing');
       updateUrlForView('landing');
       window.scrollTo(0, 0);
@@ -200,6 +202,10 @@ function AppContent() {
       setAccountTab(reviewId);
     } else if (v === 'account') {
       setAccountTab('profile');
+    }
+    
+    if (v === 'podcasts' && reviewId) {
+      setTargetPodcastId(reviewId);
     }
     
     setView(v);
@@ -267,10 +273,21 @@ function AppContent() {
 
   // Get initial view from URL
   function getViewFromPath() {
-    const path = window.location.pathname;
+    let path = window.location.pathname;
+    
+    // Remove trailing slash if present (except for root '/')
+    if (path.length > 1 && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
+    
     // Check for review with ID: /review/{id}
     if (path.startsWith('/review/')) {
       return 'review';
+    }
+    
+    // Check for podcast with ID: /podcasts/{id}
+    if (path.startsWith('/podcasts/')) {
+      return 'podcasts';
     }
     return pathToView[path] || 'landing';
   }
@@ -287,12 +304,12 @@ function AppContent() {
 
     const initialView = getViewFromPath();
     setView(initialView);
-    
+
     const path = window.location.pathname;
-    if (path.startsWith('/review/')) {
-      const reviewId = path.split('/review/')[1];
-      if (reviewId) {
-        loadReviewFromUrl(reviewId);
+    if (path.startsWith('/podcasts/')) {
+      const podcastId = path.split('/podcasts/')[1];
+      if (podcastId) {
+        setTargetPodcastId(podcastId);
       }
     }
   }, []);
@@ -483,37 +500,12 @@ function AppContent() {
         // Handle URL routing for shareable review links first to determine initial view
         const path = window.location.pathname;
         const reviewMatch = path.match(/^\/review\/([a-zA-Z0-9-]+)$/);
+        const podcastMatch = path.match(/^\/podcasts\/([a-zA-Z0-9-]+)$/);
         
         // Start non-blocking parallel fetches
         const configPromise = fetch(`${API_URL}/api/config`).then(res => res.ok ? res.json() : null).catch(() => null);
         const userPromise = getCurrentUser().catch(() => null);
-        const reviewsPromise = fetch(`${API_URL}/api/public/published-reviews?limit=100`).then(res => res.ok ? res.json() : null).catch(() => null);
-
-        if (reviewMatch) {
-          const reviewId = reviewMatch[1];
-          // Fetch the public review
-          try {
-            const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
-            if (reviewRes.ok) {
-              const reviewData = await reviewRes.json();
-              setCurrentReview({ ...reviewData, viewOnly: true });
-              navigate('review', reviewId);
-            } else {
-              navigate('magazine');
-              window.history.replaceState({}, '', '/');
-            }
-          } catch (e) {
-            console.error('Failed to load shared review:', e);
-            navigate('magazine');
-            window.history.replaceState({}, '', '/');
-          }
-        } else {
-          const params = new URLSearchParams(window.location.search);
-          const urlView = params.get('view');
-          if (urlView && ['landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 'guide', 'account'].includes(urlView)) {
-            navigate(urlView);
-          }
-        }
+        const reviewsPromise = fetch(`${API_URL}/api/public/published-reviews?limit=100`, { cache: 'no-store' }).then(res => res.ok ? res.json() : null).catch(() => null);
 
         // Wait for essential data
         const [config, savedUser, reviewsData] = await Promise.all([configPromise, userPromise, reviewsPromise]);
@@ -533,6 +525,54 @@ function AppContent() {
 
         if (reviewsData) {
           setAllReviews(reviewsData.reviews || []);
+        }
+
+        if (reviewMatch) {
+          const reviewId = reviewMatch[1];
+          // Fetch the public review
+          try {
+            const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+            if (reviewRes.ok) {
+              const reviewData = await reviewRes.json();
+              setCurrentReview({ ...reviewData, viewOnly: true });
+              navigate('review', reviewId, savedUser);
+            } else {
+              navigate('magazine', null, savedUser);
+              window.history.replaceState({}, '', '/magazine');
+            }
+          } catch (e) {
+            console.error('Failed to load shared review:', e);
+            navigate('magazine', null, savedUser);
+            window.history.replaceState({}, '', '/magazine');
+          }
+        } else if (podcastMatch) {
+          const podcastId = podcastMatch[1];
+          navigate('podcasts', podcastId, savedUser);
+        } else {
+          const params = new URLSearchParams(window.location.search);
+          const urlView = params.get('view');
+          const initialView = getViewFromPath();
+          
+          if (urlView && ['landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 'guide', 'account'].includes(urlView)) {
+            navigate(urlView, null, savedUser);
+          } else {
+            // Handle initialView checks
+            if (savedUser) {
+              if (initialView === 'signup' || initialView === 'auth') {
+                navigate('dashboard', null, savedUser);
+              } else if (initialView === 'admin' && !isAdmin(savedUser)) {
+                navigate('landing', null, savedUser);
+              } else {
+                navigate(initialView, null, savedUser);
+              }
+            } else {
+              if (initialView === 'dashboard' || initialView === 'account' || initialView === 'admin') {
+                navigate('auth', null, savedUser);
+              } else {
+                navigate(initialView, null, savedUser);
+              }
+            }
+          }
         }
 
         setIsInitializing(false);
@@ -573,22 +613,22 @@ function AppContent() {
     setCurrentUser(user);
     saveSessionLocal(user);
     
-    // Only navigate to landing if we're still on the auth view
-    if (view === 'auth') {
-      navigate('landing');
+    // Only navigate to dashboard if we're still on the auth view
+    if (view === 'auth' || view === 'signup') {
+      navigate('dashboard', null, user);
     }
   };
 
   // Handle logout
   const handleLogout = async () => {
     try {
-      clearSession();
+      await logout();
     } catch (e) {
       console.error('Logout error:', e);
     }
     setCurrentUser(null);
     setCreditStatus(null);
-    navigate('landing');
+    navigate('landing', null, null);
     setCurrentAudioFile(null);
   };
 
@@ -715,7 +755,7 @@ function AppContent() {
       
       // Call the analyze service and podcast generation directly on frontend in parallel
       const reviewPromise = analyzeTrack({
-        trackName: data.trackName,
+        trackName: data.songTitle,
         artistName: data.artistName,
         audioBase64: audioBase64,
         audioMimeType: data.audioFile.type,
@@ -729,7 +769,7 @@ function AppContent() {
       });
 
       const podcastPromise = generatePodcast(
-        data.trackName, 
+        data.songTitle, 
         data.artistName, 
         audioBase64 as string
       ).catch(err => {
@@ -882,12 +922,6 @@ function AppContent() {
     if (!currentUser) return;
 
     try {
-      // Check credits before publishing
-      const canProceed = await checkCreditsForAction('publish');
-      if (!canProceed) {
-        return; // Modal will be shown automatically
-      }
-
       let review = currentUser.history?.find(r => r.id === reviewId);
       
       if (!review && currentReview?.id === reviewId) {
@@ -911,54 +945,9 @@ function AppContent() {
 
       const updatedReview = { ...review, isPublished: true };
       
-      const headers = await getAuthHeadersLocal();
-      const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify({ userId: currentUser.id, review: updatedReview })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        // Update credits from the response
-        if (data.remaining !== undefined) {
-          setCreditStatus(prev => ({
-            ...prev,
-            credits: data.remaining,
-          }));
-        }
-        
-        // Fetch updated user data
-        const userRes = await fetch(`${API_URL}/api/users/${currentUser.id}`, { headers });
-        if (userRes.ok) {
-          const updatedUser = await userRes.json();
-          setCurrentUser(updatedUser);
-          saveSessionLocal(updatedUser);
-        }
-        
-        if (currentReview?.id === reviewId) {
-          setCurrentReview(updatedReview);
-        }
-
-        // Refresh public reviews
-        try {
-          const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
-          if (reviewsRes.ok) {
-            const data = await reviewsRes.json();
-            setAllReviews(data.reviews || []);
-          }
-        } catch (e) {
-          console.error("Failed to refresh published reviews", e);
-        }
-        
+      const success = await handleUpdateReview(updatedReview);
+      if (success) {
         navigate('magazine');
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        if (res.status === 402) {
-          setShowCreditModal(true);
-        } else {
-          showNotification(`Failed to publish: ${errorData.message || 'Server error'}`, 'error');
-        }
       }
     } catch (error) {
       console.error('handlePublish error:', error);
@@ -1006,7 +995,7 @@ function AppContent() {
 
       // Refresh public reviews
       try {
-        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
+        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`, { cache: 'no-store' });
         if (reviewsRes.ok) {
           const data = await reviewsRes.json();
           setAllReviews(data.reviews || []);
@@ -1019,13 +1008,28 @@ function AppContent() {
         fetchAdminUsers(adminUsers.offset, adminUsers.limit);
         fetchAdminReviews(adminReviews.offset, adminReviews.limit);
       }
-    } catch (error) {
+      
+      return true;
+    } catch (error: any) {
       // Rollback on failure
       setCurrentReview(previousReview);
       setCurrentUser(prev => ({ ...prev, history: previousHistory }));
       
       console.error('handleUpdateReview error:', error);
-      showNotification('An unexpected error occurred while saving changes. Please try again.', 'error');
+      
+      if (error.status === 402) {
+        setCreditModalConfig({
+          action: updatedReview.isPublished ? 'publish' : 'edit',
+          required: error.data?.required || 3,
+          reason: 'insufficient_credits',
+          message: error.data?.message,
+          isFreeUser: !currentUser?.isSubscribed
+        });
+        setShowCreditModal(true);
+      } else {
+        showNotification(error.message || 'An unexpected error occurred while saving changes. Please try again.', 'error');
+      }
+      return false;
     }
   };
 
@@ -1094,7 +1098,7 @@ function AppContent() {
     if (res.ok) {
       // Refresh public reviews
       try {
-        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
+        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`, { cache: 'no-store' });
         if (reviewsRes.ok) {
           const data = await reviewsRes.json();
           setAllReviews(data.reviews || []);
@@ -1125,10 +1129,12 @@ function AppContent() {
       setAllReviews(prev => prev.filter(r => r.id !== reviewId));
       // Also update current user history if it's their review
       if (currentUser?.history?.find(r => r.id === reviewId)) {
-        setCurrentUser(prev => ({
-          ...prev,
-          history: prev.history.filter(r => r.id !== reviewId)
-        }));
+        const updatedUser = {
+          ...currentUser,
+          history: currentUser.history.filter(r => r.id !== reviewId)
+        };
+        setCurrentUser(updatedUser);
+        saveSessionLocal(updatedUser);
       }
       // Refresh admin data if in admin view
       if (isAdmin(currentUser) && view === 'admin') {
@@ -1137,6 +1143,7 @@ function AppContent() {
       }
     } else {
       const error = await res.json().catch(() => ({ detail: 'Failed to delete review' }));
+      showNotification(error.detail || 'Failed to delete review', 'error');
       throw new Error(error.detail || 'Failed to delete review');
     }
   };

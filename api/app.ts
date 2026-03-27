@@ -61,19 +61,6 @@ app.use(helmet({
   xFrameOptions: false, // Allow framing in AI Studio
 }));
 
-// Serve static files in production BEFORE CORS and other middleware
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(publicPath, {
-    maxAge: '1d',
-    etag: true
-  }));
-  app.use(express.static(distPath, {
-    maxAge: '1y', // Vite assets have hashes
-    immutable: true,
-    index: false // Don't serve index.html here, handle it at the end
-  }));
-}
-
 // 2. CORS & BODY PARSING
 const allowedOrigins = [
   "https://verdiqmag.com",
@@ -100,6 +87,19 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+
+// Serve static files in production AFTER CORS
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(publicPath, {
+    maxAge: '1d',
+    etag: true
+  }));
+  app.use(express.static(distPath, {
+    maxAge: '1y', // Vite assets have hashes
+    immutable: true,
+    index: false // Don't serve index.html here, handle it at the end
+  }));
+}
 
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
@@ -335,7 +335,11 @@ const getFullUser = async (userId: string) => {
       const expiredReviewIds: string[] = [];
       
       for (const doc of reviewsSnapshot.docs) {
-        const review = doc.data() as Review;
+        const data = doc.data();
+        const review = {
+          ...data,
+          songTitle: data.songTitle || data.trackTitle || data.trackName || 'Untitled Track'
+        } as Review;
         
         // Check for expired temporary reviews
         if (review.isTemporary && review.expiresAt) {
@@ -1589,7 +1593,8 @@ app.post("/api/auth/mfa/verify",
       const sanitized = sanitizeUser(user);
       res.json({
         ...sanitized,
-        session: { access_token: "mock-jwt-token-" + userDoc.id }
+        session: { access_token: "mock-jwt-token-" + userDoc.id },
+        mfa_verified: true
       });
     } else {
       console.warn(`[MFA] Invalid login code ${mfa_code} for ${email}`);
@@ -1738,10 +1743,12 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
     const isNowPublishing = review.isPublished && !currentReviewData?.isPublished;
     
     // Check if content actually changed to avoid charging for unpublish/delete
+    const currentSongTitle = currentReviewData?.songTitle || currentReviewData?.trackTitle;
+    const newSongTitle = review.songTitle || review.trackTitle;
     const isContentChanged = 
       review.reviewBody !== currentReviewData?.reviewBody ||
       review.artistName !== currentReviewData?.artistName ||
-      review.trackTitle !== currentReviewData?.trackTitle ||
+      newSongTitle !== currentSongTitle ||
       review.rating !== currentReviewData?.rating ||
       JSON.stringify(review.tags || []) !== JSON.stringify(currentReviewData?.tags || []);
       
@@ -1856,7 +1863,13 @@ app.get("/api/public/published-reviews", async (req, res, next) => {
     const query = db.collection('reviews').where('isPublished', '==', true).orderBy('createdAt', 'desc');
     const totalCount = await query.count();
     const snapshot = await query.offset(offset).limit(limit).get();
-    const reviews = snapshot.docs.map(doc => doc.data());
+    const reviews = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        ...data,
+        songTitle: data.songTitle || data.trackTitle || data.trackName || 'Untitled Track'
+      };
+    });
     
     const result = {
       reviews,
@@ -1884,7 +1897,11 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
 
     const doc = await db.collection('reviews').doc(id).get();
     if (doc.exists) {
-      const review = doc.data() as Review;
+      const data = doc.data() as Review;
+      const review = {
+        ...data,
+        songTitle: data.songTitle || data.trackTitle || data.trackName || 'Untitled Track'
+      };
       serverCache.set(cacheKey, review, 3600); // Cache for 60 minutes
       res.json(review);
     } else {

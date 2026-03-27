@@ -64,8 +64,10 @@ const ReviewDisplay = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave(editedReview);
-      setEditMode(false);
+      const success = await onSave(editedReview);
+      if (success) {
+        setEditMode(false);
+      }
     } catch (e) {
       console.error('Save failed:', e);
     } finally {

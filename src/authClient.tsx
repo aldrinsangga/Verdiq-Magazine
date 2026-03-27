@@ -164,6 +164,11 @@ export const login = async (email, password) => {
         body: JSON.stringify({ email, password, name: user.displayName || email.split('@')[0], id: user.uid })
       });
       const signupData = await safeJson(signupRes);
+      
+      if (!signupRes.ok) {
+        throw new Error(signupData.detail || signupData.message || 'Failed to create user profile');
+      }
+      
       saveSession({ ...signupData, session: { access_token: token } });
       return { ...signupData, session: { access_token: token } };
     }
@@ -277,6 +282,20 @@ export const getCurrentUser = async () => {
           
           if (res.ok) {
             const userData = await safeJson(res);
+            
+            // Check if MFA is enabled but not verified in this session
+            // Since we don't have a way to track MFA session state across reloads easily without a custom token,
+            // we will require them to log in again if MFA is enabled.
+            // A better approach would be to store an mfa_verified flag in localStorage.
+            const session = getSession();
+            if (userData.mfaEnabled && !session?.mfa_verified) {
+              console.log(`[getCurrentUser] MFA is enabled but not verified in session for user ${user.uid}. Logging out.`);
+              await signOut(auth);
+              clearSession();
+              resolve(null);
+              return;
+            }
+
             const fullUser = { 
               ...userData, 
               email: userData.email || user.email,

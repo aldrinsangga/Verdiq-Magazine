@@ -7,7 +7,7 @@ import { ref, getDownloadURL } from 'firebase/storage';
 
 const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubscribed, onNavigate }) => {
   const [formData, setFormData] = useState({
-    trackName: '',
+    songTitle: '',
     artistName: '',
     lyrics: '',
     bio: '',
@@ -156,7 +156,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
       return;
     }
 
-    if (!formData.trackName.trim()) {
+    if (!formData.songTitle.trim()) {
       setError('Please enter the name of the track.');
       return;
     }
@@ -301,8 +301,8 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
                 </label>
                 <input 
                   required
-                  value={formData.trackName}
-                  onChange={e => setFormData({...formData, trackName: e.target.value})}
+                  value={formData.songTitle}
+                  onChange={e => setFormData({...formData, songTitle: e.target.value})}
                   className="input-field"
                   placeholder=""
                   data-testid="track-name-input"
@@ -423,7 +423,7 @@ const SearchSection = ({ onAnalyze, onCancel, isLoading, credits, status, isSubs
 
             <button
               type="submit"
-              disabled={isLoading || !selectedFile || !formData.trackName || !formData.artistName || !featuredPhoto}
+              disabled={isLoading || !selectedFile || !formData.songTitle || !formData.artistName || !featuredPhoto}
               className={`btn-primary !py-6 !text-xl !rounded-[24px] mt-6 transition-all duration-500 ${isLoading ? 'bg-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.4)]' : ''}`}
               data-testid="analyze-btn"
             >

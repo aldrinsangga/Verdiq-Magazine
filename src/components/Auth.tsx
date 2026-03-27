@@ -89,6 +89,8 @@ const Auth = ({ onLogin, onClose, initialMode = 'login' }) => {
           onCancel={() => {
             setShowMFA(false);
             setMfaCredentials(null);
+            // Log out of Firebase Auth since they cancelled MFA
+            import('../authClient').then(({ logout }) => logout());
           }}
         />
       </div>

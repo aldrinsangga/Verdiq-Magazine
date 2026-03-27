@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, QrCode, Key, Check, TriangleAlert, X, Loader2 } from 'lucide-react';
-import { auth } from '../authClient';
+import { auth, getSession, saveSession } from '../authClient';
 
 const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
   ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
@@ -99,6 +99,11 @@ const MFASetup = ({ user, session, onMFAEnabled, onClose }) => {
       if (data.success) {
         setStep('success');
         setMfaEnabled(true);
+        // Update local session to indicate MFA is verified so they don't get logged out on refresh
+        const currentSession = getSession();
+        if (currentSession) {
+          saveSession({ ...currentSession, mfa_verified: true });
+        }
         if (onMFAEnabled) onMFAEnabled();
       }
     } catch (e) {

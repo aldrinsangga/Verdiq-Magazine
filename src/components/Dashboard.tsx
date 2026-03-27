@@ -12,13 +12,20 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onDeleteReview, onNaviga
   const handleConfirmDelete = async (e, review) => {
     e.stopPropagation();
     setDeleteConfirmId(null);
-    await onUpdateReview({ ...review, isDeleted: true });
+    const success = await onUpdateReview({ ...review, isDeleted: true, isPublished: false });
+    if (success) {
+      setActiveTab('deleted');
+    }
   };
 
   const handlePermanentDelete = async (e, reviewId) => {
     e.stopPropagation();
     if (onDeleteReview) {
-      await onDeleteReview(reviewId);
+      try {
+        await onDeleteReview(reviewId);
+      } catch (error) {
+        console.error('Failed to permanently delete review:', error);
+      }
     }
   };
 
@@ -29,19 +36,26 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onDeleteReview, onNaviga
 
   const handleRestore = async (e, review) => {
     e.stopPropagation();
-    await onUpdateReview({ ...review, isDeleted: false });
+    const success = await onUpdateReview({ ...review, isDeleted: false });
+    if (success) {
+      setActiveTab('draft');
+    }
   };
 
   const handleUnpublish = async (e, review) => {
     e.stopPropagation();
-    await onUpdateReview({ ...review, isPublished: false });
-    setActiveTab('draft');
+    const success = await onUpdateReview({ ...review, isPublished: false });
+    if (success) {
+      setActiveTab('draft');
+    }
   };
 
   const handlePublish = async (e, review) => {
     e.stopPropagation();
-    await onUpdateReview({ ...review, isPublished: true });
-    setActiveTab('published');
+    const success = await onUpdateReview({ ...review, isPublished: true });
+    if (success) {
+      setActiveTab('published');
+    }
   };
 
   const filteredReviews = reviews.filter(r => {

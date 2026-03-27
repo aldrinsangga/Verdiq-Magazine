@@ -46,6 +46,13 @@ export async function smartFetch(url: string, options: FetchOptions = {}) {
       
       const data = await response.json();
       
+      if (!response.ok) {
+        const error = new Error(data.message || `HTTP ${response.status}`);
+        (error as any).status = response.status;
+        (error as any).data = data;
+        throw error;
+      }
+      
       // 2. Update Cache
       if (fetchOptions.method === 'GET' || !fetchOptions.method) {
         cache.set(url, { data, timestamp: Date.now() });
