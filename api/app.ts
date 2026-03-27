@@ -1817,6 +1817,20 @@ app.put("/api/reviews/:reviewId", async (req, res, next) => {
 
     await db.collection('reviews').doc(reviewId).update(reviewToUpdate);
     
+    // Invalidate caches
+    serverCache.del(`user_doc_${authUserId}`);
+    serverCache.del(`user_full_${authUserId}`);
+    serverCache.del(`credits_status_${authUserId}`);
+    serverCache.del(`public_review_${reviewId}`);
+    
+    // Invalidate all public reviews caches
+    const keys = serverCache.keys();
+    keys.forEach(key => {
+      if (key.startsWith('public_reviews_')) {
+        serverCache.del(key);
+      }
+    });
+
     // Fetch updated credits to return
     const updatedUserDoc = await db.collection('users').doc(authUserId).get();
     const updatedCredits = updatedUserDoc.data()?.credits ?? requestingUser?.credits;
@@ -1901,6 +1915,21 @@ app.delete("/api/reviews/:id", requireAuth, async (req, res, next) => {
     }
 
     await db.collection('reviews').doc(id).delete();
+    
+    // Invalidate caches
+    serverCache.del(`user_doc_${userId}`);
+    serverCache.del(`user_full_${userId}`);
+    serverCache.del(`credits_status_${userId}`);
+    serverCache.del(`public_review_${id}`);
+    
+    // Invalidate all public reviews caches
+    const keys = serverCache.keys();
+    keys.forEach(key => {
+      if (key.startsWith('public_reviews_')) {
+        serverCache.del(key);
+      }
+    });
+
     res.json({ success: true });
   } catch (error) {
     next(error);

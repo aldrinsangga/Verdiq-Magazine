@@ -1004,6 +1004,17 @@ function AppContent() {
         saveSessionLocal(freshUser);
       }
 
+      // Refresh public reviews
+      try {
+        const reviewsRes = await fetch(`${API_URL}/api/public/published-reviews?limit=100`);
+        if (reviewsRes.ok) {
+          const data = await reviewsRes.json();
+          setAllReviews(data.reviews || []);
+        }
+      } catch (e) {
+        console.error("Failed to refresh published reviews", e);
+      }
+
       if (isAdmin(currentUser) && view === 'admin') {
         fetchAdminUsers(adminUsers.offset, adminUsers.limit);
         fetchAdminReviews(adminReviews.offset, adminReviews.limit);

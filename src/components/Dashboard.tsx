@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
+const Dashboard = ({ reviews, onSelect, onUpdateReview, onDeleteReview, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('draft');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -13,6 +13,13 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
     e.stopPropagation();
     setDeleteConfirmId(null);
     await onUpdateReview({ ...review, isDeleted: true });
+  };
+
+  const handlePermanentDelete = async (e, reviewId) => {
+    e.stopPropagation();
+    if (onDeleteReview) {
+      await onDeleteReview(reviewId);
+    }
   };
 
   const handleCancelDelete = (e) => {
@@ -29,6 +36,12 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
     e.stopPropagation();
     await onUpdateReview({ ...review, isPublished: false });
     setActiveTab('draft');
+  };
+
+  const handlePublish = async (e, review) => {
+    e.stopPropagation();
+    await onUpdateReview({ ...review, isPublished: true });
+    setActiveTab('published');
   };
 
   const filteredReviews = reviews.filter(r => {
@@ -121,13 +134,22 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
                   )}
                   
                   {activeTab === 'deleted' ? (
-                    <button 
-                      onClick={(e) => handleRestore(e, r)}
-                      className="glass p-2 rounded-full border border-white/10 hover:border-emerald-500/50 hover:text-emerald-500 transition-all"
-                      title="Restore"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    </button>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={(e) => handleRestore(e, r)}
+                        className="glass p-2 rounded-full border border-white/10 hover:border-emerald-500/50 hover:text-emerald-500 transition-all"
+                        title="Restore"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                      </button>
+                      <button 
+                        onClick={(e) => handlePermanentDelete(e, r.id)}
+                        className="glass p-2 rounded-full border border-white/10 hover:border-red-500/50 hover:text-red-500 transition-all"
+                        title="Permanent Delete"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                      </button>
+                    </div>
                   ) : deleteConfirmId === r.id ? (
                     <div className="glass px-3 py-1 rounded-full border border-red-500/50 flex items-center gap-2">
                       <span className="text-red-500 text-[10px] font-black uppercase tracking-widest">Delete?</span>
@@ -136,8 +158,17 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
                       <button onClick={handleCancelDelete} className="text-white hover:text-slate-300 text-[10px] font-bold">NO</button>
                     </div>
                   ) : (
-                    <>
-                      {r.isPublished && (
+                    <div className="flex gap-2">
+                      {activeTab === 'draft' && (
+                        <button 
+                          onClick={(e) => handlePublish(e, r)}
+                          className="glass px-3 md:px-4 py-1 md:py-1.5 rounded-full border border-emerald-500/30 hover:bg-emerald-500/10 transition-all"
+                          title="Publish"
+                        >
+                          <span className="text-emerald-500 text-[8px] md:text-[10px] font-black uppercase tracking-widest">Publish</span>
+                        </button>
+                      )}
+                      {activeTab === 'published' && (
                         <button 
                           onClick={(e) => handleUnpublish(e, r)}
                           className="glass px-3 md:px-4 py-1 md:py-1.5 rounded-full border border-red-500/30 hover:bg-red-500/10 transition-all"
@@ -153,7 +184,7 @@ const Dashboard = ({ reviews, onSelect, onUpdateReview, onNavigate }) => {
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                       </button>
-                    </>
+                    </div>
                   )}
                 </div>
 

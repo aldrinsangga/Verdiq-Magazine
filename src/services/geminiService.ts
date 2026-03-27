@@ -630,12 +630,12 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
     MANDATORY START: The podcast MUST always start with Wolf saying: "Welcome back to the session. Today we're checking out ${trackName} by ${artistName}."
     
     RANDOM INTRO: Immediately after the mandatory start, Wolf should share something random and different every time. 
-    Topics can include: a very short story, a weird fact, a quick observation about his day, a compliment to Sloane, asking about the weather, what she had for breakfast, or something random about the studio (e.g., "Sloane, did you see the new monitors?" or "Man, this coffee is hitting different today").
+    Topics can include: a very short story (MAX 2 sentences), a weird fact, a quick observation about his day, a compliment to Sloane, asking about the weather, what she had for breakfast, or something random about the studio (e.g., "Sloane, did you see the new monitors?" or "Man, this coffee is hitting different today").
     He should be animated and high-energy here. 
     - Add some chuckles and giggles if the random banter is funny.
     - Add some reactions that fit with the topic being discussed (e.g., Wolf laughing at his own joke, Sloane reacting with "No way!" or "That's wild").
     - Sloane should react naturally to this, and she should INTERRUPT Wolf once during this intro with a quick comment or a laugh.
-    This segment should be brief but engaging.
+    CRITICAL: This segment MUST be very brief (max 3-4 lines of total dialogue) to get to the music faster.
     
     TRANSITION: Ensure a smooth, conversational transition from the random intro into the actual analysis of "${trackName}".
     

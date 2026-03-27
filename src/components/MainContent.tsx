@@ -168,6 +168,7 @@ const MainContent: React.FC<MainContentProps> = ({
           <Dashboard 
             reviews={currentUser.history || []} 
             onUpdateReview={handleUpdateReview}
+            onDeleteReview={handleDeleteReview}
             onNavigate={navigate}
             onSelect={async (r) => { 
               console.log('Dashboard: Selecting review:', r.id);
