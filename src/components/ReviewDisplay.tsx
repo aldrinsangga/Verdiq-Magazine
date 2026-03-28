@@ -42,7 +42,7 @@ const ReviewDisplay = ({
     if (review?.id && !hasTrackedRead.current) {
       hasTrackedRead.current = true;
       const API_URL = (import.meta.env.VITE_BACKEND_URL && import.meta.env.VITE_BACKEND_URL !== 'undefined') 
-        ? import.meta.env.VITE_BACKEND_URL 
+        ? import.meta.env.VITE_BACKEND_URL.replace(/\/$/, '') 
         : '';
       
       fetch(`${API_URL}/api/reviews/${review.id}/read`, { method: 'POST' })
