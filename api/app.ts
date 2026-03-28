@@ -1700,6 +1700,11 @@ app.post("/api/reviews",
       await userRef.update({ credits: newCredits });
       await updateGlobalCredits(-cost);
       
+      // Invalidate caches
+      serverCache.del(`user_doc_${userId}`);
+      serverCache.del(`user_full_${userId}`);
+      serverCache.del(`credits_status_${userId}`);
+      
       const fullUser = await getFullUser(userId);
       res.json(fullUser);
     } else {

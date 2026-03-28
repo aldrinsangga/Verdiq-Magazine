@@ -283,7 +283,11 @@ export function useAppActions(
       setStatus("Finalizing...");
       const refreshedReview = await fetchReviewWithAudio(reviewForStorage.id);
       
-      navigateToReview(refreshedReview || reviewForStorage, false);
+      if (!refreshedReview) {
+        throw new Error("Failed to verify review save. Please check your studio.");
+      }
+
+      navigateToReview(refreshedReview, false);
       setLoading(false);
       setStatus("");
       showNotification("Analysis complete! Review saved to your studio.", "success");
