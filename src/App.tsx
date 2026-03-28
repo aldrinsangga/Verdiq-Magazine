@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy, useCallback } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import MainContent from './components/MainContent';
@@ -78,31 +78,55 @@ const fetchWithTimeout = async (url: string, options: any = {}, timeout = 5000) 
   }
 };
 
+// Map views to URL paths
+const viewToPath = {
+  'landing': '/',
+  'dashboard': '/studio',
+  'magazine': '/magazine',
+  'podcasts': '/podcasts',
+  'pricing': '/pricing',
+  'account': '/account',
+  'admin': '/admin',
+  'auth': '/login',
+  'signup': '/signup',
+  'review': '/review',
+  'guide': '/guide',
+  'faq': '/faq',
+  'terms': '/terms',
+  'privacy': '/privacy',
+  'contact': '/contact',
+  'referrals': '/referrals'
+};
+
+const pathToView = Object.fromEntries(
+  Object.entries(viewToPath).map(([view, path]) => [path, view])
+);
+
+// Helper to normalize paths for routing
+const normalizePath = (path: string) => {
+  if (path === '/') return '/';
+  return path.endsWith('/') ? path.slice(0, -1) : path;
+};
+
+// Get initial view from URL
+const getViewFromPath = () => {
+  let path = normalizePath(window.location.pathname);
+  
+  // Check for review with ID: /review/{id}
+  if (path.startsWith('/review/')) {
+    return 'review';
+  }
+  
+  // Check for podcast with ID: /podcasts/{id}
+  if (path.startsWith('/podcasts/')) {
+    return 'podcasts';
+  }
+  
+  return pathToView[path] || 'landing';
+};
+
 function AppContent() {
   const { showNotification } = useNotification();
-  // Map views to URL paths
-  const viewToPath = {
-    'landing': '/',
-    'dashboard': '/studio',
-    'magazine': '/magazine',
-    'podcasts': '/podcasts',
-    'pricing': '/pricing',
-    'account': '/account',
-    'admin': '/admin',
-    'auth': '/login',
-    'signup': '/signup',
-    'review': '/review',
-    'guide': '/guide',
-    'faq': '/faq',
-    'terms': '/terms',
-    'privacy': '/privacy',
-    'contact': '/contact',
-    'referrals': '/referrals'
-  };
-  
-  const pathToView = Object.fromEntries(
-    Object.entries(viewToPath).map(([view, path]) => [path, view])
-  );
   
   const [view, setView] = useState('landing');
   const [isInitializing, setIsInitializing] = useState(true);
@@ -168,13 +192,6 @@ function AppContent() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const analysisCancelledRef = useRef(false);
 
-  const handleCancelAnalysis = () => {
-    analysisCancelledRef.current = true;
-    setLoading(false);
-    setStatus("");
-    showNotification("Analysis cancelled. No credits were deducted.", "success");
-  };
-  
   // Credit system state
   const [creditStatus, setCreditStatus] = useState(null);
   const [showCreditModal, setShowCreditModal] = useState(false);
@@ -186,7 +203,30 @@ function AppContent() {
     isFreeUser?: boolean;
   }>({ action: null, required: 0 });
 
-  const navigate = (v, reviewId = null, overrideUser = undefined) => {
+  // Update URL when view changes (without triggering navigation)
+  const updateUrlForView = useCallback((newView: string, reviewId: string | null = null) => {
+    // Ensure we only pass cloneable data to pushState
+    const safeReviewId = typeof reviewId === 'string' ? reviewId : null;
+    let newPath = viewToPath[newView as keyof typeof viewToPath] || '/';
+    
+    // Special case for review with ID
+    if (newView === 'review' && safeReviewId) {
+      newPath = `/review/${safeReviewId}`;
+    } else if (newView === 'podcasts' && safeReviewId) {
+      newPath = `/podcasts/${safeReviewId}`;
+    }
+    
+    // Only update if path actually changed
+    if (normalizePath(window.location.pathname) !== normalizePath(newPath)) {
+      try {
+        window.history.pushState({ view: String(newView), reviewId: safeReviewId }, '', newPath);
+      } catch (e) {
+        console.error('pushState failed:', e);
+      }
+    }
+  }, []);
+
+  const navigate = useCallback((v: string, reviewId: string | null = null, overrideUser: any = undefined) => {
     // Close mobile menu if open
     setMobileMenuOpen(false);
     
@@ -242,6 +282,13 @@ function AppContent() {
       fetchAdminUsers(0, 20);
       fetchAdminReviews(0, 20);
     }
+  }, [currentUser, updateUrlForView]);
+
+  const handleCancelAnalysis = () => {
+    analysisCancelledRef.current = true;
+    setLoading(false);
+    setStatus("");
+    showNotification("Analysis cancelled. No credits were deducted.", "success");
   };
 
   // Function to navigate to a review and update URL
@@ -308,32 +355,10 @@ function AppContent() {
     return pathToView[path] || 'landing';
   }
 
-  // Initial load effect
-  useEffect(() => {
-    // Capture referral code from URL
-    const params = new URLSearchParams(window.location.search);
-    const ref = params.get('ref');
-    if (ref) {
-      console.log('[Referral] Captured referral code:', ref);
-      sessionStorage.setItem('referralCode', ref);
-    }
-
-    const initialView = getViewFromPath();
-    setView(initialView);
-
-    const path = window.location.pathname;
-    if (path.startsWith('/podcasts/')) {
-      const podcastId = path.split('/podcasts/')[1];
-      if (podcastId) {
-        setTargetPodcastId(podcastId);
-      }
-    }
-  }, []);
-  
   // Sync URL with view changes
   useEffect(() => {
     const handlePopState = async () => {
-      const path = window.location.pathname;
+      const path = normalizePath(window.location.pathname);
       
       // Check for review with ID: /review/{id}
       if (path.startsWith('/review/')) {
@@ -345,33 +370,27 @@ function AppContent() {
               const reviewData = await reviewRes.json();
               setCurrentReview({ ...reviewData, viewOnly: true });
               setView('review');
-              updateUrlForView('review', reviewId);
+              // Don't call updateUrlForView here as it might push a new entry
             } else {
               setView('magazine');
-              updateUrlForView('magazine');
             }
           } catch (e) {
             setView('magazine');
-            updateUrlForView('magazine');
           }
         } else {
           setView('magazine');
-          updateUrlForView('magazine');
         }
       } else if (path.startsWith('/podcasts/')) {
         const podcastId = path.split('/podcasts/')[1];
         if (podcastId) {
           setTargetPodcastId(podcastId);
           setView('podcasts');
-          updateUrlForView('podcasts', podcastId);
         } else {
           setView('podcasts');
-          updateUrlForView('podcasts');
         }
       } else {
         const newView = pathToView[path] || 'landing';
         setView(newView);
-        updateUrlForView(newView);
         if (newView !== 'review') {
           setCurrentReview(null);
         }
@@ -381,31 +400,8 @@ function AppContent() {
     
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [pathToView]);
+  }, []);
   
-  // Update URL when view changes (without triggering navigation)
-  const updateUrlForView = (newView, reviewId = null) => {
-    // Ensure we only pass cloneable data to pushState
-    const safeReviewId = typeof reviewId === 'string' ? reviewId : null;
-    let newPath = viewToPath[newView] || '/';
-    
-    // Special case for review with ID
-    if (newView === 'review' && safeReviewId) {
-      newPath = `/review/${safeReviewId}`;
-    } else if (newView === 'podcasts' && safeReviewId) {
-      newPath = `/podcasts/${safeReviewId}`;
-    }
-    
-    // Only update if path actually changed
-    if (window.location.pathname !== newPath) {
-      try {
-        window.history.pushState({ view: String(newView), reviewId: safeReviewId }, '', newPath);
-      } catch (e) {
-        console.error('pushState failed:', e);
-      }
-    }
-  };
-
   // Fetch a review with its audio data
   const fetchReviewWithAudio = async (reviewId) => {
     try {
@@ -514,7 +510,7 @@ function AppContent() {
     const init = async () => {
       try {
         // Handle URL routing for shareable review links first to determine initial view
-        const path = window.location.pathname;
+        const path = normalizePath(window.location.pathname);
         const reviewMatch = path.match(/^\/review\/([a-zA-Z0-9-]+)$/);
         const podcastMatch = path.match(/^\/podcasts\/([a-zA-Z0-9-]+)$/);
         
@@ -607,7 +603,7 @@ function AppContent() {
     
     init();
     return () => unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const refreshUserData = async () => {
     if (!currentUser?.id) return;
