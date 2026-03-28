@@ -724,7 +724,8 @@ export const generatePodcast = async (trackName: string, artistName: string, ori
     const totalDuration = outroStartTime + outroDuration;
 
     // 5. Mix using OfflineAudioContext
-    const offlineCtx = new OfflineAudioContext(1, Math.ceil(totalDuration * audioContext.sampleRate), audioContext.sampleRate);
+    const targetSampleRate = 16000;
+    const offlineCtx = new OfflineAudioContext(1, Math.ceil(totalDuration * targetSampleRate), targetSampleRate);
 
     // Intro Jingle
     const introSource = offlineCtx.createBufferSource();
