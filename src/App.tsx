@@ -65,6 +65,19 @@ const getAuthHeadersLocal = async () => {
   return await getAuthHeaders();
 };
 
+const fetchWithTimeout = async (url: string, options: any = {}, timeout = 5000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (e) {
+    clearTimeout(id);
+    throw e;
+  }
+};
+
 function AppContent() {
   const { showNotification } = useNotification();
   // Map views to URL paths
@@ -179,7 +192,10 @@ function AppContent() {
     
     const activeUser = overrideUser !== undefined ? overrideUser : currentUser;
     
-    if ((v === 'dashboard' || v === 'account') && !activeUser) {
+    // Protected views that require authentication
+    const protectedViews = ['dashboard', 'account', 'referrals'];
+    
+    if (protectedViews.includes(v) && !activeUser) {
       setView('auth');
       updateUrlForView('auth');
       window.scrollTo(0, 0);
@@ -256,7 +272,7 @@ function AppContent() {
   const loadReviewFromUrl = async (reviewId) => {
     try {
       console.log('Loading review from URL:', reviewId);
-      const res = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+      const res = await fetchWithTimeout(`${API_URL}/api/public/reviews/${reviewId}`);
       if (res.ok) {
         const review = await res.json();
         console.log('Successfully loaded review from URL');
@@ -383,7 +399,7 @@ function AppContent() {
     // Only update if path actually changed
     if (window.location.pathname !== newPath) {
       try {
-        window.history.pushState({ view: String(newView) }, '', newPath);
+        window.history.pushState({ view: String(newView), reviewId: safeReviewId }, '', newPath);
       } catch (e) {
         console.error('pushState failed:', e);
       }
@@ -503,9 +519,9 @@ function AppContent() {
         const podcastMatch = path.match(/^\/podcasts\/([a-zA-Z0-9-]+)$/);
         
         // Start non-blocking parallel fetches
-        const configPromise = fetch(`${API_URL}/api/config`).then(res => res.ok ? res.json() : null).catch(() => null);
+        const configPromise = fetchWithTimeout(`${API_URL}/api/config`).then(res => res.ok ? res.json() : null).catch(() => null);
         const userPromise = getCurrentUser().catch(() => null);
-        const reviewsPromise = fetch(`${API_URL}/api/public/published-reviews?limit=100`, { cache: 'no-store' }).then(res => res.ok ? res.json() : null).catch(() => null);
+        const reviewsPromise = fetchWithTimeout(`${API_URL}/api/public/published-reviews?limit=100`, { cache: 'no-store' }).then(res => res.ok ? res.json() : null).catch(() => null);
 
         // Wait for essential data
         const [config, savedUser, reviewsData] = await Promise.all([configPromise, userPromise, reviewsPromise]);
@@ -531,7 +547,7 @@ function AppContent() {
           const reviewId = reviewMatch[1];
           // Fetch the public review
           try {
-            const reviewRes = await fetch(`${API_URL}/api/public/reviews/${reviewId}`);
+            const reviewRes = await fetchWithTimeout(`${API_URL}/api/public/reviews/${reviewId}`);
             if (reviewRes.ok) {
               const reviewData = await reviewRes.json();
               setCurrentReview({ ...reviewData, viewOnly: true });
@@ -553,7 +569,13 @@ function AppContent() {
           const urlView = params.get('view');
           const initialView = getViewFromPath();
           
-          if (urlView && ['landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 'guide', 'account'].includes(urlView)) {
+          const validViews = [
+            'landing', 'magazine', 'podcasts', 'dashboard', 'pricing', 
+            'guide', 'account', 'referrals', 'faq', 'terms', 
+            'privacy', 'contact', 'admin', 'auth', 'signup'
+          ];
+          
+          if (urlView && validViews.includes(urlView)) {
             navigate(urlView, null, savedUser);
           } else {
             // Handle initialView checks
@@ -566,7 +588,8 @@ function AppContent() {
                 navigate(initialView, null, savedUser);
               }
             } else {
-              if (initialView === 'dashboard' || initialView === 'account' || initialView === 'admin') {
+              const protectedViews = ['dashboard', 'account', 'admin', 'referrals'];
+              if (protectedViews.includes(initialView)) {
                 navigate('auth', null, savedUser);
               } else {
                 navigate(initialView, null, savedUser);

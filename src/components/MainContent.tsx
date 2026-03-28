@@ -41,7 +41,7 @@ interface MainContentProps {
   fetchAdminReviews: (offset: number, limit: number) => Promise<void>;
   handleAnalyze: (data: any) => Promise<void>;
   handleLogin: (user: any) => void;
-  handleUpdateReview: (review: any) => Promise<void>;
+  handleUpdateReview: (review: any) => Promise<any>;
   handlePublish: (reviewId: string) => Promise<void>;
   handleUpdateProfile: (user: any) => Promise<any>;
   handleDeleteUser: (userId: string) => Promise<void>;

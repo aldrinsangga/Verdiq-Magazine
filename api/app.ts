@@ -1897,7 +1897,7 @@ app.get("/api/public/reviews/:id", async (req, res, next) => {
 
     const doc = await db.collection('reviews').doc(id).get();
     if (doc.exists) {
-      const data = doc.data() as Review;
+      const data = doc.data() as any;
       const review = {
         ...data,
         songTitle: data.songTitle || data.trackTitle || data.trackName || 'Untitled Track'

@@ -271,8 +271,24 @@ export const logout = async () => {
  */
 export const getCurrentUser = async () => {
   return new Promise((resolve) => {
+    let resolved = false;
+    
+    // Set a timeout to prevent hanging if onAuthStateChanged never fires
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        if (typeof unsubscribe === 'function') unsubscribe();
+        console.warn('[getCurrentUser] Auth state check timed out');
+        resolve(null);
+      }
+    }, 5000);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timeout);
       unsubscribe();
+      
       if (user) {
         try {
           const token = await getIdTokenWithRetry(user);
@@ -284,9 +300,6 @@ export const getCurrentUser = async () => {
             const userData = await safeJson(res);
             
             // Check if MFA is enabled but not verified in this session
-            // Since we don't have a way to track MFA session state across reloads easily without a custom token,
-            // we will require them to log in again if MFA is enabled.
-            // A better approach would be to store an mfa_verified flag in localStorage.
             const session = getSession();
             if (userData.mfaEnabled && !session?.mfa_verified) {
               console.log(`[getCurrentUser] MFA is enabled but not verified in session for user ${user.uid}. Logging out.`);
